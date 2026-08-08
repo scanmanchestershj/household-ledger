@@ -511,7 +511,50 @@
               <select id="cardSpendFor">
                 <option value="own">Own spend only</option>
                 <option value="split">Split with others (Splitwise-style)</option>
+                <option value="emi">EMI (installment plan)</option>
               </select>
+            </div>
+            <div class="full" id="emiSection" style="display:none;">
+              <div class="section-title" style="margin-top:0;font-size:13px;">Debt / EMI details</div>
+              <div class="form-grid">
+                <div>
+                  <label class="field-label">Debt type</label>
+                  <select id="emiDebtType">
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Personal Loan">Personal Loan</option>
+                    <option value="BNPL">Buy Now Pay Later</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label">Lender country</label>
+                  <input type="text" id="emiLenderCountry" placeholder="e.g. United Arab Emirates">
+                </div>
+                <div>
+                  <label class="field-label">Lender bank</label>
+                  <input type="text" id="emiLenderBank" placeholder="e.g. Emirates NBD">
+                </div>
+                <div>
+                  <label class="field-label">Payment frequency</label>
+                  <select id="emiFrequency">
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label">Number of installments</label>
+                  <input type="number" id="emiTenure" placeholder="e.g. 6" min="1" step="1">
+                </div>
+                <div>
+                  <label class="field-label">Interest rate % (per installment period)</label>
+                  <input type="number" id="emiRate" placeholder="e.g. 2.5" min="0" step="0.01">
+                </div>
+                <div class="full" style="font-size:12.5px;color:var(--ink-soft);">
+                  Monthly EMI: <strong id="emiCalcPreview">—</strong>
+                  <div style="margin-top:2px;">Total amount above is the purchase principal. This creates one card-expense entry per installment, dated on each future due date, so upcoming months' reports pick them up automatically.</div>
+                </div>
+              </div>
             </div>
             <div class="full" id="ownReturnableWrap">
               <label class="field-label">Returnable?</label>
@@ -2203,6 +2246,26 @@
     }
   }
 
+  // ---- Auto sign-out after 60 seconds of inactivity ----
+  let idleTimer = null;
+  function resetIdleTimer(){
+    if(!currentUser) return;
+    if(idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if(currentUser){ logout(); alert('You were signed out automatically after 60 seconds of inactivity.'); }
+    }, 60000);
+  }
+  function startIdleWatch(){
+    ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(evt =>
+      document.addEventListener(evt, resetIdleTimer, { passive: true })
+    );
+    resetIdleTimer();
+  }
+  function stopIdleWatch(){
+    if(idleTimer) clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+
   function enterApp(match){
     currentUser = match;
     viewingUserId = match.id;
@@ -2223,9 +2286,11 @@
     renderViewingAsSelector();
     renderRequestsForUser();
     renderAll();
+    startIdleWatch();
   }
 
   async function logout(){
+    stopIdleWatch();
     await sb.auth.signOut();
     currentUser = null;
     viewingUserId = null;
@@ -3032,7 +3097,56 @@
     const val = document.getElementById('cardSpendFor').value;
     document.getElementById('ownReturnableWrap').style.display = val === 'own' ? '' : 'none';
     document.getElementById('splitSection').style.display = val === 'split' ? '' : 'none';
+    document.getElementById('emiSection').style.display = val === 'emi' ? '' : 'none';
     if(val === 'split') updateMySharePreview();
+    if(val === 'emi'){
+      if(!document.getElementById('emiLenderCountry').value) document.getElementById('emiLenderCountry').value = document.getElementById('cardCountry').value;
+      if(!document.getElementById('emiLenderBank').value) document.getElementById('emiLenderBank').value = document.getElementById('cardBank').value;
+      updateEmiPreview();
+    }
+  }
+  function calcEmiAmount(principal, ratePct, n){
+    const r = (Number(ratePct) || 0) / 100;
+    if(n <= 0) return 0;
+    if(r === 0) return principal / n;
+    const factor = Math.pow(1 + r, n);
+    return principal * r * factor / (factor - 1);
+  }
+  function updateEmiPreview(){
+    const principal = parseFloat(document.getElementById('cardAmount').value) || 0;
+    const rate = parseFloat(document.getElementById('emiRate').value) || 0;
+    const n = parseInt(document.getElementById('emiTenure').value, 10) || 0;
+    const el = document.getElementById('emiCalcPreview');
+    if(principal > 0 && n > 0){
+      el.textContent = fmt(calcEmiAmount(principal, rate, n)) + ' × ' + n + ' installments';
+    } else {
+      el.textContent = '—';
+    }
+  }
+  ['cardAmount','emiRate','emiTenure'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      if(document.getElementById('cardSpendFor').value === 'emi') updateEmiPreview();
+    });
+  });
+  function addMonthsToDate(dateStr, monthsToAdd){
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setMonth(d.getMonth() + monthsToAdd);
+    return d.toISOString().slice(0,10);
+  }
+  function buildEmiInstallments(base){
+    const { principal, rate, n, frequency, startDate } = base;
+    const perInstallment = Math.round(calcEmiAmount(principal, rate, n) * 100) / 100;
+    const monthsStep = frequency === 'yearly' ? 12 : (frequency === 'quarterly' ? 3 : 1);
+    const groupId = uid();
+    const installments = [];
+    let allocated = 0;
+    for(let i = 1; i <= n; i++){
+      // last installment absorbs any rounding drift so the total matches exactly
+      const amount = (i === n) ? Math.round((perInstallment * n - allocated) * 100) / 100 : perInstallment;
+      allocated += amount;
+      installments.push({ no: i, date: addMonthsToDate(startDate, i * monthsStep), amount });
+    }
+    return { groupId, installments, perInstallment };
   }
   document.getElementById('cardReturnable').addEventListener('change', () => {
     document.getElementById('ownReturnNameWrap').style.display =
@@ -3208,10 +3322,12 @@
       const timeStr = c.time ? ` ${escapeHtml(c.time)}` : '';
       let bodyExtra = '';
       if(c.spendFor === 'own'){
+        const emiBadge = c.emi ? `<div class="item-meta" style="background:#fdf3e3;color:#8a5a00;">📅 EMI ${c.emi.installmentNo}/${c.emi.totalInstallments} · ${escapeHtml(c.emi.debtType)} · ${escapeHtml(c.emi.lenderBank)} · ${c.emi.ratePerPeriod}%</div>` : '';
         bodyExtra = `
           <div class="card-tags">
             <div class="item-meta tag-own">Own spend</div>
             <div class="item-meta ${c.returnable === 'returnable' ? 'tag-returnable' : 'tag-nonreturnable'}">${c.returnable === 'returnable' ? ('Returnable' + (c.returnName ? ' · ' + escapeHtml(c.returnName) : '')) : 'Non-returnable'}</div>
+            ${emiBadge}
             ${dueBadge}
           </div>`;
       } else {
@@ -3346,7 +3462,7 @@
     if(spendFor === 'own'){
       returnable = document.getElementById('cardReturnable').value;
       returnName = document.getElementById('cardReturnName').value.trim();
-    } else {
+    } else if(spendFor === 'split'){
       const rows = [...document.querySelectorAll('#splitRows .split-row')];
       splits = rows.map(r => ({
         id: uid(),
@@ -3354,6 +3470,38 @@
         amount: parseFloat(r.querySelector('.split-amount').value) || 0,
         returnable: r.querySelector('.split-returnable').value
       })).filter(s => s.amount > 0);
+    }
+
+    if(spendFor === 'emi'){
+      const debtType = document.getElementById('emiDebtType').value;
+      const lenderCountry = document.getElementById('emiLenderCountry').value.trim() || country;
+      const lenderBank = document.getElementById('emiLenderBank').value.trim() || bank;
+      const frequency = document.getElementById('emiFrequency').value;
+      const n = parseInt(document.getElementById('emiTenure').value, 10);
+      const rate = parseFloat(document.getElementById('emiRate').value) || 0;
+      if(!n || n <= 0){ alert('Enter the number of installments.'); return; }
+      const { groupId, installments, perInstallment } = buildEmiInstallments({ principal: amount, rate, n, frequency, startDate: date });
+      installments.forEach(inst => {
+        currentData().cards.push({
+          id: uid(), country, bank, cardLabel,
+          desc: (desc || 'EMI purchase') + ` — installment ${inst.no}/${n}`,
+          amount: inst.amount, date: inst.date, time: '00:00', dueDate: inst.date,
+          spendFor: 'own', returnable: 'non-returnable', returnName: '', splits: [], slot: activeCardSlot,
+          emi: { groupId, installmentNo: inst.no, totalInstallments: n, principal: amount, ratePerPeriod: rate,
+                 frequency, debtType, lenderCountry, lenderBank, perInstallment, originalDesc: desc, purchaseDate: date }
+        });
+      });
+      document.getElementById('cardLabel').value = '';
+      document.getElementById('cardDesc').value = '';
+      document.getElementById('cardAmount').value = '';
+      document.getElementById('cardDue').value = '';
+      document.getElementById('cardTime').value = nowTimeStr();
+      document.getElementById('cardBankOther').value = '';
+      document.getElementById('emiTenure').value = '';
+      document.getElementById('emiRate').value = '';
+      updateEmiPreview();
+      save(); renderCards(); renderOverview();
+      return;
     }
 
     const record = { country, bank, cardLabel, desc, amount, date, time, dueDate, spendFor, returnable, returnName, splits, slot: activeCardSlot };
