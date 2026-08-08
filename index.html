@@ -11,19 +11,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
-    --paper: #F3F1FA;
-    --paper-deep: #E8E4F7;
+    --paper: #F8F7FC;
+    --paper-deep: #EFEDFA;
     --card: #FFFFFF;
-    --ink: #211B3D;
-    --ink-soft: #6B6485;
-    --teal: #5B4FE8;
-    --teal-dark: #4238C4;
-    --gold: #D98E2B;
-    --coral: #E24E76;
-    --amber: #E8A23A;
-    --blue: #2E6FE0;
-    --line: #DCD6F0;
-    --shadow: 0 1px 2px rgba(33,27,61,0.08), 0 8px 24px rgba(66,56,196,0.10);
+    --ink: #34304F;
+    --ink-soft: #837CA0;
+    --teal: #8B7FF0;
+    --teal-dark: #6F63DE;
+    --gold: #E7A34E;
+    --coral: #F0708F;
+    --amber: #F0B15C;
+    --blue: #6D9BF2;
+    --line: #E6E1F5;
+    --shadow: 0 1px 2px rgba(52,48,79,0.06), 0 8px 24px rgba(111,99,222,0.09);
   }
   *{box-sizing:border-box;}
   body{
@@ -41,7 +41,21 @@
     padding-bottom:40px;
   }
   @media (min-width:900px){
-    .app{ max-width:1040px; }
+    .app{ max-width:1200px; }
+  }
+  @media (min-width:1400px){
+    .app{ max-width:1440px; }
+  }
+  @media (max-width:480px){
+    header.top{ padding:18px 12px 0 12px; }
+    h1{ font-size:24px; }
+    .panel{ padding:12px !important; }
+    .form-grid{ grid-template-columns:1fr; padding:10px; }
+    input, select, textarea{ font-size:16px; } /* prevents iOS zoom-on-focus */
+  }
+  .gate-tab-btn{ flex:1; white-space:normal; font-size:11.5px; padding:9px 4px; text-align:center; line-height:1.25; }
+  @media (max-width:380px){
+    .gate-tab-btn{ font-size:10px; padding:8px 3px; }
   }
   .cards-layout{ display:flex; flex-direction:column; gap:24px; }
   @media (min-width:860px){
@@ -304,9 +318,9 @@
 
 
         <div class="gate-tabs" style="display:flex; gap:6px; margin-bottom:14px;">
-          <button type="button" class="add-btn ghost" id="gateModeSignIn" style="flex:1;">Sign in</button>
-          <button type="button" class="add-btn ghost" id="gateModeSignUp" style="flex:1;">New household</button>
-          <button type="button" class="add-btn ghost" id="gateModeJoin" style="flex:1;">Join household</button>
+          <button type="button" class="add-btn ghost gate-tab-btn" id="gateModeSignIn">Sign in</button>
+          <button type="button" class="add-btn ghost gate-tab-btn" id="gateModeSignUp">New household</button>
+          <button type="button" class="add-btn ghost gate-tab-btn" id="gateModeJoin">Join household</button>
         </div>
 
         <!-- SIGN IN -->
@@ -4851,7 +4865,11 @@
           <div><strong>${escapeHtml(r.fromName)}</strong> ${r.type === 'view_access' ? '<span class="item-meta tag-others">View access</span>' : ''} <span class="item-meta ${r.status === 'approved' ? 'tag-own' : r.status === 'rejected' ? 'tag-nonreturnable' : 'tag-soon'}">${r.status}</span></div>
           <span style="font-size:11px;color:var(--ink-soft);">${escapeHtml(r.createdAt)}</span>
         </div>
-        <div style="font-size:13px;margin-top:6px;">${escapeHtml(r.message)}${r.amount ? ' — ' + fmt(r.amount) : ''}</div>
+        <div class="req-message-display" data-id="${r.id}" style="font-size:13px;margin-top:6px;">${escapeHtml(r.message)}${r.amount ? ' — ' + fmt(r.amount) : ''}</div>
+        <div class="req-message-edit" data-id="${r.id}" style="display:none;margin-top:6px;">
+          <input type="text" class="req-message-input" data-id="${r.id}" value="${escapeHtml(r.message)}" style="margin-bottom:6px;">
+          <input type="number" class="req-amount-input" data-id="${r.id}" value="${r.amount || ''}" placeholder="Amount (optional)" style="margin-bottom:6px;">
+        </div>
         ${r.status === 'pending' ? `
           <div class="add-row" style="margin-top:8px;margin-bottom:0;">
             <input type="text" class="req-response" data-id="${r.id}" placeholder="Optional response note" style="flex:1;">
@@ -4859,6 +4877,11 @@
             <button class="add-btn tertiary" data-action="reject" data-id="${r.id}">Reject</button>
           </div>
         ` : (r.response ? `<div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">Response: ${escapeHtml(r.response)}</div>` : '')}
+        <div class="add-row" style="margin-top:8px;margin-bottom:0;justify-content:flex-end;">
+          <button class="edit-btn" data-action="editreq" data-id="${r.id}" title="Edit request">✎ Edit</button>
+          <button class="edit-btn" data-action="savereq" data-id="${r.id}" title="Save changes" style="display:none;">✓ Save</button>
+          <button class="del-btn" data-action="delreq" data-id="${r.id}" title="Delete request">× Delete</button>
+        </div>
       </div>
     `).join('');
     el.querySelectorAll('[data-action="approve"], [data-action="reject"]').forEach(btn => btn.addEventListener('click', () => {
@@ -4873,6 +4896,31 @@
         }
         save(); renderAdminRequests(); renderRequestsForUser(); renderViewAdminToggle();
       }
+    }));
+    el.querySelectorAll('[data-action="editreq"]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      el.querySelector(`.req-message-display[data-id="${id}"]`).style.display = 'none';
+      el.querySelector(`.req-message-edit[data-id="${id}"]`).style.display = '';
+      btn.style.display = 'none';
+      el.querySelector(`[data-action="savereq"][data-id="${id}"]`).style.display = '';
+    }));
+    el.querySelectorAll('[data-action="savereq"]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const req = state.requests.find(x => x.id === id);
+      if(!req) return;
+      const msgInput = el.querySelector(`.req-message-input[data-id="${id}"]`);
+      const amtInput = el.querySelector(`.req-amount-input[data-id="${id}"]`);
+      req.message = msgInput.value.trim() || req.message;
+      req.amount = amtInput.value ? parseFloat(amtInput.value) : null;
+      save(); renderAdminRequests(); renderRequestsForUser();
+    }));
+    el.querySelectorAll('[data-action="delreq"]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const req = state.requests.find(x => x.id === id);
+      if(!req) return;
+      if(!confirm(`Delete this request from ${req.fromName}?`)) return;
+      state.requests = state.requests.filter(x => x.id !== id);
+      save(); renderAdminRequests(); renderRequestsForUser();
     }));
   }
   function updateAdminBadge(){
