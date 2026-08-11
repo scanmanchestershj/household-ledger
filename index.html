@@ -98,6 +98,13 @@
   .glance-due-row{ display:flex; justify-content:space-between; gap:10px; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; }
   .glance-due-row:last-child{ border-bottom:none; }
   .glance-due-row .gdr-meta{ color:var(--ink-soft); font-size:11px; }
+  .spend-analysis-row{ margin-bottom:10px; }
+  .spend-analysis-row-head{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
+  .spend-analysis-row-head .sa-label{ font-weight:600; }
+  .spend-analysis-row-head .sa-figs{ color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; font-size:11.5px; }
+  .spend-analysis-bar-track{ background:var(--paper-deep); border-radius:20px; height:9px; overflow:hidden; }
+  .spend-analysis-bar-fill{ height:100%; background:var(--teal); border-radius:20px; transition:width 0.3s ease; }
+  .spend-analysis-total{ margin-top:14px; padding-top:12px; border-top:1px solid var(--line); display:flex; justify-content:space-between; font-size:14px; font-weight:700; }
 
   .monthly-spend-card{ border:1px solid var(--line); border-radius:8px; padding:16px 16px 14px 16px; margin:0 0 22px 0; background:var(--card); box-shadow:var(--shadow); }
   .monthly-spend-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
@@ -639,6 +646,25 @@
         </div>
 
         <div class="cards-side">
+          <div class="accordion" data-key="spend-analysis">
+            <button type="button" class="accordion-header"><span>Spend analysis — by category</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion-body">
+              <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Every card spend grouped by what it was for (e.g. Tea, Lunch, Dinner), showing each one's share of the total for the period below.</div>
+              <div class="form-grid">
+                <div>
+                  <label class="field-label">From date</label>
+                  <input type="date" id="spendAnalysisFrom">
+                </div>
+                <div>
+                  <label class="field-label">To date</label>
+                  <input type="date" id="spendAnalysisTo">
+                </div>
+              </div>
+              <div id="spendAnalysisChart"></div>
+              <div id="spendAnalysisTotal" class="spend-analysis-total"></div>
+            </div>
+          </div>
+
           <div class="accordion" data-key="bank-wise-due-spend">
             <button type="button" class="accordion-header"><span>Bank-wise due date & spend (monthly)</span><span class="accordion-arrow">▸</span></button>
             <div class="accordion-body">
@@ -3314,6 +3340,7 @@
   function renderCards(){
     renderCardUsage();
     renderBankSummaries();
+    renderSpendAnalysis();
     populateCardMapOptions('UAE');
     populateCardMapOptions('India');
     const list = document.getElementById('cardList');
@@ -3663,6 +3690,54 @@
     currentData().bankSummaries.push({ id: uid(), bank, from, to });
     save(); renderBankSummaries();
   });
+  function renderSpendAnalysis(){
+    const chartEl = document.getElementById('spendAnalysisChart');
+    const totalEl = document.getElementById('spendAnalysisTotal');
+    if(!chartEl || !totalEl) return;
+    const fromEl = document.getElementById('spendAnalysisFrom');
+    const toEl = document.getElementById('spendAnalysisTo');
+    if(fromEl && !fromEl.value) fromEl.value = todayStr().slice(0,8) + '01';
+    if(toEl && !toEl.value) toEl.value = endOfMonthStr(todayStr());
+    const from = fromEl ? fromEl.value : todayStr();
+    const to = toEl ? toEl.value : todayStr();
+
+    const cards = cardsInSlot().filter(c => c.date >= from && c.date <= to);
+    const groups = {};
+    cards.forEach(c => {
+      // strip the " — installment N/M" suffix EMI records get, so all of an
+      // EMI's installments still roll up under their original category
+      const cleanDesc = (c.desc || 'Uncategorized').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'Uncategorized';
+      const key = cleanDesc.toLowerCase();
+      if(!groups[key]) groups[key] = { label: cleanDesc, amount: 0 };
+      groups[key].amount += Number(c.amount) || 0;
+    });
+    const rows = Object.values(groups).sort((a,b) => b.amount - a.amount);
+    const total = rows.reduce((s,r) => s + r.amount, 0);
+
+    if(rows.length === 0){
+      chartEl.innerHTML = '<div class="empty" style="padding:10px 0;">No card spend in this range.</div>';
+      totalEl.style.display = 'none';
+      return;
+    }
+    totalEl.style.display = '';
+    chartEl.innerHTML = rows.map(r => {
+      const pct = total > 0 ? (r.amount / total * 100) : 0;
+      return `
+        <div class="spend-analysis-row">
+          <div class="spend-analysis-row-head">
+            <span class="sa-label">${escapeHtml(r.label)}</span>
+            <span class="sa-figs">${pct.toFixed(1)}% · ${fmt(r.amount)}</span>
+          </div>
+          <div class="spend-analysis-bar-track"><div class="spend-analysis-bar-fill" style="width:${pct.toFixed(1)}%;"></div></div>
+        </div>
+      `;
+    }).join('');
+    totalEl.innerHTML = `<span>Total</span><span>${fmt(total)}</span>`;
+  }
+  ['spendAnalysisFrom','spendAnalysisTo'].forEach(id => {
+    document.addEventListener('change', (e) => { if(e.target && e.target.id === id) renderSpendAnalysis(); });
+  });
+
   function renderBankSummaries(){
     const el = document.getElementById('bankSummaryList');
     if(!el) return;
