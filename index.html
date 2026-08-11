@@ -93,6 +93,11 @@
   .glance-delta.up{ color:var(--coral); }
   .glance-delta.amber{ color:var(--amber); }
   .glance-range-select{ font-size:11px !important; padding:5px 6px !important; margin-top:8px; width:auto; }
+  .glance-range-picker{ display:flex; align-items:center; gap:5px; margin-top:8px; }
+  .glance-range-date{ font-size:11px !important; padding:5px 6px !important; width:auto; min-width:0; flex:1; border:1px solid var(--line); border-radius:3px; background:var(--card); color:var(--ink); }
+  .glance-due-row{ display:flex; justify-content:space-between; gap:10px; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; }
+  .glance-due-row:last-child{ border-bottom:none; }
+  .glance-due-row .gdr-meta{ color:var(--ink-soft); font-size:11px; }
 
   .monthly-spend-card{ border:1px solid var(--line); border-radius:8px; padding:16px 16px 14px 16px; margin:0 0 22px 0; background:var(--card); box-shadow:var(--shadow); }
   .monthly-spend-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
@@ -693,17 +698,18 @@
           <div class="label">this month's spending</div>
           <div class="glance-delta" id="glanceThisMonthDelta"></div>
         </div>
-        <div class="stat">
+        <div class="stat" id="glanceUpcomingStat" style="cursor:pointer;">
           <div class="num" id="glanceUpcomingBills">–</div>
-          <div class="label">upcoming bills</div>
-          <select class="who-select glance-range-select" id="glanceUpcomingRange">
-            <option value="week">Due this week</option>
-            <option value="month">Due this month</option>
-            <option value="3months">Due next 3 months</option>
-          </select>
+          <div class="label">upcoming bills — click for details</div>
+          <div class="glance-range-picker" onclick="event.stopPropagation();">
+            <input type="date" class="who-select glance-range-date" id="glanceUpcomingFrom">
+            <span style="font-size:11px;color:var(--ink-soft);">to</span>
+            <input type="date" class="who-select glance-range-date" id="glanceUpcomingTo">
+          </div>
           <div class="glance-delta amber" id="glanceUpcomingSub"></div>
         </div>
       </div>
+      <div id="glanceUpcomingDetail" style="display:none;margin:-8px 0 14px 0;"></div>
 
       <div class="monthly-spend-card">
         <div class="monthly-spend-head">
@@ -4111,11 +4117,14 @@
     const d = new Date(y, m, 0);
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   }
-  function upcomingBillsWindow(range){
+  function upcomingBillsWindow(){
     const today = todayStr();
-    if(range === 'week') return { start: today, end: addDaysStr(today, 6), label: 'due this week' };
-    if(range === '3months') return { start: today, end: addDaysStr(today, 90), label: 'due in next 3 months' };
-    return { start: today, end: endOfMonthStr(today), label: 'due this month' };
+    const fromEl = document.getElementById('glanceUpcomingFrom');
+    const toEl = document.getElementById('glanceUpcomingTo');
+    let start = fromEl && fromEl.value ? fromEl.value : today;
+    let end = toEl && toEl.value ? toEl.value : addDaysStr(today, 6);
+    if(end < start) end = start;
+    return { start, end, label: `due ${start} to ${end}` };
   }
   function prevMonthKey(key){
     const [y,m] = key.split('-').map(Number);
@@ -4142,9 +4151,11 @@
       deltaEl.className = 'glance-delta';
     }
 
-    const rangeSel = document.getElementById('glanceUpcomingRange');
-    const range = rangeSel ? rangeSel.value : 'week';
-    const win = upcomingBillsWindow(range);
+    const win = upcomingBillsWindow();
+    const fromEl = document.getElementById('glanceUpcomingFrom');
+    const toEl = document.getElementById('glanceUpcomingTo');
+    if(fromEl && !fromEl.value) fromEl.value = win.start;
+    if(toEl && !toEl.value) toEl.value = win.end;
     const mapped = mappedCardIds();
     const scopeCountryName = scope === 'UAE' ? state.countryConfig.country1.name : (scope === 'India' ? state.countryConfig.country2.name : null);
     let dueCards = currentData().cards.filter(c => c.dueDate && c.dueDate >= win.start && c.dueDate <= win.end && !mapped.has(c.id));
@@ -4179,9 +4190,34 @@
     document.getElementById('glanceUpcomingBills').textContent = curFmt(dueSum);
     const totalDueCount = dueCards.length + dueDebts.length;
     document.getElementById('glanceUpcomingSub').textContent = totalDueCount ? `${totalDueCount} ${win.label}` : `None ${win.label}`;
+
+    // Individual due items, split out one per row (per date), shown when the
+    // stat card is clicked — e.g. Sept 5 payment and Sept 15 payment listed
+    // separately rather than only as one combined total.
+    const dueItems = [
+      ...dueCards.map(c => ({ label: (c.desc || c.bank || 'Card due'), amount: Number(c.amount), dueDate: c.dueDate, country: c.country || state.countryConfig.country1.name, currency: (c.country || state.countryConfig.country1.name) === state.countryConfig.country1.name ? state.countryConfig.country1.currency : state.countryConfig.country2.currency })),
+      ...dueDebts.map(d => ({ label: d.label, amount: Number(d.amount), dueDate: d.dueDate, country: d.country, currency: d.country === state.countryConfig.country1.name ? state.countryConfig.country1.currency : state.countryConfig.country2.currency }))
+    ].sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+    const detailEl = document.getElementById('glanceUpcomingDetail');
+    if(detailEl){
+      detailEl.innerHTML = dueItems.length ? dueItems.map(it => `
+        <div class="glance-due-row">
+          <span>${escapeHtml(it.label)} <span class="gdr-meta">(${escapeHtml(it.country)})</span></span>
+          <span><strong>${escapeHtml(String(CURRENCIES[it.currency] || it.currency))} ${Number(it.amount).toFixed(2)}</strong> <span class="gdr-meta">${escapeHtml(it.dueDate)}</span></span>
+        </div>
+      `).join('') : '<div class="empty" style="padding:10px;">Nothing due in this range.</div>';
+    }
   }
-  const glanceRangeSel = document.getElementById('glanceUpcomingRange');
-  if(glanceRangeSel) glanceRangeSel.addEventListener('change', renderGlanceCards);
+  const glanceStat = document.getElementById('glanceUpcomingStat');
+  if(glanceStat) glanceStat.addEventListener('click', () => {
+    const detailEl = document.getElementById('glanceUpcomingDetail');
+    if(!detailEl) return;
+    detailEl.style.display = detailEl.style.display === 'none' ? '' : 'none';
+  });
+  ['glanceUpcomingFrom','glanceUpcomingTo'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', renderGlanceCards);
+  });
 
   function renderMonthlySpendChart(){
     const scope = reportScopeVal();
