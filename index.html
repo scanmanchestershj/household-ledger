@@ -3966,7 +3966,7 @@
 
     const periodStart = periodStartDate(period);
     const openingBalance = computeOpeningBalance(periodStart, scope);
-    const totalAvailable = income + cardBorrowTotal + openingBalance;
+    const totalAvailable = income + cardBorrowTotal + openingBalance + remitReceivedTotal;
 
     let cardNonReturnable = 0, cardReturnable = 0, cardOwn = 0, cardSplitTotal = 0;
     const personMap = {};
@@ -4149,9 +4149,36 @@
     const scopeCountryName = scope === 'UAE' ? state.countryConfig.country1.name : (scope === 'India' ? state.countryConfig.country2.name : null);
     let dueCards = currentData().cards.filter(c => c.dueDate && c.dueDate >= win.start && c.dueDate <= win.end && !mapped.has(c.id));
     if(scopeCountryName) dueCards = dueCards.filter(c => (c.country || 'United Arab Emirates') === scopeCountryName);
-    const dueSum = dueCards.reduce((s,c) => s + Number(c.amount), 0);
+    const dueCardsSum = dueCards.reduce((s,c) => s + Number(c.amount), 0);
+
+    // Loans/EMIs (state.countries[X].debts) also count as upcoming due outflow —
+    // previously only card due-dates were counted here, so a debt like a yearly
+    // gold-loan installment due in 2 months never showed up in this widget.
+    function debtsDueInWindow(countryKey, countryName){
+      const list = (currentData().countries[countryKey].debts || []).filter(d => d.dueDate && d.dueDate >= win.start && d.dueDate <= win.end);
+      return list.map(d => ({
+        label: d.name + (d.category ? ' (' + d.category + ')' : ''),
+        amount: Number(d.monthlyAmount || 0),
+        dueDate: d.dueDate, country: countryName
+      }));
+    }
+    let dueDebts = [];
+    if(!scopeCountryName){
+      dueDebts = [
+        ...debtsDueInWindow('UAE', state.countryConfig.country1.name),
+        ...debtsDueInWindow('India', state.countryConfig.country2.name)
+      ];
+    } else if(scope === 'UAE'){
+      dueDebts = debtsDueInWindow('UAE', state.countryConfig.country1.name);
+    } else if(scope === 'India'){
+      dueDebts = debtsDueInWindow('India', state.countryConfig.country2.name);
+    }
+    const dueDebtsSum = dueDebts.reduce((s,d) => s + Number(d.amount), 0);
+
+    const dueSum = dueCardsSum + dueDebtsSum;
     document.getElementById('glanceUpcomingBills').textContent = curFmt(dueSum);
-    document.getElementById('glanceUpcomingSub').textContent = dueCards.length ? `${dueCards.length} ${win.label}` : `None ${win.label}`;
+    const totalDueCount = dueCards.length + dueDebts.length;
+    document.getElementById('glanceUpcomingSub').textContent = totalDueCount ? `${totalDueCount} ${win.label}` : `None ${win.label}`;
   }
   const glanceRangeSel = document.getElementById('glanceUpcomingRange');
   if(glanceRangeSel) glanceRangeSel.addEventListener('change', renderGlanceCards);
@@ -4243,6 +4270,10 @@
       <div class="sub-row"><span class="label">Opening balance</span><span>${curFmt(r.openingBalance)}</span></div>
       <div class="sub-group-title">Income (salary etc.)</div>
       ${itemSubRows(r.incomeItems, {fmtFn:curFmt})}
+      ${(scope !== 'UAE') ? `
+      <div class="sub-group-title">Remittance received from ${escapeHtml(state.countryConfig.country1.name)}</div>
+      ${itemSubRows(r.remitReceivedItems.map(x => ({label: x.label || 'Remittance received', amount: x.amount, date: x.date})), {fmtFn:curFmt})}
+      ` : ''}
       <div class="sub-group-title">Borrowing from card (due later)</div>
       ${itemSubRows(r.cardBorrowItems, {showDue:true, fmtFn:curFmt})}
       <div class="sub-row sub-total"><span class="label">Total available this period</span><span>${curFmt(r.totalAvailable)}</span></div>
@@ -4288,6 +4319,7 @@
     const bd = document.getElementById('reportBreakdown');
     const rows = [
       { key:'income', label:'Income', val:r.income, body:`<div class="sub-group-title">Income</div>${itemSubRows(r.incomeItems, {fmtFn:curFmt})}` },
+      { key:'remitreceived', label:'Remittance received from ' + state.countryConfig.country1.name, val:r.remitReceivedTotal, body:`<div class="sub-group-title">Remittance received</div>${itemSubRows(r.remitReceivedItems.map(x => ({label: x.label || 'Remittance received', amount: x.amount, date: x.date})), {fmtFn:curFmt})}` },
       { key:'regexp', label:'Regular expenses', val:r.regularExpense, body:`<div class="sub-group-title">Regular expenses</div>${itemSubRows(r.regularExpenseItems, {fmtFn:curFmt})}` },
       { key:'lending', label:'Lending money (given out)', val:r.lending, body:`<div class="sub-group-title">Lending (given out)</div>${itemSubRows(r.lendingItems, {fmtFn:curFmt})}` },
       { key:'borrowing', label:'Borrowing money (taken in)', val:r.borrowing, body:`<div class="sub-group-title">Borrowing (taken in)</div>${itemSubRows(r.borrowingItems, {showDue:true, fmtFn:curFmt})}` },
@@ -4296,8 +4328,13 @@
       { key:'net', label:'Net (income − regular expenses − card total spend)', val:r.netSimple, body:null }
     ];
     // A Home-only report has nothing to show for "Remittance sent" (that's logged on
-    // the Resident side) — drop the row entirely rather than show a confusing zero.
-    const visibleRows = scope === 'India' ? rows.filter(row => row.key !== 'remitsent') : rows;
+    // the Resident side); a Resident-only report has nothing for "Remittance received"
+    // (that only lands in the Home country's own transactions).
+    const visibleRows = rows.filter(row => {
+      if(row.key === 'remitsent' && scope === 'India') return false;
+      if(row.key === 'remitreceived' && scope === 'UAE') return false;
+      return true;
+    });
     bd.innerHTML = visibleRows.map(row => {
       const open = !!reportBreakdownOpen[row.key];
       const rowHtml = `<div class="breakdown-row${row.body ? ' clickable' : ''}" data-key="${row.key}"><span class="label">${escapeHtml(row.label)}</span><span>${curFmt(row.val)}</span></div>`;
