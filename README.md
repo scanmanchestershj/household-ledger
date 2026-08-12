@@ -112,3 +112,20 @@ from.
 - If you turn "Confirm email" back on, sign-up/join will require the person
   to confirm their email and then repeat the sign-up/join step once signed
   in, since Supabase requires an active session to write the household/profile rows.
+
+## Progressive Web App (mobile + Windows installable)
+
+This app is a full PWA — once deployed on Vercel:
+- **Android/iPhone**: open the site in Chrome/Safari → menu → "Add to Home Screen" (or Chrome will show an install banner automatically). It launches full-screen, no browser bar, with its own icon.
+- **Windows/Mac (Chrome or Edge)**: an install icon (⊕) appears in the address bar — click it to install as a standalone desktop app.
+
+The service worker (`sw.js`) caches the app shell for fast loading, but **never caches Supabase requests** — your data always loads live.
+
+## Building an Android APK
+
+This repo is already a valid installable PWA, so you don't need Android Studio or any dev tooling — use [PWABuilder](https://www.pwabuilder.com), a free Microsoft-run tool:
+
+1. Deploy this site to Vercel first (see steps above) and get its live URL.
+2. Go to [pwabuilder.com](https://www.pwabuilder.com), paste your Vercel URL, click **Start**.
+3. It'll detect the manifest + service worker automatically (green checks).
+4. Go to the **Android** package tab → **Generate Package** → downloads a signed `.apk`/`.aab` you can install directly on your phone (enable "Install unknown apps" for your browser) or upload to the Google Play Console if you want to publish it properly.

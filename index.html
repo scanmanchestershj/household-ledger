@@ -2,13 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover">
 <title>The Household Ledger</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1F6F63">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Household Ledger">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  html{ overflow-x:hidden; }
+  body{ overflow-x:hidden; }
+</style>
 <style>
   :root{
     --paper: #EDF0E8;
@@ -515,7 +527,14 @@
             </div>
             <div class="full">
               <label class="field-label">Description</label>
-              <input type="text" id="cardDesc" placeholder="e.g. Flight tickets, Dinner">
+              <select id="cardDescSelect">
+                <option value="Tea">Tea</option>
+                <option value="Lunch">Lunch</option>
+                <option value="Dinner">Dinner</option>
+                <option value="Groceries">Groceries</option>
+                <option value="Others">Others</option>
+              </select>
+              <input type="text" id="cardDesc" placeholder="Type it here" style="display:none;margin-top:8px;">
             </div>
             <div>
               <label class="field-label">Amount (total)</label>
@@ -1498,7 +1517,11 @@
         </div>
 
         <div class="section-title">Income vs. debt overview</div>
-        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;">"Total income" includes remittance received from <span id="remitFromCountryLabel">UAE</span>, logged in this country's Budget tab. "Remaining after debt" only subtracts actual loans/EMIs logged here.</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">By default, "Total income" only counts income logged directly in this country's Budget tab — remittance received from <span id="remitFromCountryLabel">UAE</span> is <strong>not</strong> included unless you allot it below.</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:10px;cursor:pointer;">
+          <input type="checkbox" id="indiaIncludeRemitInDebt" style="width:auto;">
+          Allot remittance received toward this calculation
+        </label>
         <div class="debt-summary-box" id="indiaDebtSummary"></div>
       </div>
 
@@ -3139,6 +3162,32 @@
   document.getElementById('cardCountry').addEventListener('change', populateCardBankOptions);
   document.getElementById('cardBank').addEventListener('change', toggleCardBankOther);
 
+  const CARD_DESC_PRESETS = ['Tea', 'Lunch', 'Dinner', 'Groceries'];
+  function setCardDescValue(desc){
+    const sel = document.getElementById('cardDescSelect');
+    const box = document.getElementById('cardDesc');
+    if(desc && CARD_DESC_PRESETS.includes(desc)){
+      sel.value = desc;
+      box.style.display = 'none';
+      box.value = desc;
+    } else {
+      sel.value = 'Others';
+      box.style.display = '';
+      box.value = desc || '';
+    }
+  }
+  document.getElementById('cardDescSelect').addEventListener('change', function(){
+    const box = document.getElementById('cardDesc');
+    if(this.value === 'Others'){
+      box.style.display = '';
+      box.value = '';
+      box.focus();
+    } else {
+      box.style.display = 'none';
+      box.value = this.value;
+    }
+  });
+
   document.getElementById('cardSpendFor').addEventListener('change', updateCardSpendForUI);
   function updateCardSpendForUI(){
     const val = document.getElementById('cardSpendFor').value;
@@ -3447,7 +3496,7 @@
     }
     toggleCardBankOther();
     document.getElementById('cardLabel').value = c.cardLabel || '';
-    document.getElementById('cardDesc').value = c.desc || '';
+    setCardDescValue(c.desc || '');
     document.getElementById('cardAmount').value = c.amount;
     document.getElementById('cardDate').value = c.date || todayStr();
     document.getElementById('cardTime').value = c.time || nowTimeStr();
@@ -3475,7 +3524,7 @@
     populateCardBankOptions();
     document.getElementById('cardBankOther').value = '';
     document.getElementById('cardLabel').value = '';
-    document.getElementById('cardDesc').value = '';
+    setCardDescValue('');
     document.getElementById('cardAmount').value = '';
     document.getElementById('cardDue').value = '';
     document.getElementById('cardDate').value = todayStr();
@@ -3540,7 +3589,7 @@
         });
       });
       document.getElementById('cardLabel').value = '';
-      document.getElementById('cardDesc').value = '';
+      setCardDescValue('');
       document.getElementById('cardAmount').value = '';
       document.getElementById('cardDue').value = '';
       document.getElementById('cardTime').value = nowTimeStr();
@@ -3560,7 +3609,7 @@
     } else {
       currentData().cards.push(Object.assign({id: uid()}, record));
       document.getElementById('cardLabel').value = '';
-      document.getElementById('cardDesc').value = '';
+      setCardDescValue('');
       document.getElementById('cardAmount').value = '';
       document.getElementById('cardDue').value = '';
       document.getElementById('cardTime').value = nowTimeStr();
@@ -5344,7 +5393,14 @@
   function renderDebtSummary(countryKey){
     const c = currentData().countries[countryKey];
     const prefix = countryKey === 'UAE' ? 'uae' : 'india';
-    const totalIncome = (c.transactions || []).filter(t => t.type === 'income').reduce((s,t)=>s+Number(t.amount),0);
+    // Remittance-received income (linkedRemitId) only counts toward this
+    // country's debt-income calculation if the user has explicitly allotted
+    // it via the checkbox — otherwise it's excluded so debt affordability
+    // isn't inflated by money that hasn't actually been earmarked for it.
+    const includeRemit = countryKey === 'India' ? !!(state.settings && state.settings.indiaIncludeRemitInDebt) : true;
+    const totalIncome = (c.transactions || [])
+      .filter(t => t.type === 'income' && (includeRemit || !t.linkedRemitId))
+      .reduce((s,t)=>s+Number(t.amount),0);
     const totalEmi = c.debts.reduce((s,d)=>s+monthlyEquivalentOf(d),0);
     const totalOutstanding = c.debts.reduce((s,d)=>s+Number(d.principal||0),0);
     const totalInterest = c.debts.reduce((s,d)=>s+interestPerMonth(d),0);
@@ -5387,6 +5443,8 @@
   function renderIndia(){
     const c = currentData().countries.India;
     document.getElementById('remitFromCountryLabel').textContent = state.countryConfig.country1.name;
+    const remitToggle = document.getElementById('indiaIncludeRemitInDebt');
+    if(remitToggle) remitToggle.checked = !!(state.settings && state.settings.indiaIncludeRemitInDebt);
     renderDebts('indiaDebtList', c.debts, 'India',
       (id) => { c.debts = c.debts.filter(x=>x.id!==id); if(editingDebtId('India')===id) cancelEditDebtCountry('India'); save(); renderIndia(); },
       (id) => startEditDebtCountry('India', id),
@@ -5394,6 +5452,12 @@
     renderDebtSummary('India');
     renderInvestmentCountry('India');
   }
+  const indiaIncludeRemitToggle = document.getElementById('indiaIncludeRemitInDebt');
+  if(indiaIncludeRemitToggle) indiaIncludeRemitToggle.addEventListener('change', () => {
+    if(!state.settings) state.settings = {};
+    state.settings.indiaIncludeRemitInDebt = indiaIncludeRemitToggle.checked;
+    save(); renderDebtSummary('India');
+  });
 
   function renderDebts(elId, debts, country, onDelete, onEdit, onPay){
     const el = document.getElementById(elId);
@@ -6182,6 +6246,13 @@
   setDateLine();
   initApp();
 })();
+</script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service worker registration failed', err));
+    });
+  }
 </script>
 </body>
 </html>
