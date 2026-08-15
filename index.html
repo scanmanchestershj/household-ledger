@@ -110,6 +110,8 @@
   .glance-due-row{ display:flex; justify-content:space-between; gap:10px; padding:7px 10px; border-bottom:1px solid var(--line); font-size:12.5px; }
   .glance-due-row:last-child{ border-bottom:none; }
   .glance-due-row .gdr-meta{ color:var(--ink-soft); font-size:11px; }
+  .link-btn{ background:none; border:none; padding:0; margin-left:4px; font-size:10.5px; text-decoration:underline; color:inherit; cursor:pointer; font-family:inherit; }
+  .tag-paid{ background:#E1F0E5; color:#1F6F63; }
   .spend-analysis-row{ margin-bottom:10px; }
   .spend-analysis-row-head{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
   .spend-analysis-row-head .sa-label{ font-weight:600; }
@@ -1845,6 +1847,14 @@
       if(!c.splits) c.splits = [];
       if(!c.spendFor) c.spendFor = 'own';
       if(!c.returnable) c.returnable = 'non-returnable';
+      if(c.paid === undefined) c.paid = false;
+      if(c.paidDate === undefined) c.paidDate = '';
+      if(c.appliedDue === undefined) c.appliedDue = '';
+      c.splits.forEach(sp => {
+        if(sp.paid === undefined) sp.paid = false;
+        if(sp.paidDate === undefined) sp.paidDate = '';
+        if(sp.appliedDue === undefined) sp.appliedDue = '';
+      });
       if(!c.slot) c.slot = 'resident';
       if(!c.country) c.country = 'United Arab Emirates';
       return c;
@@ -3461,10 +3471,15 @@
       let bodyExtra = '';
       if(c.spendFor === 'own'){
         const emiBadge = c.emi ? `<div class="item-meta" style="background:#fdf3e3;color:#8a5a00;">📅 EMI ${c.emi.installmentNo}/${c.emi.totalInstallments} · ${escapeHtml(c.emi.debtType)} · ${escapeHtml(c.emi.lenderBank)} · ${c.emi.ratePerPeriod}%</div>` : '';
+        const returnBadge = c.returnable === 'returnable'
+          ? (c.paid
+              ? `<div class="item-meta tag-paid">✓ Paid ${escapeHtml(c.paidDate || '')}${c.appliedDue ? ' → applied to due ' + escapeHtml(c.appliedDue) : ''} <button type="button" class="link-btn" data-action="unpaidcard" data-id="${c.id}">undo</button></div>`
+              : `<div class="item-meta tag-returnable">Returnable${c.returnName ? ' · ' + escapeHtml(c.returnName) : ''} <button type="button" class="link-btn" data-action="paidcard" data-id="${c.id}">mark paid</button></div>`)
+          : `<div class="item-meta tag-nonreturnable">Non-returnable</div>`;
         bodyExtra = `
           <div class="card-tags">
             <div class="item-meta tag-own">Own spend</div>
-            <div class="item-meta ${c.returnable === 'returnable' ? 'tag-returnable' : 'tag-nonreturnable'}">${c.returnable === 'returnable' ? ('Returnable' + (c.returnName ? ' · ' + escapeHtml(c.returnName) : '')) : 'Non-returnable'}</div>
+            ${returnBadge}
             ${emiBadge}
             ${dueBadge}
           </div>`;
@@ -3484,7 +3499,11 @@
                 <span class="sname">${escapeHtml(sp.name)}</span>
                 <span class="stags">
                   <span>${fmt(sp.amount)}</span>
-                  <span class="item-meta ${sp.returnable === 'returnable' ? 'tag-returnable' : 'tag-nonreturnable'}">${sp.returnable === 'returnable' ? 'Returnable' : 'Non-ret.'}</span>
+                  ${sp.returnable === 'returnable'
+                    ? (sp.paid
+                        ? `<span class="item-meta tag-paid">✓ Paid ${escapeHtml(sp.paidDate || '')}${sp.appliedDue ? ' → due ' + escapeHtml(sp.appliedDue) : ''} <button type="button" class="link-btn" data-action="unpaidsplit" data-card="${c.id}" data-split="${sp.id}">undo</button></span>`
+                        : `<span class="item-meta tag-returnable">Returnable <button type="button" class="link-btn" data-action="paidsplit" data-card="${c.id}" data-split="${sp.id}">mark paid</button></span>`)
+                    : `<span class="item-meta tag-nonreturnable">Non-ret.</span>`}
                 </span>
               </div>
             `).join('')}
@@ -3508,11 +3527,47 @@
       `;
       li.style.cursor = 'pointer';
       li.addEventListener('click', (e) => {
-        if(e.target.closest('.del-btn') || e.target.closest('.edit-btn')) return;
+        if(e.target.closest('.del-btn') || e.target.closest('.edit-btn') || e.target.closest('.link-btn')) return;
         startEditCard(c.id);
       });
       list.appendChild(li);
     });
+    list.querySelectorAll('[data-action="paidcard"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const c = currentData().cards.find(x => x.id === el.dataset.id);
+      if(!c) return;
+      const paidDate = prompt('Paid date (YYYY-MM-DD):', todayStr());
+      if(paidDate === null) return;
+      const appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', '');
+      c.paid = true; c.paidDate = paidDate.trim(); c.appliedDue = (appliedDue || '').trim();
+      save(); renderCards();
+    }));
+    list.querySelectorAll('[data-action="unpaidcard"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const c = currentData().cards.find(x => x.id === el.dataset.id);
+      if(!c) return;
+      c.paid = false; c.paidDate = ''; c.appliedDue = '';
+      save(); renderCards();
+    }));
+    list.querySelectorAll('[data-action="paidsplit"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const c = currentData().cards.find(x => x.id === el.dataset.card);
+      const sp = c && (c.splits || []).find(s => s.id === el.dataset.split);
+      if(!sp) return;
+      const paidDate = prompt('Paid date (YYYY-MM-DD):', todayStr());
+      if(paidDate === null) return;
+      const appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', '');
+      sp.paid = true; sp.paidDate = paidDate.trim(); sp.appliedDue = (appliedDue || '').trim();
+      save(); renderCards();
+    }));
+    list.querySelectorAll('[data-action="unpaidsplit"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const c = currentData().cards.find(x => x.id === el.dataset.card);
+      const sp = c && (c.splits || []).find(s => s.id === el.dataset.split);
+      if(!sp) return;
+      sp.paid = false; sp.paidDate = ''; sp.appliedDue = '';
+      save(); renderCards();
+    }));
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
       currentData().cards = currentData().cards.filter(x => x.id !== el.dataset.id);
       if(editingCardId === el.dataset.id) cancelEditCard();
@@ -3606,7 +3661,8 @@
         id: uid(),
         name: r.querySelector('.split-name').value.trim() || 'Unnamed',
         amount: parseFloat(r.querySelector('.split-amount').value) || 0,
-        returnable: r.querySelector('.split-returnable').value
+        returnable: r.querySelector('.split-returnable').value,
+        paid: false, paidDate: '', appliedDue: ''
       })).filter(s => s.amount > 0);
     }
 
@@ -3642,7 +3698,7 @@
       return;
     }
 
-    const record = { country, bank, cardLabel, desc, amount, date, time, dueDate, spendFor, returnable, returnName, splits, slot: activeCardSlot };
+    const record = { country, bank, cardLabel, desc, amount, date, time, dueDate, spendFor, returnable, returnName, splits, slot: activeCardSlot, paid: false, paidDate: '', appliedDue: '' };
     if(editingCardId){
       const idx = currentData().cards.findIndex(c => c.id === editingCardId);
       if(idx > -1) currentData().cards[idx] = Object.assign({id: editingCardId}, record);
@@ -4690,11 +4746,11 @@
     const items = [];
     cards.forEach(c => {
       if(c.spendFor === 'own' && c.returnable === 'returnable'){
-        items.push({ date: c.date, who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount) });
+        items.push({ date: c.date, who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount), paid: !!c.paid, paidDate: c.paidDate || '', appliedDue: c.appliedDue || '' });
       } else if(c.spendFor === 'split'){
         (c.splits || []).forEach(sp => {
           if(sp.returnable === 'returnable'){
-            items.push({ date: c.date, who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount) });
+            items.push({ date: c.date, who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount), paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '' });
           }
         });
       }
@@ -4720,24 +4776,37 @@
     if(person !== '__overall__') items = items.filter(it => it.who === person);
     items.sort((a,b) => a.date.localeCompare(b.date));
     const total = items.reduce((s,it) => s + it.amount, 0);
-    return { items, total, person, from: fromEl ? fromEl.value : '', to: toEl ? toEl.value : '' };
+    const paidTotal = items.filter(it => it.paid).reduce((s,it) => s + it.amount, 0);
+    const balanceDue = total - paidTotal;
+    return { items, total, paidTotal, balanceDue, person, from: fromEl ? fromEl.value : '', to: toEl ? toEl.value : '' };
   }
   function renderReturnableStatement(){
     populateReturnablePersonSelect();
     const listEl = document.getElementById('returnableStatementList');
     if(!listEl) return;
-    const { items, total } = returnableStatementData();
+    const { items, total, paidTotal, balanceDue } = returnableStatementData();
     if(items.length === 0){
       listEl.innerHTML = '<div class="empty">No returnable items match this selection.</div>';
       return;
     }
     listEl.innerHTML = `
       <table class="report-table">
-        <thead><tr><th>Date</th><th>What</th><th>Amount</th></tr></thead>
+        <thead><tr><th>Date</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th></tr></thead>
         <tbody>
-          ${items.map(it => `<tr><td>${escapeHtml(it.date)}</td><td>${escapeHtml(it.desc)}</td><td>${fmt(it.amount)}</td></tr>`).join('')}
+          ${items.map(it => `<tr>
+            <td>${escapeHtml(it.date)}</td>
+            <td>${escapeHtml(it.desc)}</td>
+            <td>${fmt(it.amount)}</td>
+            <td><span class="item-meta ${it.paid ? 'tag-paid' : 'tag-soon'}">${it.paid ? 'Paid' : 'Pending'}</span></td>
+            <td>${escapeHtml(it.paidDate || '—')}</td>
+            <td>${escapeHtml(it.appliedDue || '—')}</td>
+          </tr>`).join('')}
         </tbody>
-        <tfoot><tr><td colspan="2"><strong>Total</strong></td><td><strong>${fmt(total)}</strong></td></tr></tfoot>
+        <tfoot>
+          <tr><td colspan="2">Total</td><td colspan="4"><strong>${fmt(total)}</strong></td></tr>
+          <tr><td colspan="2">Paid so far</td><td colspan="4">${fmt(paidTotal)}</td></tr>
+          <tr><td colspan="2"><strong>Balance due</strong></td><td colspan="4"><strong>${fmt(balanceDue)}</strong></td></tr>
+        </tfoot>
       </table>
     `;
   }
@@ -4746,31 +4815,69 @@
     if(el) el.addEventListener('change', renderReturnableStatement);
   });
   document.getElementById('returnableGeneratePdf').addEventListener('click', () => {
-    const { items, total, person, from, to } = returnableStatementData();
+    const { items, total, paidTotal, balanceDue, person, from, to } = returnableStatementData();
     if(items.length === 0){ alert('Nothing to put in the PDF for this selection.'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const personLabel = person === '__overall__' ? 'Everyone' : person;
-    doc.setFontSize(15);
-    doc.setTextColor(0);
-    doc.text(state.appTitle || 'Household Ledger', 14, 18);
-    doc.setFontSize(12);
-    doc.text(`Returnable statement — ${personLabel}`, 14, 27);
+
+    // Professional statement header
+    doc.setFillColor(31, 111, 99);
+    doc.rect(0, 0, 210, 24, 'F');
+    doc.setFontSize(16);
+    doc.setTextColor(255,255,255);
+    doc.text(state.appTitle || 'Household Ledger', 14, 15);
     doc.setFontSize(10);
+    doc.text('Returnable Statement', 196, 15, { align: 'right' });
+
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.text(`Statement for: ${personLabel}`, 14, 34);
+    doc.setFontSize(9.5);
     doc.setTextColor(90);
     const rangeLabel = (from || to) ? `Period: ${from || 'start'} to ${to || 'today'}` : 'Period: all time';
-    doc.text(rangeLabel, 14, 34);
-    doc.text(`Generated ${todayStr()}`, 14, 40);
-    const records = items.map(it => ({ Date: it.date, Description: it.desc, Amount: fmt(it.amount) }));
-    const fields = [{key:'Date',label:'Date'},{key:'Description',label:'Description'},{key:'Amount',label:'Amount'}];
+    doc.text(rangeLabel, 14, 40);
+    doc.text(`Statement date: ${todayStr()}`, 14, 45);
+
+    const records = items.map(it => ({
+      Date: it.date,
+      Description: it.desc,
+      Amount: fmt(it.amount),
+      Status: it.paid ? 'Paid' : 'Pending',
+      'Paid Date': it.paidDate || '—',
+      'Applied To Due': it.appliedDue || '—'
+    }));
+    const fields = ['Date','Description','Amount','Status','Paid Date','Applied To Due'].map(k => ({key:k,label:k}));
     const table = rowsPdfTable(records, fields);
-    doc.autoTable({ startY: 46, head: table.head, body: table.body, headStyles: { fillColor: [58,90,140] } });
-    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 56;
-    doc.setFontSize(12);
+    doc.autoTable({
+      startY: 51,
+      head: table.head,
+      body: table.body,
+      styles: { fontSize: 8.5 },
+      headStyles: { fillColor: [31,111,99], textColor: [255,255,255] },
+      alternateRowStyles: { fillColor: [243,240,232] }
+    });
+    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 60;
+    doc.setDrawColor(200);
+    doc.line(120, finalY + 8, 196, finalY + 8);
+    doc.setFontSize(10);
+    doc.setTextColor(60);
+    doc.text('Total:', 140, finalY + 14);
+    doc.text(fmt(total), 196, finalY + 14, { align: 'right' });
+    doc.text('Paid so far:', 140, finalY + 20);
+    doc.text(fmt(paidTotal), 196, finalY + 20, { align: 'right' });
+    doc.setFontSize(11.5);
     doc.setTextColor(0);
-    doc.text(`Total owed: ${fmt(total)}`, 14, finalY + 10);
+    doc.text('Balance due:', 140, finalY + 28);
+    doc.text(fmt(balanceDue), 196, finalY + 28, { align: 'right' });
+
+    doc.setFontSize(8);
+    doc.setTextColor(140);
+    doc.text('Generated by ' + (state.appTitle || 'Household Ledger'), 14, 287);
+
     doc.save(`Returnable_${personLabel.replace(/\s+/g,'_')}_${from || 'all'}_to_${to || 'today'}.pdf`);
   });
+
 
   // ---- Transposed table helpers for downloads: field/heading labels run down the
   // first column, and each record gets its own column to the right — used for every
