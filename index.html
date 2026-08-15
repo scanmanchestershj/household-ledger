@@ -842,6 +842,10 @@
       <div class="section-title">Spent for each person (splits)</div>
       <div id="reportPersonBreakdown"></div>
 
+      <div class="section-title">Returnable items — date wise</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Every individual returnable item in this period, listed one row per entry by date — your own returnable card spends and each person's returnable split share, shown separately rather than totalled together.</div>
+      <div id="reportReturnableDateWise"></div>
+
       <div class="section-title">Export & share</div>
       <div class="add-row">
         <button class="add-btn" id="exportExcelBtn">⬇ Download all-in-one Excel report</button>
@@ -4654,6 +4658,39 @@
           </tbody>
         </table>
       `;
+    }
+
+    // Individual returnable items, one row per entry, sorted by date — separate
+    // from the person-summary table above which only shows totals per person.
+    const returnableEl = document.getElementById('reportReturnableDateWise');
+    if(returnableEl){
+      const items = [];
+      r.cardsBySpend.forEach(c => {
+        if(c.spendFor === 'own' && c.returnable === 'returnable'){
+          items.push({ date: c.date, who: c.returnName || 'You', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount) });
+        } else if(c.spendFor === 'split'){
+          (c.splits || []).forEach(sp => {
+            if(sp.returnable === 'returnable'){
+              items.push({ date: c.date, who: sp.name, desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount) });
+            }
+          });
+        }
+      });
+      items.sort((a,b) => a.date.localeCompare(b.date));
+      if(items.length === 0){
+        returnableEl.innerHTML = '<div class="empty">No returnable items in this period.</div>';
+      } else {
+        const grandTotal = items.reduce((s,it) => s + it.amount, 0);
+        returnableEl.innerHTML = `
+          <table class="report-table">
+            <thead><tr><th>Date</th><th>From</th><th>What</th><th>Amount</th></tr></thead>
+            <tbody>
+              ${items.map(it => `<tr><td>${escapeHtml(it.date)}</td><td>${escapeHtml(it.who)}</td><td>${escapeHtml(it.desc)}</td><td>${curFmt(it.amount)}</td></tr>`).join('')}
+            </tbody>
+            <tfoot><tr><td colspan="3"><strong>Total returnable</strong></td><td><strong>${curFmt(grandTotal)}</strong></td></tr></tfoot>
+          </table>
+        `;
+      }
     }
   }
 
