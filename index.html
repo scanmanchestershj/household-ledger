@@ -684,6 +684,23 @@
             </div>
           </div>
 
+          <div class="accordion" data-key="iou-in">
+            <button type="button" class="accordion-header"><span>Owed to you — others' spend split with you</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion-body">
+              <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">The reverse of your card splits — this is for when <em>someone else</em> pays and splits a cost with you (e.g. Vignesh spends AED 2 and your share is AED 1). Log it here, per day, per person. This is a personal IOU tracker only — it's kept separate and is never counted as income or expense in Reports.</div>
+              <div class="add-row" style="flex-wrap:wrap;">
+                <input type="text" id="iouInPerson" placeholder="Who spent (e.g. Vignesh)" style="flex:1 1 140px;">
+                <input type="number" id="iouInTotal" placeholder="Total they spent" step="0.01" style="flex:1 1 110px;">
+                <input type="number" id="iouInShare" placeholder="Your share" step="0.01" style="flex:1 1 110px;">
+                <input type="date" id="iouInDate" style="flex:1 1 140px;">
+                <input type="text" id="iouInNote" placeholder="Note (optional)" style="flex:1 1 140px;">
+              </div>
+              <button class="add-btn full-width" id="iouInAdd" style="margin-top:8px;">Add entry</button>
+              <div id="iouInList" style="margin-top:12px;"></div>
+              <div id="iouInGrandTotal" class="spend-analysis-total" style="display:none;"></div>
+            </div>
+          </div>
+
           <div class="accordion" data-key="bank-wise-due-spend">
             <button type="button" class="accordion-header"><span>Bank-wise due date & spend (monthly)</span><span class="accordion-arrow">▸</span></button>
             <div class="accordion-body">
@@ -1754,6 +1771,7 @@
       groceries: [],
       transactions: [],
       cards: [],
+      iouIn: [],
       bankSettings: {},
       bankSummaries: [],
       devices: [
@@ -1812,6 +1830,7 @@
     });
     (ud.groceries || []).forEach(g => { if(!g.country) g.country = 'resident'; });
     (ud.devices || []).forEach(d => { if(!d.country) d.country = 'resident'; });
+    if(!ud.iouIn) ud.iouIn = [];
 
     // Chores and the Budget/transactions ledger used to be shared across the whole
     // household. They now live separately inside Resident Country and Home Country —
@@ -3390,6 +3409,7 @@
     renderCardUsage();
     renderBankSummaries();
     renderSpendAnalysis();
+    renderIouIn();
     populateCardMapOptions('UAE');
     populateCardMapOptions('India');
     const list = document.getElementById('cardList');
@@ -3786,6 +3806,61 @@
   ['spendAnalysisFrom','spendAnalysisTo'].forEach(id => {
     document.addEventListener('change', (e) => { if(e.target && e.target.id === id) renderSpendAnalysis(); });
   });
+
+  // ---- "Owed to you" — IOU tracker for what OTHERS spend and split with you ----
+  // (the reverse direction of a card's own "split" feature). Purely a personal
+  // ledger — never fed into Reports as income or expense.
+  document.getElementById('iouInAdd').addEventListener('click', () => {
+    const person = document.getElementById('iouInPerson').value.trim();
+    const total = parseFloat(document.getElementById('iouInTotal').value);
+    const share = parseFloat(document.getElementById('iouInShare').value);
+    const date = document.getElementById('iouInDate').value || todayStr();
+    const note = document.getElementById('iouInNote').value.trim();
+    if(!person || !share || share <= 0){ alert('Enter who spent and your share amount.'); return; }
+    if(!currentData().iouIn) currentData().iouIn = [];
+    currentData().iouIn.push({ id: uid(), person, total: isNaN(total) ? null : total, share, date, note, slot: activeCardSlot });
+    document.getElementById('iouInPerson').value = '';
+    document.getElementById('iouInTotal').value = '';
+    document.getElementById('iouInShare').value = '';
+    document.getElementById('iouInNote').value = '';
+    save(); renderIouIn();
+  });
+  function renderIouIn(){
+    const listEl = document.getElementById('iouInList');
+    const totalEl = document.getElementById('iouInGrandTotal');
+    if(!listEl) return;
+    const entries = (currentData().iouIn || []).filter(e => (e.slot || 'resident') === activeCardSlot).sort((a,b) => b.date.localeCompare(a.date));
+    if(entries.length === 0){
+      listEl.innerHTML = '<div class="empty">No entries yet.</div>';
+      totalEl.style.display = 'none';
+      return;
+    }
+    const byPerson = {};
+    entries.forEach(e => { byPerson[e.person] = (byPerson[e.person] || 0) + Number(e.share); });
+    const grandTotal = entries.reduce((s,e) => s + Number(e.share), 0);
+
+    const personSummary = Object.entries(byPerson).map(([name, sum]) =>
+      `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);padding:2px 0;"><span>${escapeHtml(name)}</span><span>${fmt(sum)}</span></div>`
+    ).join('');
+
+    listEl.innerHTML = `
+      <div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);">${personSummary}</div>
+    ` + entries.map(e => `
+      <div class="glance-due-row">
+        <span><strong>${escapeHtml(e.person)}</strong> ${e.note ? '· ' + escapeHtml(e.note) : ''}${e.total ? ` <span class="gdr-meta">(of ${fmt(e.total)} total)</span>` : ''}</span>
+        <span>
+          <strong>${fmt(e.share)}</strong> <span class="gdr-meta">${escapeHtml(e.date)}</span>
+          <button class="del-btn" data-action="deliouin" data-id="${e.id}" style="margin-left:6px;" title="Delete">×</button>
+        </span>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('[data-action="deliouin"]').forEach(btn => btn.addEventListener('click', () => {
+      currentData().iouIn = (currentData().iouIn || []).filter(e => e.id !== btn.dataset.id);
+      save(); renderIouIn();
+    }));
+    totalEl.style.display = '';
+    totalEl.innerHTML = `<span>Total owed to you</span><span>${fmt(grandTotal)}</span>`;
+  }
 
   function renderBankSummaries(){
     const el = document.getElementById('bankSummaryList');
