@@ -842,9 +842,26 @@
       <div class="section-title">Spent for each person (splits)</div>
       <div id="reportPersonBreakdown"></div>
 
-      <div class="section-title">Returnable items — date wise</div>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Every individual returnable item in this period, listed one row per entry by date — your own returnable card spends and each person's returnable split share, shown separately rather than totalled together.</div>
-      <div id="reportReturnableDateWise"></div>
+      <div class="section-title">Returnable — statement for one person</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Pick a person (or "Overall" for everyone) and a date range to see exactly what's owed, date by date — then generate a PDF you can hand to them directly.</div>
+      <div class="form-grid">
+        <div>
+          <label class="field-label">Person</label>
+          <select id="returnablePerson">
+            <option value="__overall__">Overall (everyone)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">From date</label>
+          <input type="date" id="returnableFrom">
+        </div>
+        <div>
+          <label class="field-label">To date</label>
+          <input type="date" id="returnableTo">
+        </div>
+      </div>
+      <div id="returnableStatementList"></div>
+      <button class="add-btn full-width" id="returnableGeneratePdf" style="margin-top:8px;">Generate PDF</button>
 
       <div class="section-title">Export & share</div>
       <div class="add-row">
@@ -4660,39 +4677,100 @@
       `;
     }
 
-    // Individual returnable items, one row per entry, sorted by date — separate
-    // from the person-summary table above which only shows totals per person.
-    const returnableEl = document.getElementById('reportReturnableDateWise');
-    if(returnableEl){
-      const items = [];
-      r.cardsBySpend.forEach(c => {
-        if(c.spendFor === 'own' && c.returnable === 'returnable'){
-          items.push({ date: c.date, who: c.returnName || 'You', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount) });
-        } else if(c.spendFor === 'split'){
-          (c.splits || []).forEach(sp => {
-            if(sp.returnable === 'returnable'){
-              items.push({ date: c.date, who: sp.name, desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount) });
-            }
-          });
-        }
-      });
-      items.sort((a,b) => a.date.localeCompare(b.date));
-      if(items.length === 0){
-        returnableEl.innerHTML = '<div class="empty">No returnable items in this period.</div>';
-      } else {
-        const grandTotal = items.reduce((s,it) => s + it.amount, 0);
-        returnableEl.innerHTML = `
-          <table class="report-table">
-            <thead><tr><th>Date</th><th>From</th><th>What</th><th>Amount</th></tr></thead>
-            <tbody>
-              ${items.map(it => `<tr><td>${escapeHtml(it.date)}</td><td>${escapeHtml(it.who)}</td><td>${escapeHtml(it.desc)}</td><td>${curFmt(it.amount)}</td></tr>`).join('')}
-            </tbody>
-            <tfoot><tr><td colspan="3"><strong>Total returnable</strong></td><td><strong>${curFmt(grandTotal)}</strong></td></tr></tfoot>
-          </table>
-        `;
-      }
-    }
+    renderReturnableStatement();
   }
+
+  // ---- Returnable statement: pick a person + date range, see it itemized by
+  // date, then generate a PDF to hand to that person. ----
+  function allReturnableItems(){
+    const scope = reportScopeVal();
+    const scopeCountryName = scope === 'UAE' ? state.countryConfig.country1.name : (scope === 'India' ? state.countryConfig.country2.name : null);
+    let cards = currentData().cards;
+    if(scopeCountryName) cards = cards.filter(c => (c.country || state.countryConfig.country1.name) === scopeCountryName);
+    const items = [];
+    cards.forEach(c => {
+      if(c.spendFor === 'own' && c.returnable === 'returnable'){
+        items.push({ date: c.date, who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount) });
+      } else if(c.spendFor === 'split'){
+        (c.splits || []).forEach(sp => {
+          if(sp.returnable === 'returnable'){
+            items.push({ date: c.date, who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount) });
+          }
+        });
+      }
+    });
+    return items;
+  }
+  function populateReturnablePersonSelect(){
+    const sel = document.getElementById('returnablePerson');
+    if(!sel) return;
+    const current = sel.value;
+    const names = [...new Set(allReturnableItems().map(it => it.who))].sort();
+    sel.innerHTML = `<option value="__overall__">Overall (everyone)</option>` + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    if(names.includes(current) || current === '__overall__') sel.value = current;
+  }
+  function returnableStatementData(){
+    const personSel = document.getElementById('returnablePerson');
+    const fromEl = document.getElementById('returnableFrom');
+    const toEl = document.getElementById('returnableTo');
+    const person = personSel ? personSel.value : '__overall__';
+    const from = fromEl && fromEl.value ? fromEl.value : '0000-01-01';
+    const to = toEl && toEl.value ? toEl.value : '9999-12-31';
+    let items = allReturnableItems().filter(it => it.date >= from && it.date <= to);
+    if(person !== '__overall__') items = items.filter(it => it.who === person);
+    items.sort((a,b) => a.date.localeCompare(b.date));
+    const total = items.reduce((s,it) => s + it.amount, 0);
+    return { items, total, person, from: fromEl ? fromEl.value : '', to: toEl ? toEl.value : '' };
+  }
+  function renderReturnableStatement(){
+    populateReturnablePersonSelect();
+    const listEl = document.getElementById('returnableStatementList');
+    if(!listEl) return;
+    const { items, total } = returnableStatementData();
+    if(items.length === 0){
+      listEl.innerHTML = '<div class="empty">No returnable items match this selection.</div>';
+      return;
+    }
+    listEl.innerHTML = `
+      <table class="report-table">
+        <thead><tr><th>Date</th><th>What</th><th>Amount</th></tr></thead>
+        <tbody>
+          ${items.map(it => `<tr><td>${escapeHtml(it.date)}</td><td>${escapeHtml(it.desc)}</td><td>${fmt(it.amount)}</td></tr>`).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="2"><strong>Total</strong></td><td><strong>${fmt(total)}</strong></td></tr></tfoot>
+      </table>
+    `;
+  }
+  ['returnablePerson','returnableFrom','returnableTo'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', renderReturnableStatement);
+  });
+  document.getElementById('returnableGeneratePdf').addEventListener('click', () => {
+    const { items, total, person, from, to } = returnableStatementData();
+    if(items.length === 0){ alert('Nothing to put in the PDF for this selection.'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const personLabel = person === '__overall__' ? 'Everyone' : person;
+    doc.setFontSize(15);
+    doc.setTextColor(0);
+    doc.text(state.appTitle || 'Household Ledger', 14, 18);
+    doc.setFontSize(12);
+    doc.text(`Returnable statement — ${personLabel}`, 14, 27);
+    doc.setFontSize(10);
+    doc.setTextColor(90);
+    const rangeLabel = (from || to) ? `Period: ${from || 'start'} to ${to || 'today'}` : 'Period: all time';
+    doc.text(rangeLabel, 14, 34);
+    doc.text(`Generated ${todayStr()}`, 14, 40);
+    const records = items.map(it => ({ Date: it.date, Description: it.desc, Amount: fmt(it.amount) }));
+    const fields = [{key:'Date',label:'Date'},{key:'Description',label:'Description'},{key:'Amount',label:'Amount'}];
+    const table = rowsPdfTable(records, fields);
+    doc.autoTable({ startY: 46, head: table.head, body: table.body, headStyles: { fillColor: [58,90,140] } });
+    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 56;
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`Total owed: ${fmt(total)}`, 14, finalY + 10);
+    doc.save(`Returnable_${personLabel.replace(/\s+/g,'_')}_${from || 'all'}_to_${to || 'today'}.pdf`);
+  });
 
   // ---- Transposed table helpers for downloads: field/heading labels run down the
   // first column, and each record gets its own column to the right — used for every
