@@ -1740,7 +1740,13 @@
 <script>
 (function(){
   // ---- Supabase client (auth + database persistence) ----
-  const sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  // Sessions are kept in sessionStorage (not localStorage) so closing the
+  // browser tab/app fully signs you out — reopening later always asks for
+  // your password again. Refreshing the page while the tab stays open does
+  // NOT log you out, since sessionStorage survives a normal page reload.
+  const sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, storage: window.sessionStorage, autoRefreshToken: true }
+  });
   let householdId = null;   // the signed-in user's household
   let myProfile = null;     // the signed-in user's own profiles row
 
