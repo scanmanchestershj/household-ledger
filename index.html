@@ -695,6 +695,7 @@
                 <input type="number" id="iouInTotal" placeholder="Total they spent" step="0.01" style="flex:1 1 110px;">
                 <input type="number" id="iouInShare" placeholder="Your share" step="0.01" style="flex:1 1 110px;">
                 <input type="date" id="iouInDate" style="flex:1 1 140px;">
+                <input type="time" id="iouInTime" style="flex:1 1 110px;">
                 <input type="text" id="iouInNote" placeholder="Note (optional)" style="flex:1 1 140px;">
               </div>
               <button class="add-btn full-width" id="iouInAdd" style="margin-top:8px;">Add entry</button>
@@ -1024,6 +1025,35 @@
               <option value="person">A person (counts in Debt owed)</option>
               <option value="card">Credit card (already tracked in Cards tab — won't be double-counted here)</option>
             </select>
+          </div>
+          <div class="full" id="uaeTxPurposeWrap" style="display:none;">
+            <label class="field-label">Purpose of use</label>
+            <select id="uaeTxPurpose">
+              <option value="">General / household use</option>
+              <option value="card_payment">Credit card payment (repaying a specific month's bill)</option>
+              <option value="spend_for_other">Spent for someone else</option>
+            </select>
+          </div>
+          <div class="full" id="uaeTxPurposeCardDueWrap" style="display:none;">
+            <label class="field-label">Which month's repayment (due date)</label>
+            <input type="date" id="uaeTxPurposeCardDue">
+          </div>
+          <div class="full" id="uaeTxPurposeOtherWrap" style="display:none;">
+            <div class="form-grid">
+              <div>
+                <label class="field-label">Spent for (name)</label>
+                <input type="text" id="uaeTxPurposePerson" placeholder="e.g. Vignesh">
+              </div>
+              <div>
+                <label class="field-label">Date</label>
+                <input type="date" id="uaeTxPurposeDate">
+              </div>
+              <div>
+                <label class="field-label">Time</label>
+                <input type="time" id="uaeTxPurposeTime">
+              </div>
+            </div>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">This shows up as a returnable item for this person in the Report tab's "Returnable — statement for one person".</div>
           </div>
           <div class="full" id="uaeTxPersonWrap" style="display:none;">
             <label class="field-label" id="uaeTxPersonLabel">Person</label>
@@ -1408,6 +1438,35 @@
               <option value="person">A person (counts in Debt owed)</option>
               <option value="card">Credit card (already tracked in Cards tab — won't be double-counted here)</option>
             </select>
+          </div>
+          <div class="full" id="indiaTxPurposeWrap" style="display:none;">
+            <label class="field-label">Purpose of use</label>
+            <select id="indiaTxPurpose">
+              <option value="">General / household use</option>
+              <option value="card_payment">Credit card payment (repaying a specific month's bill)</option>
+              <option value="spend_for_other">Spent for someone else</option>
+            </select>
+          </div>
+          <div class="full" id="indiaTxPurposeCardDueWrap" style="display:none;">
+            <label class="field-label">Which month's repayment (due date)</label>
+            <input type="date" id="indiaTxPurposeCardDue">
+          </div>
+          <div class="full" id="indiaTxPurposeOtherWrap" style="display:none;">
+            <div class="form-grid">
+              <div>
+                <label class="field-label">Spent for (name)</label>
+                <input type="text" id="indiaTxPurposePerson" placeholder="e.g. Vignesh">
+              </div>
+              <div>
+                <label class="field-label">Date</label>
+                <input type="date" id="indiaTxPurposeDate">
+              </div>
+              <div>
+                <label class="field-label">Time</label>
+                <input type="time" id="indiaTxPurposeTime">
+              </div>
+            </div>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">This shows up as a returnable item for this person in the Report tab's "Returnable — statement for one person".</div>
           </div>
           <div class="full" id="indiaTxPersonWrap" style="display:none;">
             <label class="field-label" id="indiaTxPersonLabel">Person</label>
@@ -2827,12 +2886,34 @@
     const dueLabel = document.getElementById(prefix + 'TxDueLabel');
     const sourceWrap = document.getElementById(prefix + 'TxBorrowSourceWrap');
     sourceWrap.style.display = type === 'borrowing' ? '' : 'none';
+    const purposeWrap = document.getElementById(prefix + 'TxPurposeWrap');
+    if(purposeWrap) purposeWrap.style.display = type === 'borrowing' ? '' : 'none';
+    if(type !== 'borrowing'){
+      const cdWrap = document.getElementById(prefix + 'TxPurposeCardDueWrap');
+      const otWrap = document.getElementById(prefix + 'TxPurposeOtherWrap');
+      if(cdWrap) cdWrap.style.display = 'none';
+      if(otWrap) otWrap.style.display = 'none';
+    } else {
+      updateTxPurposeVisibilityCountry(countryKey);
+    }
     if(type === 'lending'){ wrap.style.display = ''; label.textContent = 'Lent to (name)'; dueWrap.style.display = ''; dueLabel.textContent = 'Expected return date'; }
     else if(type === 'borrowing'){ wrap.style.display = ''; label.textContent = 'Borrowed from (name)'; dueWrap.style.display = ''; dueLabel.textContent = 'Repayment due date'; }
     else { wrap.style.display = 'none'; dueWrap.style.display = 'none'; }
   }
+  function updateTxPurposeVisibilityCountry(countryKey){
+    const prefix = budgetPrefix(countryKey);
+    const purposeEl = document.getElementById(prefix + 'TxPurpose');
+    if(!purposeEl) return;
+    const purpose = purposeEl.value;
+    const cdWrap = document.getElementById(prefix + 'TxPurposeCardDueWrap');
+    const otWrap = document.getElementById(prefix + 'TxPurposeOtherWrap');
+    if(cdWrap) cdWrap.style.display = purpose === 'card_payment' ? '' : 'none';
+    if(otWrap) otWrap.style.display = purpose === 'spend_for_other' ? '' : 'none';
+  }
   document.getElementById('uaeTxType').addEventListener('change', () => updateTxPersonVisibilityCountry('UAE'));
   document.getElementById('indiaTxType').addEventListener('change', () => updateTxPersonVisibilityCountry('India'));
+  document.getElementById('uaeTxPurpose').addEventListener('change', () => updateTxPurposeVisibilityCountry('UAE'));
+  document.getElementById('indiaTxPurpose').addEventListener('change', () => updateTxPurposeVisibilityCountry('India'));
 
   function renderBudgetCountry(countryKey){
     const prefix = budgetPrefix(countryKey);
@@ -2947,9 +3028,16 @@
     document.getElementById(prefix + 'TxPerson').value = t.person || '';
     document.getElementById(prefix + 'TxDue').value = t.dueDate || '';
     document.getElementById(prefix + 'TxBorrowSource').value = t.borrowSource || 'person';
+    const purposeEl = document.getElementById(prefix + 'TxPurpose');
+    if(purposeEl) purposeEl.value = t.purpose || '';
+    const cdEl = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdEl) cdEl.value = t.purposeCardDue || '';
+    const ppEl = document.getElementById(prefix + 'TxPurposePerson'); if(ppEl) ppEl.value = t.purposePerson || '';
+    const pdEl = document.getElementById(prefix + 'TxPurposeDate'); if(pdEl) pdEl.value = t.purposeDate || '';
+    const ptEl = document.getElementById(prefix + 'TxPurposeTime'); if(ptEl) ptEl.value = t.purposeTime || '';
     populateCardMapOptions(countryKey);
     document.getElementById(prefix + 'TxCardMap').value = t.cardMapId || '';
     updateTxPersonVisibilityCountry(countryKey);
+    updateTxPurposeVisibilityCountry(countryKey);
     document.getElementById(prefix + 'TxAdd').textContent = 'Update transaction';
     document.getElementById(prefix + 'TxCancelEdit').style.display = '';
     document.getElementById('panel-' + (countryKey === 'UAE' ? 'uae' : 'india')).scrollIntoView({behavior:'smooth', block:'start'});
@@ -2964,6 +3052,11 @@
     document.getElementById(prefix + 'TxPerson').value = '';
     document.getElementById(prefix + 'TxDue').value = '';
     document.getElementById(prefix + 'TxBorrowSource').value = 'person';
+    const purposeElC = document.getElementById(prefix + 'TxPurpose'); if(purposeElC) purposeElC.value = '';
+    const cdElC = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdElC) cdElC.value = '';
+    const ppElC = document.getElementById(prefix + 'TxPurposePerson'); if(ppElC) ppElC.value = '';
+    const pdElC = document.getElementById(prefix + 'TxPurposeDate'); if(pdElC) pdElC.value = '';
+    const ptElC = document.getElementById(prefix + 'TxPurposeTime'); if(ptElC) ptElC.value = '';
     populateCardMapOptions(countryKey);
     document.getElementById(prefix + 'TxCardMap').value = '';
     updateTxPersonVisibilityCountry(countryKey);
@@ -3027,7 +3120,19 @@
     }
     const curEditId = editingTxId(countryKey);
     const existingRepaid = curEditId ? (data.transactions.find(x=>x.id===curEditId)||{}).repaid : false;
-    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMapId: cardMap ? (cardMap.value || '') : '' };
+    const purposeEl = document.getElementById(prefix + 'TxPurpose');
+    const purpose = (type.value === 'borrowing' && purposeEl) ? purposeEl.value : '';
+    let purposeCardDue = '', purposePerson = '', purposeDate = '', purposeTime = '';
+    if(purpose === 'card_payment'){
+      const el = document.getElementById(prefix + 'TxPurposeCardDue');
+      purposeCardDue = el ? el.value : '';
+    } else if(purpose === 'spend_for_other'){
+      purposePerson = (document.getElementById(prefix + 'TxPurposePerson') || {}).value || '';
+      purposePerson = purposePerson.trim();
+      purposeDate = (document.getElementById(prefix + 'TxPurposeDate') || {}).value || (date.value || todayStr());
+      purposeTime = (document.getElementById(prefix + 'TxPurposeTime') || {}).value || '';
+    }
+    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMapId: cardMap ? (cardMap.value || '') : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime };
     if(curEditId){
       const idx = data.transactions.findIndex(x => x.id === curEditId);
       if(idx > -1) data.transactions[idx] = Object.assign({id: curEditId}, record);
@@ -3036,6 +3141,12 @@
       data.transactions.push(Object.assign({id: uid()}, record));
       label.value = ''; amount.value = ''; person.value = ''; due.value = '';
       if(cardMap) cardMap.value = '';
+      if(purposeEl) purposeEl.value = '';
+      const cdEl = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdEl) cdEl.value = '';
+      const ppEl = document.getElementById(prefix + 'TxPurposePerson'); if(ppEl) ppEl.value = '';
+      const pdEl = document.getElementById(prefix + 'TxPurposeDate'); if(pdEl) pdEl.value = '';
+      const ptEl = document.getElementById(prefix + 'TxPurposeTime'); if(ptEl) ptEl.value = '';
+      updateTxPurposeVisibilityCountry(countryKey);
     }
     save(); renderBudgetCountry(countryKey); renderOverview();
   }
@@ -3898,13 +4009,15 @@
     const total = parseFloat(document.getElementById('iouInTotal').value);
     const share = parseFloat(document.getElementById('iouInShare').value);
     const date = document.getElementById('iouInDate').value || todayStr();
+    const time = document.getElementById('iouInTime').value || '';
     const note = document.getElementById('iouInNote').value.trim();
     if(!person || !share || share <= 0){ alert('Enter who spent and your share amount.'); return; }
     if(!currentData().iouIn) currentData().iouIn = [];
-    currentData().iouIn.push({ id: uid(), person, total: isNaN(total) ? null : total, share, date, note, slot: activeCardSlot });
+    currentData().iouIn.push({ id: uid(), person, total: isNaN(total) ? null : total, share, date, time, note, slot: activeCardSlot });
     document.getElementById('iouInPerson').value = '';
     document.getElementById('iouInTotal').value = '';
     document.getElementById('iouInShare').value = '';
+    document.getElementById('iouInTime').value = '';
     document.getElementById('iouInNote').value = '';
     save(); renderIouIn();
   });
@@ -3932,7 +4045,7 @@
       <div class="glance-due-row">
         <span><strong>${escapeHtml(e.person)}</strong> ${e.note ? '· ' + escapeHtml(e.note) : ''}${e.total ? ` <span class="gdr-meta">(of ${fmt(e.total)} total)</span>` : ''}</span>
         <span>
-          <strong>${fmt(e.share)}</strong> <span class="gdr-meta">${escapeHtml(e.date)}</span>
+          <strong>${fmt(e.share)}</strong> <span class="gdr-meta">${escapeHtml(e.date)}${e.time ? ' ' + escapeHtml(e.time) : ''}</span>
           <button class="del-btn" data-action="deliouin" data-id="${e.id}" style="margin-left:6px;" title="Delete">×</button>
         </span>
       </div>
@@ -4752,14 +4865,30 @@
     const items = [];
     cards.forEach(c => {
       if(c.spendFor === 'own' && c.returnable === 'returnable'){
-        items.push({ date: c.date, who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount), paid: !!c.paid, paidDate: c.paidDate || '', appliedDue: c.appliedDue || '' });
+        items.push({ date: c.date, time: c.time || '', who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount), paid: !!c.paid, paidDate: c.paidDate || '', appliedDue: c.appliedDue || '' });
       } else if(c.spendFor === 'split'){
         (c.splits || []).forEach(sp => {
           if(sp.returnable === 'returnable'){
-            items.push({ date: c.date, who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount), paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '' });
+            items.push({ date: c.date, time: c.time || '', who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount), paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '' });
           }
         });
       }
+    });
+    // Borrowed money that was then spent on someone else's behalf (Budget →
+    // Borrowing → Purpose of use → "Spent for someone else") is also a
+    // returnable — that person owes it back, same as a card split would.
+    const countryKeys = scope === 'UAE' ? ['UAE'] : (scope === 'India' ? ['India'] : ['UAE','India']);
+    countryKeys.forEach(ck => {
+      const tx = (currentData().countries[ck] && currentData().countries[ck].transactions) || [];
+      tx.forEach(t => {
+        if(t.type === 'borrowing' && t.purpose === 'spend_for_other' && t.purposePerson){
+          items.push({
+            date: t.purposeDate || t.date, time: t.purposeTime || '',
+            who: t.purposePerson, desc: (t.label || 'Borrowed & spent for them'),
+            amount: Number(t.amount), paid: false, paidDate: '', appliedDue: ''
+          });
+        }
+      });
     });
     return items;
   }
@@ -4797,10 +4926,11 @@
     }
     listEl.innerHTML = `
       <table class="report-table">
-        <thead><tr><th>Date</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th></tr></thead>
+        <thead><tr><th>Date</th><th>Time</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th></tr></thead>
         <tbody>
           ${items.map(it => `<tr>
             <td>${escapeHtml(it.date)}</td>
+            <td>${escapeHtml(it.time || '—')}</td>
             <td>${escapeHtml(it.desc)}</td>
             <td>${fmt(it.amount)}</td>
             <td><span class="item-meta ${it.paid ? 'tag-paid' : 'tag-soon'}">${it.paid ? 'Paid' : 'Pending'}</span></td>
@@ -4809,9 +4939,9 @@
           </tr>`).join('')}
         </tbody>
         <tfoot>
-          <tr><td colspan="2">Total</td><td colspan="4"><strong>${fmt(total)}</strong></td></tr>
-          <tr><td colspan="2">Paid so far</td><td colspan="4">${fmt(paidTotal)}</td></tr>
-          <tr><td colspan="2"><strong>Balance due</strong></td><td colspan="4"><strong>${fmt(balanceDue)}</strong></td></tr>
+          <tr><td colspan="3">Total</td><td colspan="4"><strong>${fmt(total)}</strong></td></tr>
+          <tr><td colspan="3">Paid so far</td><td colspan="4">${fmt(paidTotal)}</td></tr>
+          <tr><td colspan="3"><strong>Balance due</strong></td><td colspan="4"><strong>${fmt(balanceDue)}</strong></td></tr>
         </tfoot>
       </table>
     `;
@@ -4847,13 +4977,14 @@
 
     const records = items.map(it => ({
       Date: it.date,
+      Time: it.time || '—',
       Description: it.desc,
       Amount: fmt(it.amount),
       Status: it.paid ? 'Paid' : 'Pending',
       'Paid Date': it.paidDate || '—',
       'Applied To Due': it.appliedDue || '—'
     }));
-    const fields = ['Date','Description','Amount','Status','Paid Date','Applied To Due'].map(k => ({key:k,label:k}));
+    const fields = ['Date','Time','Description','Amount','Status','Paid Date','Applied To Due'].map(k => ({key:k,label:k}));
     const table = rowsPdfTable(records, fields);
     doc.autoTable({
       startY: 51,
