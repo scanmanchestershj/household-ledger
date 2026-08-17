@@ -699,6 +699,7 @@
                 <input type="text" id="iouInNote" placeholder="Note (optional)" style="flex:1 1 140px;">
               </div>
               <button class="add-btn full-width" id="iouInAdd" style="margin-top:8px;">Add entry</button>
+              <button class="add-btn ghost full-width" id="iouInCancelEdit" style="margin-top:8px;display:none;">Cancel edit</button>
               <div id="iouInList" style="margin-top:12px;"></div>
               <div id="iouInGrandTotal" class="spend-analysis-total" style="display:none;"></div>
             </div>
@@ -757,10 +758,10 @@
       <div class="section-title" style="margin-top:0;" id="reportHeading">Spend analysis</div>
 
       <div class="section-title" style="margin-top:0;">At a glance</div>
-      <div class="report-grid" style="margin-bottom:14px;">
-        <div class="stat teal">
+      <div class="report-grid" style="margin-bottom:8px;">
+        <div class="stat teal" id="glanceThisMonthStat" style="cursor:pointer;">
           <div class="num" id="glanceThisMonth">–</div>
-          <div class="label">this month's spending</div>
+          <div class="label">this month's spending — click for details</div>
           <div class="glance-delta" id="glanceThisMonthDelta"></div>
         </div>
         <div class="stat" id="glanceUpcomingStat" style="cursor:pointer;">
@@ -774,7 +775,8 @@
           <div class="glance-delta amber" id="glanceUpcomingSub"></div>
         </div>
       </div>
-      <div id="glanceUpcomingDetail" style="display:none;margin:-8px 0 14px 0;"></div>
+      <div id="glanceThisMonthDetail" style="display:none;margin:-4px 0 10px 0;"></div>
+      <div id="glanceUpcomingDetail" style="display:none;margin:-4px 0 14px 0;"></div>
 
       <div class="monthly-spend-card">
         <div class="monthly-spend-head">
@@ -1927,6 +1929,16 @@
     (ud.groceries || []).forEach(g => { if(!g.country) g.country = 'resident'; });
     (ud.devices || []).forEach(d => { if(!d.country) d.country = 'resident'; });
     if(!ud.iouIn) ud.iouIn = [];
+    ['UAE','India'].forEach(ck => {
+      const country = ud.countries && ud.countries[ck];
+      if(country && country.transactions){
+        country.transactions.forEach(t => {
+          if(t.purposePaid === undefined) t.purposePaid = false;
+          if(t.purposePaidDate === undefined) t.purposePaidDate = '';
+          if(t.purposeAppliedDue === undefined) t.purposeAppliedDue = '';
+        });
+      }
+    });
 
     // Chores and the Budget/transactions ledger used to be shared across the whole
     // household. They now live separately inside Resident Country and Home Country —
@@ -3436,17 +3448,17 @@
       <button type="button" class="del-btn split-remove" aria-label="Remove split">×</button>
     `;
     document.getElementById('splitRows').appendChild(row);
-    row.querySelector('.split-remove').addEventListener('click', () => { row.remove(); applySplitTypeUI(); });
+    row.querySelector('.split-remove').addEventListener('click', () => { row.remove(); recalcSplitsAndPreview(); });
     row.querySelector('.split-amount').addEventListener('input', updateMySharePreview);
-    row.querySelector('.split-percent').addEventListener('input', updateMySharePreview);
-    row.querySelector('.split-shares').addEventListener('input', updateMySharePreview);
-    row.querySelector('.split-adjust').addEventListener('input', updateMySharePreview);
+    row.querySelector('.split-percent').addEventListener('input', recalcSplitsAndPreview);
+    row.querySelector('.split-shares').addEventListener('input', recalcSplitsAndPreview);
+    row.querySelector('.split-adjust').addEventListener('input', recalcSplitsAndPreview);
     applySplitTypeUI();
   }
-  document.getElementById('addSplitRowBtn').addEventListener('click', () => addSplitRowUI());
-  document.getElementById('cardAmount').addEventListener('input', updateMySharePreview);
+  document.getElementById('addSplitRowBtn').addEventListener('click', () => { addSplitRowUI(); recalcSplitsAndPreview(); });
+  document.getElementById('cardAmount').addEventListener('input', recalcSplitsAndPreview);
   const splitTypeSelectEl = document.getElementById('splitTypeSelect');
-  if(splitTypeSelectEl) splitTypeSelectEl.addEventListener('change', applySplitTypeUI);
+  if(splitTypeSelectEl) splitTypeSelectEl.addEventListener('change', () => { applySplitTypeUI(); recalcSplitsAndPreview(); });
 
   // Shows/hides the right input per row for the chosen split mode, then
   // recomputes each row's underlying dollar amount (except "unequally",
@@ -3462,8 +3474,11 @@
       pctEl.style.display = type === 'percentage' ? '' : 'none';
       sharesEl.style.display = type === 'shares' ? '' : 'none';
       adjustEl.style.display = type === 'adjustment' ? '' : 'none';
-      amountEl.style.display = type === 'unequally' ? '' : 'none';
-      amountEl.readOnly = type !== 'unequally';
+      // The computed amount always stays visible and editable — so after
+      // picking "Equally" (or any auto-split mode) you can still see and
+      // fine-tune each person's exact amount by hand afterward.
+      amountEl.style.display = '';
+      amountEl.readOnly = false;
     });
     updateMySharePreview();
   }
@@ -3497,11 +3512,16 @@
 
   function updateMySharePreview(){
     const total = parseFloat(document.getElementById('cardAmount').value) || 0;
+    const rows = [...document.querySelectorAll('#splitRows .split-row')];
+    const splitSum = rows.reduce((s, r) => s + (parseFloat(r.querySelector('.split-amount').value) || 0), 0);
+    document.getElementById('mySharePreview').textContent = fmt(Math.max(0, total - splitSum));
+  }
+  function recalcSplitsAndPreview(){
+    const total = parseFloat(document.getElementById('cardAmount').value) || 0;
     const type = currentSplitType();
     const rows = [...document.querySelectorAll('#splitRows .split-row')];
     if(type !== 'unequally') recomputeSplitAmounts(type, total, rows);
-    const splitSum = rows.reduce((s, r) => s + (parseFloat(r.querySelector('.split-amount').value) || 0), 0);
-    document.getElementById('mySharePreview').textContent = fmt(Math.max(0, total - splitSum));
+    updateMySharePreview();
   }
   function clearSplitRows(){ document.getElementById('splitRows').innerHTML = ''; }
 
@@ -4004,6 +4024,7 @@
   // ---- "Owed to you" — IOU tracker for what OTHERS spend and split with you ----
   // (the reverse direction of a card's own "split" feature). Purely a personal
   // ledger — never fed into Reports as income or expense.
+  let editingIouInId = null;
   document.getElementById('iouInAdd').addEventListener('click', () => {
     const person = document.getElementById('iouInPerson').value.trim();
     const total = parseFloat(document.getElementById('iouInTotal').value);
@@ -4013,14 +4034,45 @@
     const note = document.getElementById('iouInNote').value.trim();
     if(!person || !share || share <= 0){ alert('Enter who spent and your share amount.'); return; }
     if(!currentData().iouIn) currentData().iouIn = [];
-    currentData().iouIn.push({ id: uid(), person, total: isNaN(total) ? null : total, share, date, time, note, slot: activeCardSlot });
+    if(editingIouInId){
+      const entry = currentData().iouIn.find(e => e.id === editingIouInId);
+      if(entry) Object.assign(entry, { person, total: isNaN(total) ? null : total, share, date, time, note });
+      cancelEditIouIn();
+    } else {
+      currentData().iouIn.push({ id: uid(), person, total: isNaN(total) ? null : total, share, date, time, note, slot: activeCardSlot });
+      document.getElementById('iouInPerson').value = '';
+      document.getElementById('iouInTotal').value = '';
+      document.getElementById('iouInShare').value = '';
+      document.getElementById('iouInTime').value = '';
+      document.getElementById('iouInNote').value = '';
+    }
+    save(); renderIouIn();
+  });
+  function startEditIouIn(id){
+    const entry = (currentData().iouIn || []).find(e => e.id === id);
+    if(!entry) return;
+    editingIouInId = id;
+    document.getElementById('iouInPerson').value = entry.person || '';
+    document.getElementById('iouInTotal').value = entry.total || '';
+    document.getElementById('iouInShare').value = entry.share || '';
+    document.getElementById('iouInDate').value = entry.date || todayStr();
+    document.getElementById('iouInTime').value = entry.time || '';
+    document.getElementById('iouInNote').value = entry.note || '';
+    document.getElementById('iouInAdd').textContent = 'Update entry';
+    document.getElementById('iouInCancelEdit').style.display = '';
+  }
+  function cancelEditIouIn(){
+    editingIouInId = null;
     document.getElementById('iouInPerson').value = '';
     document.getElementById('iouInTotal').value = '';
     document.getElementById('iouInShare').value = '';
+    document.getElementById('iouInDate').value = '';
     document.getElementById('iouInTime').value = '';
     document.getElementById('iouInNote').value = '';
-    save(); renderIouIn();
-  });
+    document.getElementById('iouInAdd').textContent = 'Add entry';
+    document.getElementById('iouInCancelEdit').style.display = 'none';
+  }
+  document.getElementById('iouInCancelEdit').addEventListener('click', cancelEditIouIn);
   function renderIouIn(){
     const listEl = document.getElementById('iouInList');
     const totalEl = document.getElementById('iouInGrandTotal');
@@ -4046,12 +4098,15 @@
         <span><strong>${escapeHtml(e.person)}</strong> ${e.note ? '· ' + escapeHtml(e.note) : ''}${e.total ? ` <span class="gdr-meta">(of ${fmt(e.total)} total)</span>` : ''}</span>
         <span>
           <strong>${fmt(e.share)}</strong> <span class="gdr-meta">${escapeHtml(e.date)}${e.time ? ' ' + escapeHtml(e.time) : ''}</span>
-          <button class="del-btn" data-action="deliouin" data-id="${e.id}" style="margin-left:6px;" title="Delete">×</button>
+          <button class="edit-btn" data-action="editiouin" data-id="${e.id}" style="margin-left:6px;" title="Edit">✎</button>
+          <button class="del-btn" data-action="deliouin" data-id="${e.id}" style="margin-left:2px;" title="Delete">×</button>
         </span>
       </div>
     `).join('');
+    listEl.querySelectorAll('[data-action="editiouin"]').forEach(btn => btn.addEventListener('click', () => startEditIouIn(btn.dataset.id)));
     listEl.querySelectorAll('[data-action="deliouin"]').forEach(btn => btn.addEventListener('click', () => {
       currentData().iouIn = (currentData().iouIn || []).filter(e => e.id !== btn.dataset.id);
+      if(editingIouInId === btn.dataset.id) cancelEditIouIn();
       save(); renderIouIn();
     }));
     totalEl.style.display = '';
@@ -4288,12 +4343,15 @@
     const sorted = [...keys].sort().reverse();
     const prevVal = sel.value;
     sel.innerHTML = sorted.map(k => `<option value="${k}">${monthLabel(k)}</option>`).join('');
-    sel.value = sorted.includes(prevVal) ? prevVal : sorted[0];
+    // Default to the CURRENT month, not whichever month happens to sort first
+    // (a future card due-date would otherwise become the default, e.g. October
+    // showing up instead of the actual current month).
+    sel.value = sorted.includes(prevVal) ? prevVal : monthKey(todayStr());
 
     const sortedYears = [...years].sort().reverse();
     const prevYear = yearSel.value;
     yearSel.innerHTML = sortedYears.map(y => `<option value="${y}">${y}</option>`).join('');
-    yearSel.value = sortedYears.includes(prevYear) ? prevYear : sortedYears[0];
+    yearSel.value = sortedYears.includes(prevYear) ? prevYear : todayStr().slice(0,4);
   }
 
   function currentPeriod(){
@@ -4546,6 +4604,19 @@
       deltaEl.className = 'glance-delta';
     }
 
+    // Individual card spend for the current month, shown when the stat is clicked.
+    const monthReport = computeReportData({type:'monthly', key: todayKey}, scope);
+    const thisMonthDetailEl = document.getElementById('glanceThisMonthDetail');
+    if(thisMonthDetailEl){
+      const cardItems = [...monthReport.cardsBySpend].sort((a,b) => b.date.localeCompare(a.date));
+      thisMonthDetailEl.innerHTML = cardItems.length ? cardItems.map(c => `
+        <div class="glance-due-row">
+          <span>${escapeHtml(c.desc || c.bank || 'Card spend')} <span class="gdr-meta">(${escapeHtml(c.bank || '')}${c.country ? ' · ' + escapeHtml(c.country) : ''})</span></span>
+          <span><strong>${curFmt(Number(c.amount))}</strong> <span class="gdr-meta">${escapeHtml(c.date)}</span></span>
+        </div>
+      `).join('') : '<div class="empty" style="padding:10px;">No card spend this month.</div>';
+    }
+
     const win = upcomingBillsWindow();
     const fromEl = document.getElementById('glanceUpcomingFrom');
     const toEl = document.getElementById('glanceUpcomingTo');
@@ -4606,6 +4677,12 @@
   const glanceStat = document.getElementById('glanceUpcomingStat');
   if(glanceStat) glanceStat.addEventListener('click', () => {
     const detailEl = document.getElementById('glanceUpcomingDetail');
+    if(!detailEl) return;
+    detailEl.style.display = detailEl.style.display === 'none' ? '' : 'none';
+  });
+  const glanceThisMonthStat = document.getElementById('glanceThisMonthStat');
+  if(glanceThisMonthStat) glanceThisMonthStat.addEventListener('click', () => {
+    const detailEl = document.getElementById('glanceThisMonthDetail');
     if(!detailEl) return;
     detailEl.style.display = detailEl.style.display === 'none' ? '' : 'none';
   });
@@ -4865,11 +4942,11 @@
     const items = [];
     cards.forEach(c => {
       if(c.spendFor === 'own' && c.returnable === 'returnable'){
-        items.push({ date: c.date, time: c.time || '', who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount), paid: !!c.paid, paidDate: c.paidDate || '', appliedDue: c.appliedDue || '' });
+        items.push({ date: c.date, time: c.time || '', who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount), paid: !!c.paid, paidDate: c.paidDate || '', appliedDue: c.appliedDue || '', src: { type: 'card', cardId: c.id } });
       } else if(c.spendFor === 'split'){
         (c.splits || []).forEach(sp => {
           if(sp.returnable === 'returnable'){
-            items.push({ date: c.date, time: c.time || '', who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount), paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '' });
+            items.push({ date: c.date, time: c.time || '', who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount), paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '', src: { type: 'split', cardId: c.id, splitId: sp.id } });
           }
         });
       }
@@ -4885,12 +4962,42 @@
           items.push({
             date: t.purposeDate || t.date, time: t.purposeTime || '',
             who: t.purposePerson, desc: (t.label || 'Borrowed & spent for them'),
-            amount: Number(t.amount), paid: false, paidDate: '', appliedDue: ''
+            amount: Number(t.amount), paid: !!t.purposePaid, paidDate: t.purposePaidDate || '', appliedDue: t.purposeAppliedDue || '',
+            src: { type: 'tx', country: ck, txId: t.id }
           });
         }
       });
     });
     return items;
+  }
+  function markReturnableItemPaid(src, makePaid){
+    let paidDate = '', appliedDue = '';
+    if(makePaid){
+      paidDate = prompt('Paid date (YYYY-MM-DD):', todayStr());
+      if(paidDate === null) return false;
+      appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', '') || '';
+    }
+    if(src.type === 'card'){
+      const c = currentData().cards.find(x => x.id === src.cardId);
+      if(!c) return false;
+      c.paid = makePaid; c.paidDate = makePaid ? paidDate.trim() : ''; c.appliedDue = makePaid ? appliedDue.trim() : '';
+    } else if(src.type === 'split'){
+      const c = currentData().cards.find(x => x.id === src.cardId);
+      const sp = c && (c.splits || []).find(s => s.id === src.splitId);
+      if(!sp) return false;
+      sp.paid = makePaid; sp.paidDate = makePaid ? paidDate.trim() : ''; sp.appliedDue = makePaid ? appliedDue.trim() : '';
+    } else if(src.type === 'tx'){
+      const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
+      const t = tx && tx.find(x => x.id === src.txId);
+      if(!t) return false;
+      t.purposePaid = makePaid; t.purposePaidDate = makePaid ? paidDate.trim() : ''; t.purposeAppliedDue = makePaid ? appliedDue.trim() : '';
+    } else {
+      return false;
+    }
+    save();
+    renderReturnableStatement();
+    renderCards();
+    return true;
   }
   function populateReturnablePersonSelect(){
     const sel = document.getElementById('returnablePerson');
@@ -4928,12 +5035,17 @@
       <table class="report-table">
         <thead><tr><th>Date</th><th>Time</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th></tr></thead>
         <tbody>
-          ${items.map(it => `<tr>
+          ${items.map((it, i) => `<tr>
             <td>${escapeHtml(it.date)}</td>
             <td>${escapeHtml(it.time || '—')}</td>
             <td>${escapeHtml(it.desc)}</td>
             <td>${fmt(it.amount)}</td>
-            <td><span class="item-meta ${it.paid ? 'tag-paid' : 'tag-soon'}">${it.paid ? 'Paid' : 'Pending'}</span></td>
+            <td>
+              <span class="item-meta ${it.paid ? 'tag-paid' : 'tag-soon'}">${it.paid ? 'Paid' : 'Pending'}</span>
+              ${it.src ? (it.paid
+                ? `<button type="button" class="link-btn" data-action="returnableundo" data-idx="${i}">undo</button>`
+                : `<button type="button" class="link-btn" data-action="returnablepaid" data-idx="${i}">mark paid</button>`) : ''}
+            </td>
             <td>${escapeHtml(it.paidDate || '—')}</td>
             <td>${escapeHtml(it.appliedDue || '—')}</td>
           </tr>`).join('')}
@@ -4945,6 +5057,14 @@
         </tfoot>
       </table>
     `;
+    listEl.querySelectorAll('[data-action="returnablepaid"]').forEach(btn => btn.addEventListener('click', () => {
+      const it = items[Number(btn.dataset.idx)];
+      if(it && it.src) markReturnableItemPaid(it.src, true);
+    }));
+    listEl.querySelectorAll('[data-action="returnableundo"]').forEach(btn => btn.addEventListener('click', () => {
+      const it = items[Number(btn.dataset.idx)];
+      if(it && it.src) markReturnableItemPaid(it.src, false);
+    }));
   }
   ['returnablePerson','returnableFrom','returnableTo'].forEach(id => {
     const el = document.getElementById(id);
