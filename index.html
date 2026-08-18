@@ -1915,10 +1915,12 @@
       if(c.paid === undefined) c.paid = false;
       if(c.paidDate === undefined) c.paidDate = '';
       if(c.appliedDue === undefined) c.appliedDue = '';
+      if(c.usedFor === undefined) c.usedFor = '';
       c.splits.forEach(sp => {
         if(sp.paid === undefined) sp.paid = false;
         if(sp.paidDate === undefined) sp.paidDate = '';
         if(sp.appliedDue === undefined) sp.appliedDue = '';
+        if(sp.usedFor === undefined) sp.usedFor = '';
       });
       if(!c.slot) c.slot = 'resident';
       if(!c.country) c.country = 'United Arab Emirates';
@@ -1934,6 +1936,7 @@
           if(t.purposePaid === undefined) t.purposePaid = false;
           if(t.purposePaidDate === undefined) t.purposePaidDate = '';
           if(t.purposeAppliedDue === undefined) t.purposeAppliedDue = '';
+          if(t.purposeUsedFor === undefined) t.purposeUsedFor = '';
           if(!t.cardMaps){
             t.cardMaps = t.cardMapId ? [{ cardId: t.cardMapId, amount: t.amount }] : [];
           }
@@ -3682,7 +3685,7 @@
         const emiBadge = c.emi ? `<div class="item-meta" style="background:#fdf3e3;color:#8a5a00;">📅 EMI ${c.emi.installmentNo}/${c.emi.totalInstallments} · ${escapeHtml(c.emi.debtType)} · ${escapeHtml(c.emi.lenderBank)} · ${c.emi.ratePerPeriod}%</div>` : '';
         const returnBadge = c.returnable === 'returnable'
           ? (c.paid
-              ? `<div class="item-meta tag-paid">✓ Paid ${escapeHtml(c.paidDate || '')}${c.appliedDue ? ' → applied to due ' + escapeHtml(c.appliedDue) : ''} <button type="button" class="link-btn" data-action="unpaidcard" data-id="${c.id}">undo</button></div>`
+              ? `<div class="item-meta tag-paid">✓ Paid ${escapeHtml(c.paidDate || '')}${c.appliedDue ? ' → applied to due ' + escapeHtml(c.appliedDue) : ''}${c.usedFor ? ' · used for ' + escapeHtml(c.usedFor) : ''} <button type="button" class="link-btn" data-action="editpaidcard" data-id="${c.id}">edit</button> <button type="button" class="link-btn" data-action="unpaidcard" data-id="${c.id}">undo</button></div>`
               : `<div class="item-meta tag-returnable">Returnable${c.returnName ? ' · ' + escapeHtml(c.returnName) : ''} <button type="button" class="link-btn" data-action="paidcard" data-id="${c.id}">mark paid</button></div>`)
           : `<div class="item-meta tag-nonreturnable">Non-returnable</div>`;
         bodyExtra = `
@@ -3710,7 +3713,7 @@
                   <span>${fmt(sp.amount)}</span>
                   ${sp.returnable === 'returnable'
                     ? (sp.paid
-                        ? `<span class="item-meta tag-paid">✓ Paid ${escapeHtml(sp.paidDate || '')}${sp.appliedDue ? ' → due ' + escapeHtml(sp.appliedDue) : ''} <button type="button" class="link-btn" data-action="unpaidsplit" data-card="${c.id}" data-split="${sp.id}">undo</button></span>`
+                        ? `<span class="item-meta tag-paid">✓ Paid ${escapeHtml(sp.paidDate || '')}${sp.appliedDue ? ' → due ' + escapeHtml(sp.appliedDue) : ''}${sp.usedFor ? ' · used for ' + escapeHtml(sp.usedFor) : ''} <button type="button" class="link-btn" data-action="editpaidsplit" data-card="${c.id}" data-split="${sp.id}">edit</button> <button type="button" class="link-btn" data-action="unpaidsplit" data-card="${c.id}" data-split="${sp.id}">undo</button></span>`
                         : `<span class="item-meta tag-returnable">Returnable <button type="button" class="link-btn" data-action="paidsplit" data-card="${c.id}" data-split="${sp.id}">mark paid</button></span>`)
                     : `<span class="item-meta tag-nonreturnable">Non-ret.</span>`}
                 </span>
@@ -3748,14 +3751,26 @@
       const paidDate = prompt('Paid date (YYYY-MM-DD):', todayStr());
       if(paidDate === null) return;
       const appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', '');
-      c.paid = true; c.paidDate = paidDate.trim(); c.appliedDue = (appliedDue || '').trim();
+      const usedFor = prompt('What did you use this money for? (e.g. "Mashreq credit card — July repayment", leave blank if none)', c.usedFor || '');
+      c.paid = true; c.paidDate = paidDate.trim(); c.appliedDue = (appliedDue || '').trim(); c.usedFor = (usedFor || '').trim();
+      save(); renderCards();
+    }));
+    list.querySelectorAll('[data-action="editpaidcard"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const c = currentData().cards.find(x => x.id === el.dataset.id);
+      if(!c) return;
+      const paidDate = prompt('Paid date (YYYY-MM-DD):', c.paidDate || todayStr());
+      if(paidDate === null) return;
+      const appliedDue = prompt('Applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', c.appliedDue || '');
+      const usedFor = prompt('What did you use this money for? (leave blank if none)', c.usedFor || '');
+      c.paidDate = paidDate.trim(); c.appliedDue = (appliedDue || '').trim(); c.usedFor = (usedFor || '').trim();
       save(); renderCards();
     }));
     list.querySelectorAll('[data-action="unpaidcard"]').forEach(el => el.addEventListener('click', (e) => {
       e.stopPropagation();
       const c = currentData().cards.find(x => x.id === el.dataset.id);
       if(!c) return;
-      c.paid = false; c.paidDate = ''; c.appliedDue = '';
+      c.paid = false; c.paidDate = ''; c.appliedDue = ''; c.usedFor = '';
       save(); renderCards();
     }));
     list.querySelectorAll('[data-action="paidsplit"]').forEach(el => el.addEventListener('click', (e) => {
@@ -3766,7 +3781,20 @@
       const paidDate = prompt('Paid date (YYYY-MM-DD):', todayStr());
       if(paidDate === null) return;
       const appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', '');
-      sp.paid = true; sp.paidDate = paidDate.trim(); sp.appliedDue = (appliedDue || '').trim();
+      const usedFor = prompt('What did you use this money for? (leave blank if none)', sp.usedFor || '');
+      sp.paid = true; sp.paidDate = paidDate.trim(); sp.appliedDue = (appliedDue || '').trim(); sp.usedFor = (usedFor || '').trim();
+      save(); renderCards();
+    }));
+    list.querySelectorAll('[data-action="editpaidsplit"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const c = currentData().cards.find(x => x.id === el.dataset.card);
+      const sp = c && (c.splits || []).find(s => s.id === el.dataset.split);
+      if(!sp) return;
+      const paidDate = prompt('Paid date (YYYY-MM-DD):', sp.paidDate || todayStr());
+      if(paidDate === null) return;
+      const appliedDue = prompt('Applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', sp.appliedDue || '');
+      const usedFor = prompt('What did you use this money for? (leave blank if none)', sp.usedFor || '');
+      sp.paidDate = paidDate.trim(); sp.appliedDue = (appliedDue || '').trim(); sp.usedFor = (usedFor || '').trim();
       save(); renderCards();
     }));
     list.querySelectorAll('[data-action="unpaidsplit"]').forEach(el => el.addEventListener('click', (e) => {
@@ -3871,7 +3899,7 @@
         name: r.querySelector('.split-name').value.trim() || 'Unnamed',
         amount: parseFloat(r.querySelector('.split-amount').value) || 0,
         returnable: r.querySelector('.split-returnable').value,
-        paid: false, paidDate: '', appliedDue: ''
+        paid: false, paidDate: '', appliedDue: '', usedFor: ''
       })).filter(s => s.amount > 0);
     }
 
@@ -3907,7 +3935,7 @@
       return;
     }
 
-    const record = { country, bank, cardLabel, desc, amount, date, time, dueDate, spendFor, returnable, returnName, splits, slot: activeCardSlot, paid: false, paidDate: '', appliedDue: '' };
+    const record = { country, bank, cardLabel, desc, amount, date, time, dueDate, spendFor, returnable, returnName, splits, slot: activeCardSlot, paid: false, paidDate: '', appliedDue: '', usedFor: '' };
     if(editingCardId){
       const idx = currentData().cards.findIndex(c => c.id === editingCardId);
       if(idx > -1) currentData().cards[idx] = Object.assign({id: editingCardId}, record);
@@ -5017,11 +5045,11 @@
     const items = [];
     cards.forEach(c => {
       if(c.spendFor === 'own' && c.returnable === 'returnable'){
-        items.push({ date: c.date, time: c.time || '', who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount), paid: !!c.paid, paidDate: c.paidDate || '', appliedDue: c.appliedDue || '', src: { type: 'card', cardId: c.id } });
+        items.push({ date: c.date, time: c.time || '', who: c.returnName || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(c.amount), paid: !!c.paid, paidDate: c.paidDate || '', appliedDue: c.appliedDue || '', usedFor: c.usedFor || '', src: { type: 'card', cardId: c.id } });
       } else if(c.spendFor === 'split'){
         (c.splits || []).forEach(sp => {
           if(sp.returnable === 'returnable'){
-            items.push({ date: c.date, time: c.time || '', who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount), paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '', src: { type: 'split', cardId: c.id, splitId: sp.id } });
+            items.push({ date: c.date, time: c.time || '', who: sp.name || 'Unnamed', desc: c.desc || c.bank || 'Card spend', amount: Number(sp.amount), paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '', usedFor: sp.usedFor || '', src: { type: 'split', cardId: c.id, splitId: sp.id } });
           }
         });
       }
@@ -5037,7 +5065,7 @@
           items.push({
             date: t.purposeDate || t.date, time: t.purposeTime || '',
             who: t.purposePerson, desc: (t.label || 'Borrowed & spent for them'),
-            amount: Number(t.amount), paid: !!t.purposePaid, paidDate: t.purposePaidDate || '', appliedDue: t.purposeAppliedDue || '',
+            amount: Number(t.amount), paid: !!t.purposePaid, paidDate: t.purposePaidDate || '', appliedDue: t.purposeAppliedDue || '', usedFor: t.purposeUsedFor || '',
             src: { type: 'tx', country: ck, txId: t.id }
           });
         }
@@ -5045,27 +5073,41 @@
     });
     return items;
   }
+  function findReturnableSourceRecord(src){
+    if(src.type === 'card') return currentData().cards.find(x => x.id === src.cardId);
+    if(src.type === 'split'){
+      const c = currentData().cards.find(x => x.id === src.cardId);
+      return c && (c.splits || []).find(s => s.id === src.splitId);
+    }
+    if(src.type === 'tx'){
+      const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
+      return tx && tx.find(x => x.id === src.txId);
+    }
+    return null;
+  }
   function markReturnableItemPaid(src, makePaid){
-    let paidDate = '', appliedDue = '';
+    let paidDate = '', appliedDue = '', usedFor = '';
     if(makePaid){
+      const existing = findReturnableSourceRecord(src) || {};
       paidDate = prompt('Paid date (YYYY-MM-DD):', todayStr());
       if(paidDate === null) return false;
       appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', '') || '';
+      usedFor = prompt('What did you use this money for? (e.g. "Mashreq credit card — July repayment", leave blank if none)', existing.usedFor || existing.purposeUsedFor || '') || '';
     }
     if(src.type === 'card'){
       const c = currentData().cards.find(x => x.id === src.cardId);
       if(!c) return false;
-      c.paid = makePaid; c.paidDate = makePaid ? paidDate.trim() : ''; c.appliedDue = makePaid ? appliedDue.trim() : '';
+      c.paid = makePaid; c.paidDate = makePaid ? paidDate.trim() : ''; c.appliedDue = makePaid ? appliedDue.trim() : ''; c.usedFor = makePaid ? usedFor.trim() : '';
     } else if(src.type === 'split'){
       const c = currentData().cards.find(x => x.id === src.cardId);
       const sp = c && (c.splits || []).find(s => s.id === src.splitId);
       if(!sp) return false;
-      sp.paid = makePaid; sp.paidDate = makePaid ? paidDate.trim() : ''; sp.appliedDue = makePaid ? appliedDue.trim() : '';
+      sp.paid = makePaid; sp.paidDate = makePaid ? paidDate.trim() : ''; sp.appliedDue = makePaid ? appliedDue.trim() : ''; sp.usedFor = makePaid ? usedFor.trim() : '';
     } else if(src.type === 'tx'){
       const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
       const t = tx && tx.find(x => x.id === src.txId);
       if(!t) return false;
-      t.purposePaid = makePaid; t.purposePaidDate = makePaid ? paidDate.trim() : ''; t.purposeAppliedDue = makePaid ? appliedDue.trim() : '';
+      t.purposePaid = makePaid; t.purposePaidDate = makePaid ? paidDate.trim() : ''; t.purposeAppliedDue = makePaid ? appliedDue.trim() : ''; t.purposeUsedFor = makePaid ? usedFor.trim() : '';
     } else {
       return false;
     }
@@ -5108,7 +5150,7 @@
     }
     listEl.innerHTML = `
       <table class="report-table">
-        <thead><tr><th>Date</th><th>Time</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th></tr></thead>
+        <thead><tr><th>Date</th><th>Time</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th><th>Used for</th></tr></thead>
         <tbody>
           ${items.map((it, i) => `<tr>
             <td>${escapeHtml(it.date)}</td>
@@ -5118,20 +5160,25 @@
             <td>
               <span class="item-meta ${it.paid ? 'tag-paid' : 'tag-soon'}">${it.paid ? 'Paid' : 'Pending'}</span>
               ${it.src ? (it.paid
-                ? `<button type="button" class="link-btn" data-action="returnableundo" data-idx="${i}">undo</button>`
+                ? `<button type="button" class="link-btn" data-action="returnableedit" data-idx="${i}">edit</button> <button type="button" class="link-btn" data-action="returnableundo" data-idx="${i}">undo</button>`
                 : `<button type="button" class="link-btn" data-action="returnablepaid" data-idx="${i}">mark paid</button>`) : ''}
             </td>
             <td>${escapeHtml(it.paidDate || '—')}</td>
             <td>${escapeHtml(it.appliedDue || '—')}</td>
+            <td>${escapeHtml(it.usedFor || '—')}</td>
           </tr>`).join('')}
         </tbody>
         <tfoot>
-          <tr><td colspan="3">Total</td><td colspan="4"><strong>${fmt(total)}</strong></td></tr>
-          <tr><td colspan="3">Paid so far</td><td colspan="4">${fmt(paidTotal)}</td></tr>
-          <tr><td colspan="3"><strong>Balance due</strong></td><td colspan="4"><strong>${fmt(balanceDue)}</strong></td></tr>
+          <tr><td colspan="3">Total</td><td colspan="5"><strong>${fmt(total)}</strong></td></tr>
+          <tr><td colspan="3">Paid so far</td><td colspan="5">${fmt(paidTotal)}</td></tr>
+          <tr><td colspan="3"><strong>Balance due</strong></td><td colspan="5"><strong>${fmt(balanceDue)}</strong></td></tr>
         </tfoot>
       </table>
     `;
+    listEl.querySelectorAll('[data-action="returnableedit"]').forEach(btn => btn.addEventListener('click', () => {
+      const it = items[Number(btn.dataset.idx)];
+      if(it && it.src) markReturnableItemPaid(it.src, true);
+    }));
     listEl.querySelectorAll('[data-action="returnablepaid"]').forEach(btn => btn.addEventListener('click', () => {
       const it = items[Number(btn.dataset.idx)];
       if(it && it.src) markReturnableItemPaid(it.src, true);
@@ -5177,9 +5224,10 @@
       Amount: fmt(it.amount),
       Status: it.paid ? 'Paid' : 'Pending',
       'Paid Date': it.paidDate || '—',
-      'Applied To Due': it.appliedDue || '—'
+      'Applied To Due': it.appliedDue || '—',
+      'Used For': it.usedFor || '—'
     }));
-    const fields = ['Date','Time','Description','Amount','Status','Paid Date','Applied To Due'].map(k => ({key:k,label:k}));
+    const fields = ['Date','Time','Description','Amount','Status','Paid Date','Applied To Due','Used For'].map(k => ({key:k,label:k}));
     const table = rowsPdfTable(records, fields);
     doc.autoTable({
       startY: 51,
