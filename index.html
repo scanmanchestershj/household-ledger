@@ -1927,7 +1927,11 @@
       return c;
     });
     (ud.groceries || []).forEach(g => { if(!g.country) g.country = 'resident'; });
-    (ud.devices || []).forEach(d => { if(!d.country) d.country = 'resident'; });
+    (ud.devices || []).forEach(d => {
+      if(!d.country) d.country = 'resident';
+      if(!d.connectionType) d.connectionType = 'none';
+      if(!d.config) d.config = {};
+    });
     if(!ud.iouIn) ud.iouIn = [];
     ['UAE','India'].forEach(ck => {
       const country = ud.countries && ud.countries[ck];
@@ -4348,6 +4352,180 @@
   }
 
   // ---- Devices ----
+  function connectionSummary(d){
+    if(!d.connectionType || d.connectionType === 'none') return 'Not connected — toggle just saves on/off here';
+    if(d.connectionType === 'home_assistant') return `Home Assistant · ${escapeHtml((d.config && d.config.entityId) || 'no entity set')}`;
+    if(d.connectionType === 'rest_api') return `REST API · ${escapeHtml((d.config && d.config.onUrl) ? 'configured' : 'no URL set')}`;
+    if(d.connectionType === 'bluetooth') return `Bluetooth · ${escapeHtml((d.config && d.config.deviceName) || 'not paired yet')}`;
+    return 'Not connected';
+  }
+  function deviceConfigFormHtml(d){
+    const cfg = d.config || {};
+    return `
+      <div class="device-config-panel" data-id="${d.id}">
+        <div class="form-grid">
+          <div class="full">
+            <label class="field-label">Connection type</label>
+            <select class="dc-type">
+              <option value="none" ${(!d.connectionType || d.connectionType==='none')?'selected':''}>None (manual toggle only)</option>
+              <option value="home_assistant" ${d.connectionType==='home_assistant'?'selected':''}>Home Assistant</option>
+              <option value="rest_api" ${d.connectionType==='rest_api'?'selected':''}>REST API / webhook (Shelly, Tasmota, SmartThings, IFTTT…)</option>
+              <option value="bluetooth" ${d.connectionType==='bluetooth'?'selected':''}>Bluetooth (Web Bluetooth, Chrome only)</option>
+            </select>
+          </div>
+
+          <div class="full dc-section dc-home_assistant" style="display:none;">
+            <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">Needs your Home Assistant URL to be reachable from your browser (e.g. via Nabu Casa remote access, or you're on the same network), plus a Long-Lived Access Token from your HA profile page.</div>
+            <label class="field-label">Home Assistant URL</label>
+            <input type="text" class="dc-ha-url" placeholder="https://your-home.duckdns.org:8123" value="${escapeHtml(cfg.baseUrl||'')}">
+            <label class="field-label">Long-lived access token</label>
+            <input type="password" class="dc-ha-token" placeholder="eyJ..." value="${escapeHtml(cfg.token||'')}">
+            <label class="field-label">Entity ID</label>
+            <input type="text" class="dc-ha-entity" placeholder="switch.living_room_lamp" value="${escapeHtml(cfg.entityId||'')}">
+          </div>
+
+          <div class="full dc-section dc-rest_api" style="display:none;">
+            <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">Works for devices/services with their own local or cloud HTTP endpoint. Note: if this URL is http:// (not https://) and your device is a local IP, most browsers will block it as "mixed content" since this site itself is https:// — Home Assistant or a similar local hub that you expose over HTTPS avoids that problem.</div>
+            <label class="field-label">Turn ON — URL</label>
+            <input type="text" class="dc-rest-on-url" placeholder="https://..." value="${escapeHtml(cfg.onUrl||'')}">
+            <label class="field-label">Turn ON — method</label>
+            <select class="dc-rest-on-method">
+              <option value="GET" ${cfg.onMethod==='GET'||!cfg.onMethod?'selected':''}>GET</option>
+              <option value="POST" ${cfg.onMethod==='POST'?'selected':''}>POST</option>
+            </select>
+            <label class="field-label">Turn ON — headers (JSON, optional)</label>
+            <input type="text" class="dc-rest-on-headers" placeholder='{"Authorization":"Bearer ..."}' value="${escapeHtml(cfg.onHeaders||'')}">
+            <label class="field-label">Turn ON — body (optional, for POST)</label>
+            <input type="text" class="dc-rest-on-body" placeholder='{"state":"on"}' value="${escapeHtml(cfg.onBody||'')}">
+            <div style="height:8px;"></div>
+            <label class="field-label">Turn OFF — URL</label>
+            <input type="text" class="dc-rest-off-url" placeholder="https://..." value="${escapeHtml(cfg.offUrl||'')}">
+            <label class="field-label">Turn OFF — method</label>
+            <select class="dc-rest-off-method">
+              <option value="GET" ${cfg.offMethod==='GET'||!cfg.offMethod?'selected':''}>GET</option>
+              <option value="POST" ${cfg.offMethod==='POST'?'selected':''}>POST</option>
+            </select>
+            <label class="field-label">Turn OFF — headers (JSON, optional)</label>
+            <input type="text" class="dc-rest-off-headers" placeholder='{"Authorization":"Bearer ..."}' value="${escapeHtml(cfg.offHeaders||'')}">
+            <label class="field-label">Turn OFF — body (optional, for POST)</label>
+            <input type="text" class="dc-rest-off-body" placeholder='{"state":"off"}' value="${escapeHtml(cfg.offBody||'')}">
+          </div>
+
+          <div class="full dc-section dc-bluetooth" style="display:none;">
+            <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">Chrome/Edge only. You'll need the Service and Characteristic UUIDs for your device (check its manual, or a BLE scanner app) — Web Bluetooth can't discover custom vendor services on its own. Pairing happens fresh each time you use the toggle unless your browser remembers it.</div>
+            <label class="field-label">Service UUID</label>
+            <input type="text" class="dc-ble-service" placeholder="0000ffe0-0000-1000-8000-00805f9b34fb" value="${escapeHtml(cfg.serviceUuid||'')}">
+            <label class="field-label">Characteristic UUID</label>
+            <input type="text" class="dc-ble-char" placeholder="0000ffe1-0000-1000-8000-00805f9b34fb" value="${escapeHtml(cfg.characteristicUuid||'')}">
+            <label class="field-label">Value to write for ON (hex bytes, e.g. 01 or 0xFF)</label>
+            <input type="text" class="dc-ble-on" placeholder="01" value="${escapeHtml(cfg.onValueHex||'01')}">
+            <label class="field-label">Value to write for OFF (hex bytes)</label>
+            <input type="text" class="dc-ble-off" placeholder="00" value="${escapeHtml(cfg.offValueHex||'00')}">
+            <div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">Paired device: ${escapeHtml(cfg.deviceName || 'none yet — pairing happens the first time you use the toggle')}</div>
+          </div>
+
+          <button type="button" class="add-btn full-width dc-save">Save connection settings</button>
+        </div>
+      </div>
+    `;
+  }
+  function wireDeviceConfigForm(panelEl, d){
+    const typeSel = panelEl.querySelector('.dc-type');
+    function updateSectionVisibility(){
+      panelEl.querySelectorAll('.dc-section').forEach(s => s.style.display = 'none');
+      const active = panelEl.querySelector('.dc-' + typeSel.value);
+      if(active) active.style.display = '';
+    }
+    typeSel.addEventListener('change', updateSectionVisibility);
+    updateSectionVisibility();
+    panelEl.querySelector('.dc-save').addEventListener('click', () => {
+      const type = typeSel.value;
+      let config = {};
+      if(type === 'home_assistant'){
+        config = {
+          baseUrl: panelEl.querySelector('.dc-ha-url').value.trim().replace(/\/$/,''),
+          token: panelEl.querySelector('.dc-ha-token').value.trim(),
+          entityId: panelEl.querySelector('.dc-ha-entity').value.trim()
+        };
+      } else if(type === 'rest_api'){
+        config = {
+          onUrl: panelEl.querySelector('.dc-rest-on-url').value.trim(),
+          onMethod: panelEl.querySelector('.dc-rest-on-method').value,
+          onHeaders: panelEl.querySelector('.dc-rest-on-headers').value.trim(),
+          onBody: panelEl.querySelector('.dc-rest-on-body').value.trim(),
+          offUrl: panelEl.querySelector('.dc-rest-off-url').value.trim(),
+          offMethod: panelEl.querySelector('.dc-rest-off-method').value,
+          offHeaders: panelEl.querySelector('.dc-rest-off-headers').value.trim(),
+          offBody: panelEl.querySelector('.dc-rest-off-body').value.trim()
+        };
+      } else if(type === 'bluetooth'){
+        config = {
+          serviceUuid: panelEl.querySelector('.dc-ble-service').value.trim(),
+          characteristicUuid: panelEl.querySelector('.dc-ble-char').value.trim(),
+          onValueHex: panelEl.querySelector('.dc-ble-on').value.trim() || '01',
+          offValueHex: panelEl.querySelector('.dc-ble-off').value.trim() || '00',
+          deviceName: (d.config && d.config.deviceName) || ''
+        };
+      }
+      d.connectionType = type;
+      d.config = config;
+      save(); renderDevices();
+    });
+  }
+  function parseHexToBytes(hexStr){
+    const clean = (hexStr || '').replace(/^0x/i,'').replace(/\s+/g,'');
+    const pairs = clean.match(/.{1,2}/g) || [];
+    return new Uint8Array(pairs.map(p => parseInt(p, 16)));
+  }
+  async function driveDeviceConnection(d, turnOn){
+    if(!d.connectionType || d.connectionType === 'none') return true; // no real device — just flip the stored state
+    if(d.connectionType === 'home_assistant'){
+      const cfg = d.config || {};
+      if(!cfg.baseUrl || !cfg.token || !cfg.entityId) throw new Error('Home Assistant connection is not fully configured yet — click the ⚙ to set it up.');
+      const domain = cfg.entityId.split('.')[0] || 'homeassistant';
+      const service = turnOn ? 'turn_on' : 'turn_off';
+      const res = await fetch(`${cfg.baseUrl}/api/services/${domain}/${service}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_id: cfg.entityId })
+      });
+      if(!res.ok) throw new Error(`Home Assistant returned ${res.status}`);
+      return true;
+    }
+    if(d.connectionType === 'rest_api'){
+      const cfg = d.config || {};
+      const url = turnOn ? cfg.onUrl : cfg.offUrl;
+      const method = (turnOn ? cfg.onMethod : cfg.offMethod) || 'GET';
+      const headersRaw = turnOn ? cfg.onHeaders : cfg.offHeaders;
+      const bodyRaw = turnOn ? cfg.onBody : cfg.offBody;
+      if(!url) throw new Error('No URL configured for this action yet — click the ⚙ to set it up.');
+      let headers = {};
+      if(headersRaw){ try{ headers = JSON.parse(headersRaw); }catch(e){ throw new Error('Headers field is not valid JSON.'); } }
+      const opts = { method, headers };
+      if(method === 'POST' && bodyRaw){ opts.body = bodyRaw; if(!headers['Content-Type']) headers['Content-Type'] = 'application/json'; }
+      const res = await fetch(url, opts);
+      if(!res.ok) throw new Error(`Device returned ${res.status}`);
+      return true;
+    }
+    if(d.connectionType === 'bluetooth'){
+      if(!navigator.bluetooth) throw new Error('Web Bluetooth is not supported in this browser — try Chrome or Edge.');
+      const cfg = d.config || {};
+      if(!cfg.serviceUuid || !cfg.characteristicUuid) throw new Error('Bluetooth Service/Characteristic UUID is not set yet — click the ⚙ to set it up.');
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [cfg.serviceUuid] }],
+        optionalServices: [cfg.serviceUuid]
+      });
+      cfg.deviceName = device.name || 'Paired device';
+      d.config = cfg;
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(cfg.serviceUuid);
+      const characteristic = await service.getCharacteristic(cfg.characteristicUuid);
+      const bytes = parseHexToBytes(turnOn ? cfg.onValueHex : cfg.offValueHex);
+      await characteristic.writeValue(bytes);
+      return true;
+    }
+    return true;
+  }
   function renderDevicesFor(country, gridId){
     const grid = document.getElementById(gridId);
     grid.innerHTML = '';
@@ -4359,16 +4537,41 @@
       card.innerHTML = `
         <div class="device-room">${escapeHtml(d.room)}</div>
         <div class="device-name">${escapeHtml(d.name)}</div>
+        <div style="font-size:10.5px;color:var(--ink-soft);">${connectionSummary(d)}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <button class="toggle ${d.on ? 'on' : ''}" data-id="${d.id}" aria-label="Toggle ${escapeHtml(d.name)}"><span class="knob"></span></button>
-          <button class="del-btn" data-id="${d.id}" aria-label="Remove device">×</button>
+          <span>
+            <button type="button" class="edit-btn dc-toggle-btn" data-id="${d.id}" title="Connection settings">⚙</button>
+            <button class="del-btn" data-id="${d.id}" aria-label="Remove device">×</button>
+          </span>
         </div>
+        <div class="dc-panel-mount" data-id="${d.id}"></div>
       `;
       grid.appendChild(card);
     });
-    grid.querySelectorAll('.toggle').forEach(el => el.addEventListener('click', () => {
+    grid.querySelectorAll('.toggle').forEach(el => el.addEventListener('click', async () => {
       const d = currentData().devices.find(x => x.id === el.dataset.id);
-      d.on = !d.on; save(); renderDevices(); renderOverview();
+      if(!d) return;
+      const goingOn = !d.on;
+      el.disabled = true;
+      el.style.opacity = '0.6';
+      try{
+        await driveDeviceConnection(d, goingOn);
+        d.on = goingOn;
+        save(); renderDevices(); renderOverview();
+      }catch(err){
+        alert('Could not reach this device: ' + err.message);
+        el.disabled = false;
+        el.style.opacity = '';
+      }
+    }));
+    grid.querySelectorAll('.dc-toggle-btn').forEach(el => el.addEventListener('click', () => {
+      const d = currentData().devices.find(x => x.id === el.dataset.id);
+      const mount = grid.querySelector(`.dc-panel-mount[data-id="${el.dataset.id}"]`);
+      if(!d || !mount) return;
+      if(mount.innerHTML){ mount.innerHTML = ''; return; }
+      mount.innerHTML = deviceConfigFormHtml(d);
+      wireDeviceConfigForm(mount.querySelector('.device-config-panel'), d);
     }));
     grid.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
       currentData().devices = currentData().devices.filter(x => x.id !== el.dataset.id);
@@ -4384,7 +4587,7 @@
     const roomInput = document.getElementById(roomId);
     const name = nameInput.value.trim();
     if(!name) return;
-    currentData().devices.push({ id: uid(), name, room: roomInput.value.trim() || 'Home', on: false, country });
+    currentData().devices.push({ id: uid(), name, room: roomInput.value.trim() || 'Home', on: false, country, connectionType: 'none', config: {} });
     nameInput.value = ''; roomInput.value = '';
     save(); renderDevices(); renderOverview();
   }
