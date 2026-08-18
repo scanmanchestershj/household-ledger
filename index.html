@@ -23,19 +23,20 @@
 </style>
 <style>
   :root{
-    --paper: #EDF0E8;
-    --paper-deep: #E3E7DC;
-    --card: #FCFCFA;
-    --ink: #263B33;
-    --ink-soft: #5C6B62;
-    --teal: #1F6F63;
-    --teal-dark: #17544B;
-    --gold: #A9791F;
-    --coral: #B5533C;
-    --amber: #C68A2E;
-    --blue: #3A5A8C;
-    --line: #D3D8CC;
-    --shadow: 0 1px 2px rgba(38,59,51,0.06), 0 4px 14px rgba(38,59,51,0.06);
+    --paper: #F5F7F6;
+    --paper-deep: #EAF6F1;
+    --card: #FFFFFF;
+    --ink: #2A2E2D;
+    --ink-soft: #7C8681;
+    --teal: #00C896;
+    --teal-dark: #00A87D;
+    --gold: #F5A623;
+    --coral: #F4515F;
+    --amber: #F5A623;
+    --blue: #4A90E2;
+    --line: #E6ECE9;
+    --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 18px rgba(0,200,150,0.08);
+    --radius: 14px;
   }
   *{box-sizing:border-box;}
   body{
@@ -94,7 +95,7 @@
   @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
 
   .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px; }
-  .stat{ border:1px solid var(--line); border-radius:2px; padding:14px; }
+  .stat{ border:1px solid var(--line); border-radius:var(--radius); padding:16px; background:var(--card); box-shadow:var(--shadow); }
   .stat .num{ font-family:'Fraunces', serif; font-size:22px; font-weight:600; }
   .stat .label{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
   .stat.teal .num{ color:var(--teal-dark); }
@@ -111,7 +112,17 @@
   .glance-due-row:last-child{ border-bottom:none; }
   .glance-due-row .gdr-meta{ color:var(--ink-soft); font-size:11px; }
   .link-btn{ background:none; border:none; padding:0; margin-left:4px; font-size:10.5px; text-decoration:underline; color:inherit; cursor:pointer; font-family:inherit; }
-  .tag-paid{ background:#E1F0E5; color:#1F6F63; }
+  .tag-paid{ background:#DFF7EE; color:var(--teal-dark); }
+  .overspend-gauge{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); margin-bottom:10px; }
+  .overspend-gauge-track{ background:var(--paper-deep); border-radius:20px; height:14px; overflow:hidden; margin:10px 0 8px 0; }
+  .overspend-gauge-fill{ height:100%; border-radius:20px; transition:width 0.3s ease; }
+  .overspend-gauge-fill.under{ background:var(--teal); }
+  .overspend-gauge-fill.over{ background:var(--coral); }
+  .overspend-badge{ display:inline-block; padding:4px 12px; border-radius:20px; font-weight:700; font-size:13px; }
+  .overspend-badge.under{ background:#DFF7EE; color:var(--teal-dark); }
+  .overspend-badge.over{ background:#FDE3E5; color:var(--coral); }
+  .suggestion-card{ display:flex; gap:10px; align-items:flex-start; background:var(--paper-deep); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; font-size:12.5px; }
+  .suggestion-card .emoji{ font-size:18px; }
   .spend-analysis-row{ margin-bottom:10px; }
   .spend-analysis-row-head{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
   .spend-analysis-row-head .sa-label{ font-weight:600; }
@@ -156,7 +167,7 @@
     border-radius:3px; background:#fff; color:var(--ink); flex:1; min-width:0; width:100%;
   }
   input:focus, select:focus, button:focus-visible{ outline:2px solid var(--teal); outline-offset:1px; }
-  button.add-btn{ font-family:'IBM Plex Mono', monospace; font-size:13px; background:var(--teal); color:#fff; border:none; padding:9px 14px; border-radius:3px; cursor:pointer; white-space:nowrap; }
+  button.add-btn{ font-family:'Work Sans', sans-serif; font-weight:600; font-size:13px; background:var(--teal); color:#fff; border:none; padding:10px 16px; border-radius:24px; cursor:pointer; white-space:nowrap; }
   button.add-btn:hover{ background:var(--teal-dark); }
   button.add-btn.full-width{ width:100%; grid-column:1/-1; padding:11px; }
   button.add-btn.secondary{ background:var(--gold); }
@@ -204,7 +215,7 @@
   .tx-amount.expense{ color:var(--coral); }
 
   .device-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .device-card{ border:1px solid var(--line); border-radius:3px; padding:14px; display:flex; flex-direction:column; gap:8px; }
+  .device-card{ border:1px solid var(--line); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:8px; background:var(--card); box-shadow:var(--shadow); }
   .device-name{ font-size:14px; font-weight:500; }
   .device-room{ font-size:11px; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; }
   .toggle{ width:42px; height:24px; background:var(--line); border-radius:12px; position:relative; cursor:pointer; border:none; align-self:flex-start; transition: background 0.15s ease; }
@@ -270,7 +281,7 @@
   .converter-row{ display:flex; gap:8px; align-items:center; margin-top:8px; }
   .converter-row input{ flex:1; }
   .converter-arrow{ color:var(--ink-soft); font-size:14px; flex:0 0 auto; }
-  .debt-card{ border:1px solid var(--line); border-radius:3px; padding:12px; margin-bottom:10px; }
+  .debt-card{ border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:10px; background:var(--card); box-shadow:var(--shadow); }
   .debt-top{ display:flex; justify-content:space-between; align-items:baseline; }
   .debt-cat{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; text-transform:uppercase; color:var(--gold); background:#EFE3D3; padding:2px 8px; border-radius:10px; }
   .debt-summary-box{ background:var(--paper-deep); border-radius:3px; padding:14px; margin-top:6px; }
@@ -828,6 +839,17 @@
 
       <div class="section-title">Breakdown <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(tap a row to see its individual entries)</span></div>
       <div id="reportBreakdown"></div>
+
+      <div class="section-title">Am I overspending?</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a monthly spending target and see exactly where you stand — plus a few concrete ways to bring it down, based on your actual biggest categories this month.</div>
+      <div class="form-grid" style="margin-bottom:8px;">
+        <div>
+          <label class="field-label">Monthly budget target</label>
+          <input type="number" id="overspendTarget" placeholder="e.g. 6000" step="1">
+        </div>
+      </div>
+      <div id="overspendGauge"></div>
+      <div id="overspendSuggestions"></div>
 
       <div id="reportCountrySplitWrap">
         <div class="section-title">Resident vs Home — this period</div>
@@ -5048,6 +5070,87 @@
     });
   }
 
+  function overspendTargetKey(scope){
+    return 'overspend_' + (scope || 'all');
+  }
+  function renderOverspendCheck(r, scope, curFmt){
+    const targetEl = document.getElementById('overspendTarget');
+    const gaugeEl = document.getElementById('overspendGauge');
+    const suggEl = document.getElementById('overspendSuggestions');
+    if(!targetEl || !gaugeEl || !suggEl) return;
+    if(!state.settings.overspendTargets) state.settings.overspendTargets = {};
+    const key = overspendTargetKey(scope);
+    if(document.activeElement !== targetEl){
+      targetEl.value = state.settings.overspendTargets[key] || '';
+    }
+    const target = parseFloat(targetEl.value) || 0;
+    const spend = r.totalOutflow;
+
+    if(target <= 0){
+      gaugeEl.innerHTML = `<div class="empty">Set a monthly target above to see how you're tracking.</div>`;
+    } else {
+      const pct = Math.min(150, (spend / target) * 100);
+      const over = spend > target;
+      const diff = Math.abs(spend - target);
+      gaugeEl.innerHTML = `
+        <div class="overspend-gauge">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12.5px;color:var(--ink-soft);">Spent ${curFmt(spend)} of ${curFmt(target)} target</span>
+            <span class="overspend-badge ${over ? 'over' : 'under'}">${over ? 'Overspending' : 'Under budget'} · ${curFmt(diff)} ${over ? 'over' : 'left'}</span>
+          </div>
+          <div class="overspend-gauge-track"><div class="overspend-gauge-fill ${over ? 'over' : 'under'}" style="width:${Math.min(100,pct)}%;"></div></div>
+        </div>
+      `;
+    }
+
+    // Build category totals from BOTH card spend and regular Budget expenses
+    // for this period, so suggestions reflect your real biggest spend areas.
+    const groups = {};
+    r.cardsBySpend.forEach(c => {
+      const label = (c.desc || c.bank || 'Card spend').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i,'').trim();
+      groups[label] = (groups[label] || 0) + Number(c.amount);
+    });
+    r.regularExpenseItems.forEach(it => {
+      groups[it.label] = (groups[it.label] || 0) + Number(it.amount);
+    });
+    const topCats = Object.entries(groups).sort((a,b) => b[1]-a[1]).slice(0,3);
+
+    const tips = [];
+    const tipBank = {
+      tea: { emoji:'☕', text: (label,amt) => `"${label}" adds up to ${curFmt(amt)} this period. Small, frequent buys like tea/coffee are often the easiest to trim — brewing at home even half the time can meaningfully cut this.` },
+      lunch: { emoji:'🍱', text: (label,amt) => `"${label}" is ${curFmt(amt)} so far. Meal-prepping 2–3 days a week instead of buying out usually cuts this category by 30–40%.` },
+      dinner: { emoji:'🍽️', text: (label,amt) => `"${label}" is ${curFmt(amt)}. Cooking dinner at home a few extra nights a week is one of the highest-impact ways to bring this down.` },
+      groceries: { emoji:'🛒', text: (label,amt) => `"${label}" is ${curFmt(amt)}. A simple weekly list before shopping (and avoiding shopping hungry) typically saves 10–15% here.` }
+    };
+    topCats.forEach(([label, amt]) => {
+      const key = label.toLowerCase();
+      const bank = tipBank[key];
+      if(bank){
+        tips.push({ emoji: bank.emoji, text: bank.text(label, amt) });
+      } else {
+        tips.push({ emoji: '📌', text: `"${label}" is your biggest line at ${curFmt(amt)} this period — worth a closer look at whether every one of these was necessary.` });
+      }
+    });
+    if(target > 0 && spend > target){
+      tips.push({ emoji: '🎯', text: `You're ${curFmt(spend - target)} over your ${curFmt(target)} target — cutting your top category above by even 20% would likely bring you back under.` });
+    }
+    tips.push({ emoji: '🔁', text: `Recurring card payments (EMIs, subscriptions) don't show up as "overspending" day-to-day but quietly shrink what's left — worth reviewing them once a month.` });
+
+    suggEl.innerHTML = topCats.length
+      ? tips.map(t => `<div class="suggestion-card"><span class="emoji">${t.emoji}</span><span>${escapeHtml(t.text)}</span></div>`).join('')
+      : '<div class="empty">Not enough spending logged this period to suggest anything yet.</div>';
+  }
+  document.getElementById('overspendTarget').addEventListener('input', () => {
+    const scope = reportScopeVal();
+    if(!state.settings.overspendTargets) state.settings.overspendTargets = {};
+    state.settings.overspendTargets[overspendTargetKey(scope)] = parseFloat(document.getElementById('overspendTarget').value) || 0;
+    save();
+    const period = currentPeriod();
+    const r = computeReportData(period, scope);
+    const curFmt = scope ? (amt) => fmtCountry(amt, scope) : fmt;
+    renderOverspendCheck(r, scope, curFmt);
+  });
+
   function renderReport(){
     populateReportMonths();
     populateDueBankFilter();
@@ -5070,6 +5173,8 @@
 
     document.getElementById('repIncome').textContent = curFmt(r.income);
     document.getElementById('repExpense').textContent = curFmt(r.totalOutflow);
+
+    renderOverspendCheck(r, scope, curFmt);
 
     const maxVal = Math.max(r.income, r.totalOutflow, 1);
     document.getElementById('barIncome').style.width = Math.min(100, (r.income/maxVal)*100) + '%';
