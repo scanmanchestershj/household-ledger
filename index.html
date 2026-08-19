@@ -248,6 +248,8 @@
   .breakdown-detail .sub-group-title:first-child{ margin-top:0; }
   .breakdown-detail .sub-total{ font-weight:600; border-top:2px solid var(--line); margin-top:4px; padding-top:6px; }
   table.report-table{ width:100%; border-collapse:collapse; font-size:13px; margin-top:4px; }
+  .report-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:4px; }
+  .report-table-wrap table.report-table{ margin-top:0; min-width:520px; }
   table.report-table th, table.report-table td{ text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
   table.report-table th{ font-family:'IBM Plex Mono', monospace; font-size:10px; text-transform:uppercase; color:var(--ink-soft); font-weight:500; }
 
@@ -2847,6 +2849,7 @@
     const rows = computeMonthlyClosing(countryKey);
     if(rows.length === 0){ el.innerHTML = '<div class="empty">Nothing to close yet — add some transactions first.</div>'; return; }
     el.innerHTML = `
+      <div class="report-table-wrap">
       <table class="report-table">
         <thead><tr><th>Month</th><th>Opening</th><th>Income</th>${countryKey === 'India' ? '<th>Remit. in</th>' : ''}<th>Expenses</th><th>Lending</th><th>Closing</th></tr></thead>
         <tbody>
@@ -2861,6 +2864,7 @@
           </tr>`).join('')}
         </tbody>
       </table>
+      </div>
     `;
   }
   function cardMapOptionsHtml(countryKey){
@@ -5276,6 +5280,7 @@
       const countrySplitEl = document.getElementById('reportCountrySplit');
       const residentName = state.countryConfig.country1.name, homeName = state.countryConfig.country2.name;
       countrySplitEl.innerHTML = `
+        <div class="report-table-wrap">
         <table class="report-table">
           <thead><tr><th>Country</th><th>Income</th><th>Remittance</th><th>Expenses</th><th>Card spend</th><th>Net (income − outflow)</th></tr></thead>
           <tbody>
@@ -5297,6 +5302,7 @@
             </tr>
           </tbody>
         </table>
+        </div>
       `;
     }
 
@@ -5328,6 +5334,7 @@
       personEl.innerHTML = '<div class="empty">No split card expenses for others in this period.</div>';
     } else {
       personEl.innerHTML = `
+        <div class="report-table-wrap">
         <table class="report-table">
           <thead><tr><th>Person</th><th>Returnable</th><th>Non-returnable</th><th>Total</th></tr></thead>
           <tbody>
@@ -5337,6 +5344,7 @@
             }).join('')}
           </tbody>
         </table>
+        </div>
       `;
     }
 
@@ -5457,6 +5465,7 @@
       return;
     }
     listEl.innerHTML = `
+      <div class="report-table-wrap">
       <table class="report-table">
         <thead><tr><th>Date</th><th>Time</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th><th>Used for</th></tr></thead>
         <tbody>
@@ -5482,6 +5491,7 @@
           <tr><td colspan="3"><strong>Balance due</strong></td><td colspan="5"><strong>${fmt(balanceDue)}</strong></td></tr>
         </tfoot>
       </table>
+      </div>
     `;
     listEl.querySelectorAll('[data-action="returnableedit"]').forEach(btn => btn.addEventListener('click', () => {
       const it = items[Number(btn.dataset.idx)];
