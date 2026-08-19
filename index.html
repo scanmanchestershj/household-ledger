@@ -134,6 +134,12 @@
   .sa-cat-chip{ flex:1 1 calc(50% - 8px); min-width:110px; background:var(--paper-deep); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:2px; }
   .sa-cat-label{ font-size:11px; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; }
   .sa-cat-amount{ font-size:14px; font-weight:700; color:var(--ink); }
+  .theme-swatch-row{ display:flex; flex-wrap:wrap; gap:10px; }
+  .theme-swatch{ width:48px; height:48px; border-radius:50%; cursor:pointer; border:3px solid transparent; display:flex; align-items:center; justify-content:center; transition:transform 0.15s ease; flex:0 0 auto; }
+  .theme-swatch:hover{ transform:scale(1.08); }
+  .theme-swatch.active{ border-color:var(--ink); }
+  .theme-swatch .check{ color:#fff; font-size:16px; opacity:0; }
+  .theme-swatch.active .check{ opacity:1; }
 
   .monthly-spend-card{ border:1px solid var(--line); border-radius:8px; padding:16px 16px 14px 16px; margin:0 0 22px 0; background:var(--card); box-shadow:var(--shadow); }
   .monthly-spend-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
@@ -1788,6 +1794,16 @@
         <div id="myAccountMsg" style="grid-column:1/-1; font-size:12px; color:var(--teal-dark); display:none;">Saved.</div>
       </div>
 
+      <div class="section-title">Appearance</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Pick whatever color feels right — this changes instantly and applies for everyone in this household.</div>
+      <div id="themeSwatches" class="theme-swatch-row"></div>
+      <div class="form-grid" style="margin-top:10px;">
+        <div>
+          <label class="field-label">Or pick a custom color</label>
+          <input type="color" id="themeCustomColor" value="#1F6F63" style="height:40px;padding:2px;">
+        </div>
+      </div>
+
       <div class="section-title">Invite people to this household</div>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;" id="inviteCodeBox">Share this code — new members enter it on the "Join household" tab of the login screen.</div>
 
@@ -1837,6 +1853,86 @@
   });
   let householdId = null;   // the signed-in user's household
   let myProfile = null;     // the signed-in user's own profiles row
+
+  // ---- Theme (choosable colors, avoiding the default green/blue) ----
+  const THEMES = {
+    sand:   { name: 'Warm Sand',   swatch: '#C97B4A', paper:'#FBF7F2', paperDeep:'#F3EAE0', teal:'#C97B4A', tealDark:'#A85E33', line:'#EADFD2' },
+    rose:   { name: 'Soft Rose',   swatch: '#D9758F', paper:'#FDF5F6', paperDeep:'#F8E8EA', teal:'#D9758F', tealDark:'#B85670', line:'#F0DCE0' },
+    gray:   { name: 'Warm Gray',   swatch: '#8A7F72', paper:'#F7F6F4', paperDeep:'#ECEAE6', teal:'#8A7F72', tealDark:'#696055', line:'#E2DED8' },
+    peach:  { name: 'Peach Cream', swatch: '#E8926B', paper:'#FFF8F2', paperDeep:'#FBEADD', teal:'#E8926B', tealDark:'#C4713F', line:'#F2DECC' },
+    amber:  { name: 'Golden Amber',swatch: '#C08A2E', paper:'#FBF8F0', paperDeep:'#F5EDD6', teal:'#C08A2E', tealDark:'#976B1F', line:'#EBDFC0' },
+    mauve:  { name: 'Mauve Plum',  swatch: '#9C6B85', paper:'#F8F5F7', paperDeep:'#EFE5EC', teal:'#9C6B85', tealDark:'#7A4F64', line:'#E5D8DF' },
+    classic:{ name: 'Classic Teal',swatch: '#1F6F63', paper:'#EDF0E8', paperDeep:'#E3E7DC', teal:'#1F6F63', tealDark:'#17544B', line:'#D3D8CC' }
+  };
+  function hexToRgb(hex){
+    const h = hex.replace('#','');
+    return { r: parseInt(h.substr(0,2),16), g: parseInt(h.substr(2,2),16), b: parseInt(h.substr(4,2),16) };
+  }
+  function rgbToHex(r,g,b){
+    return '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  }
+  function mixHex(hex, towardHex, amount){
+    const a = hexToRgb(hex), b = hexToRgb(towardHex);
+    return rgbToHex(a.r + (b.r-a.r)*amount, a.g + (b.g-a.g)*amount, a.b + (b.b-a.b)*amount);
+  }
+  function applyThemeVars(vars){
+    const root = document.documentElement;
+    root.style.setProperty('--paper', vars.paper);
+    root.style.setProperty('--paper-deep', vars.paperDeep);
+    root.style.setProperty('--teal', vars.teal);
+    root.style.setProperty('--teal-dark', vars.tealDark);
+    root.style.setProperty('--line', vars.line);
+  }
+  function applyTheme(themeKey){
+    const t = THEMES[themeKey];
+    if(!t) return;
+    applyThemeVars(t);
+    renderThemeSwatches(themeKey, null);
+  }
+  function applyCustomThemeColor(hex){
+    applyThemeVars({
+      paper: mixHex(hex, '#ffffff', 0.95),
+      paperDeep: mixHex(hex, '#ffffff', 0.87),
+      teal: hex,
+      tealDark: mixHex(hex, '#000000', 0.25),
+      line: mixHex(hex, '#ffffff', 0.82)
+    });
+    renderThemeSwatches(null, hex);
+  }
+  function renderThemeSwatches(activeKey, activeCustom){
+    const el = document.getElementById('themeSwatches');
+    if(!el) return;
+    el.innerHTML = Object.entries(THEMES).map(([key, t]) => `
+      <div class="theme-swatch ${key === activeKey ? 'active' : ''}" data-key="${key}" style="background:${t.swatch};" title="${escapeHtml(t.name)}"><span class="check">✓</span></div>
+    `).join('');
+    el.querySelectorAll('.theme-swatch').forEach(sw => sw.addEventListener('click', () => {
+      const key = sw.dataset.key;
+      applyTheme(key);
+      if(!state.settings) state.settings = {};
+      state.settings.theme = { preset: key, custom: null };
+      save();
+    }));
+  }
+  function initThemeFromSettings(){
+    const saved = state.settings && state.settings.theme;
+    if(saved && saved.custom){
+      applyCustomThemeColor(saved.custom);
+      const customInput = document.getElementById('themeCustomColor');
+      if(customInput) customInput.value = saved.custom;
+    } else if(saved && saved.preset && THEMES[saved.preset]){
+      applyTheme(saved.preset);
+    } else {
+      renderThemeSwatches(null, null);
+    }
+  }
+  const themeCustomColorEl = document.getElementById('themeCustomColor');
+  if(themeCustomColorEl) themeCustomColorEl.addEventListener('input', () => {
+    const hex = themeCustomColorEl.value;
+    applyCustomThemeColor(hex);
+    if(!state.settings) state.settings = {};
+    state.settings.theme = { preset: null, custom: hex };
+    save();
+  });
 
   const CURRENCIES = { AED: 'AED', INR: '₹', USD: '$', GBP: '£', EUR: '€', SAR: 'SAR', PKR: 'PKR', PHP: '₱', BDT: '৳', EGP: 'EGP', QAR: 'QAR', KWD: 'KWD', OMR: 'OMR', BHD: 'BHD', CAD: 'C$', AUD: 'A$', SGD: 'S$' };
   const COUNTRY_DB = [
@@ -2521,6 +2617,7 @@
     renderRequestsForUser();
     renderAll();
     startIdleWatch();
+    initThemeFromSettings();
   }
 
   async function logout(){
