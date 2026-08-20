@@ -635,7 +635,7 @@
               </select>
               <div id="ownReturnNameWrap" style="display:none; margin-top:8px;">
                 <label class="field-label">Who owes it back?</label>
-                <input type="text" id="cardReturnName" placeholder="Name">
+                <input type="text" id="cardReturnName" placeholder="Name" list="knownPeopleList">
               </div>
             </div>
             <div class="full" id="splitSection" style="display:none;">
@@ -653,6 +653,7 @@
               <div id="splitRows"></div>
               <button type="button" class="add-btn ghost" id="addSplitRowBtn" style="margin-top:4px;">+ Add person</button>
               <div style="margin-top:10px; font-size:12.5px; color:var(--ink-soft);">My own share: <strong id="mySharePreview">0.00</strong></div>
+              <datalist id="knownPeopleList"></datalist>
             </div>
             <button class="add-btn full-width" id="cardAdd">Add card expense</button>
             <button class="add-btn ghost full-width" id="cardCancelEdit" style="display:none;">Cancel edit</button>
@@ -715,7 +716,7 @@
             <div class="accordion-body">
               <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">The reverse of your card splits — this is for when <em>someone else</em> pays and splits a cost with you (e.g. Vignesh spends AED 2 and your share is AED 1). Log it here, per day, per person. This is a personal IOU tracker only — it's kept separate and is never counted as income or expense in Reports.</div>
               <div class="add-row" style="flex-wrap:wrap;">
-                <input type="text" id="iouInPerson" placeholder="Who spent (e.g. Vignesh)" style="flex:1 1 140px;">
+                <input type="text" id="iouInPerson" placeholder="Who spent (e.g. Vignesh)" list="knownPeopleList" style="flex:1 1 140px;">
                 <input type="number" id="iouInTotal" placeholder="Total they spent" step="0.01" style="flex:1 1 110px;">
                 <input type="number" id="iouInShare" placeholder="Your share" step="0.01" style="flex:1 1 110px;">
                 <input type="date" id="iouInDate" style="flex:1 1 140px;">
@@ -3639,11 +3640,29 @@
     const sel = document.getElementById('splitTypeSelect');
     return sel ? sel.value : 'unequally';
   }
+  function populateKnownPeopleList(){
+    const dl = document.getElementById('knownPeopleList');
+    if(!dl) return;
+    const names = new Set();
+    (currentData().cards || []).forEach(c => {
+      if(c.returnName) names.add(c.returnName.trim());
+      (c.splits || []).forEach(sp => { if(sp.name) names.add(sp.name.trim()); });
+    });
+    (currentData().iouIn || []).forEach(e => { if(e.person) names.add(e.person.trim()); });
+    ['UAE','India'].forEach(ck => {
+      const country = currentData().countries && currentData().countries[ck];
+      (country && country.transactions || []).forEach(t => {
+        if(t.person) names.add(t.person.trim());
+        if(t.purposePerson) names.add(t.purposePerson.trim());
+      });
+    });
+    dl.innerHTML = [...names].filter(Boolean).sort().map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+  }
   function addSplitRowUI(prefill){
     const row = document.createElement('div');
     row.className = 'split-row';
     row.innerHTML = `
-      <input type="text" class="split-name" placeholder="Name" value="${prefill ? escapeHtml(prefill.name) : ''}">
+      <input type="text" class="split-name" placeholder="Name" list="knownPeopleList" value="${prefill ? escapeHtml(prefill.name) : ''}">
       <input type="number" class="split-amount" placeholder="Amount" step="0.01" value="${prefill ? prefill.amount : ''}">
       <input type="number" class="split-percent" placeholder="%" step="0.01" style="display:none;">
       <input type="number" class="split-shares" placeholder="Shares" step="1" value="1" style="display:none;">
@@ -3785,6 +3804,7 @@
     renderBankSummaries();
     renderSpendAnalysis();
     renderIouIn();
+    populateKnownPeopleList();
     populateCardMapOptions('UAE');
     populateCardMapOptions('India');
     const list = document.getElementById('cardList');
