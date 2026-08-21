@@ -23,19 +23,19 @@
 </style>
 <style>
   :root{
-    --paper: #F7F4FB;
-    --paper-deep: #EBE2F5;
+    --paper: #F5F7F6;
+    --paper-deep: #EAF6F1;
     --card: #FFFFFF;
-    --ink: #2A2233;
-    --ink-soft: #7C7488;
-    --teal: #5B2A86;
-    --teal-dark: #3E1C5E;
-    --gold: #C9A227;
-    --coral: #C0392B;
-    --amber: #C9A227;
-    --blue: #4A5FC1;
-    --line: #D9C7EC;
-    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 18px rgba(91,42,134,0.10);
+    --ink: #2A2E2D;
+    --ink-soft: #7C8681;
+    --teal: #00C896;
+    --teal-dark: #00A87D;
+    --gold: #F5A623;
+    --coral: #F4515F;
+    --amber: #F5A623;
+    --blue: #4A90E2;
+    --line: #E6ECE9;
+    --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 18px rgba(0,200,150,0.08);
     --radius: 14px;
   }
   *{box-sizing:border-box;}
@@ -1962,7 +1962,7 @@
     } else if(saved && saved.preset && THEMES[saved.preset]){
       applyTheme(saved.preset);
     } else {
-      applyTheme('royal'); // default look for new/never-customized households
+      renderThemeSwatches(null, null);
     }
   }
   const themeCustomColorEl = document.getElementById('themeCustomColor');
