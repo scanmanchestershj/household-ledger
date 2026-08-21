@@ -125,6 +125,11 @@
   .overspend-badge{ display:inline-block; padding:4px 12px; border-radius:20px; font-weight:700; font-size:13px; }
   .overspend-badge.under{ background:#DFF7EE; color:var(--teal-dark); }
   .overspend-badge.over{ background:#FDE3E5; color:var(--coral); }
+  .alert-banner{ display:flex; align-items:flex-start; gap:10px; border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; font-size:12.5px; line-height:1.45; }
+  .alert-banner.warn{ background:#FDF3E3; color:#8A5A00; border:1px solid #F3DEA0; }
+  .alert-banner.danger{ background:#FDE3E5; color:#8A2E2E; border:1px solid #F3B8BC; }
+  .alert-banner .alert-emoji{ font-size:16px; flex:0 0 auto; }
+  .alert-banner strong{ display:block; margin-bottom:2px; }
   .suggestion-card{ display:flex; gap:10px; align-items:flex-start; background:var(--paper-deep); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; font-size:12.5px; }
   .suggestion-card .emoji{ font-size:18px; }
   .spend-analysis-row{ margin-bottom:10px; }
@@ -466,6 +471,7 @@
   <main>
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview">
+      <div id="overviewAlerts" style="display:none;margin-bottom:14px;"></div>
       <div id="viewingAsBox" style="display:none; margin-bottom:14px;">
         <label class="field-label">Viewing data for</label>
         <select class="who-select" id="viewingAsSelect" style="width:auto;"></select>
@@ -4122,6 +4128,18 @@
     const spendFor = document.getElementById('cardSpendFor').value;
     if(isNaN(amount) || amount <= 0) return;
 
+    // Duplicate card-swipe check: same bank, date, and amount already logged (and not the
+    // card currently being edited) is very likely the same swipe entered twice by mistake.
+    if(!editingCardId){
+      const dupCard = (currentData().cards || []).find(c =>
+        c.bank === bank && c.date === date && Math.abs(Number(c.amount) - amount) < 0.01
+      );
+      if(dupCard){
+        const proceed = confirm(`This looks like a duplicate — ${bank} already has a ${fmt(dupCard.amount)} swipe logged on ${date}${dupCard.desc ? ' ("' + dupCard.desc + '")' : ''}. Add this as a separate entry anyway?`);
+        if(!proceed) return;
+      }
+    }
+
     let returnable = 'non-returnable', returnName = '', splits = [];
     if(spendFor === 'own'){
       returnable = document.getElementById('cardReturnable').value;
@@ -7396,9 +7414,57 @@
     `;
   }
 
+  // ---- Overview alerts: bills due soon + monthly budget threshold ----
+  function renderOverviewAlerts(){
+    const box = document.getElementById('overviewAlerts');
+    if(!box) return;
+    const banners = [];
+
+    // Bills due within the next 3 days (today included), across both countries' cards.
+    const soonCutoff = new Date(); soonCutoff.setHours(0,0,0,0); soonCutoff.setDate(soonCutoff.getDate() + 3);
+    const soonCutoffStr = soonCutoff.toISOString().slice(0,10);
+    const dueSoon = (currentData().cards || []).filter(c => c.dueDate && c.dueDate >= todayStr() && c.dueDate <= soonCutoffStr);
+    if(dueSoon.length){
+      const totalDue = dueSoon.reduce((s,c) => s + Number(c.amount), 0);
+      const names = [...new Set(dueSoon.map(c => c.bank))].slice(0,3).join(', ');
+      banners.push({
+        type: 'warn', emoji: '📅',
+        title: `${dueSoon.length} bill${dueSoon.length === 1 ? '' : 's'} due in the next 3 days`,
+        body: `${names}${dueSoon.length > 3 ? ' and others' : ''} — totalling ${fmt(totalDue)}. Check the Cards tab for exact dates.`
+      });
+    }
+
+    // Monthly budget threshold — reuses the same target the Report tab's
+    // "Am I overspending?" gauge uses for the combined (both countries) scope.
+    try{
+      const target = (state.settings.overspendTargets || {})['overspend_all'] || 0;
+      if(target > 0){
+        const period = { type: 'monthly', key: monthKey(todayStr()) };
+        const r = computeReportData(period, '');
+        const spend = r.totalOutflow;
+        const pct = (spend / target) * 100;
+        if(pct >= 100){
+          banners.push({ type: 'danger', emoji: '🚨', title: `Over your monthly budget target`, body: `You've spent ${fmt(spend)} of your ${fmt(target)} target this month (${Math.round(pct)}%). See Report → "Am I overspending?" for where to cut back.` });
+        } else if(pct >= 80){
+          banners.push({ type: 'warn', emoji: '⚠️', title: `Approaching your monthly budget target`, body: `You've spent ${fmt(spend)} of your ${fmt(target)} target this month (${Math.round(pct)}%).` });
+        }
+      }
+    }catch(e){ /* report data not ready yet (e.g. before first render) — skip silently */ }
+
+    if(banners.length === 0){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    box.innerHTML = banners.map(b => `
+      <div class="alert-banner ${b.type}">
+        <span class="alert-emoji">${b.emoji}</span>
+        <span><strong>${escapeHtml(b.title)}</strong>${escapeHtml(b.body)}</span>
+      </div>
+    `).join('');
+  }
+
   function renderOverview(){
     updateRequestsSectionVisibility();
     populateOverviewMonthOptions();
+    renderOverviewAlerts();
     const monthFilter = overviewMonthFilter();
     const periodLabelEl = document.getElementById('statBudgetPeriodLabel');
     if(periodLabelEl) periodLabelEl.textContent = monthFilter ? `balance — ${monthLabel(monthFilter)}` : 'balance — all time';
