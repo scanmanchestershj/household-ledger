@@ -125,6 +125,9 @@
   .overspend-badge{ display:inline-block; padding:4px 12px; border-radius:20px; font-weight:700; font-size:13px; }
   .overspend-badge.under{ background:#DFF7EE; color:var(--teal-dark); }
   .overspend-badge.over{ background:#FDE3E5; color:var(--coral); }
+  .activity-row{ display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:12px; }
+  .activity-row:last-child{ border-bottom:none; }
+  .activity-dot{ width:7px; height:7px; border-radius:50%; background:var(--teal); margin-top:5px; flex:0 0 auto; }
   .alert-banner{ display:flex; align-items:flex-start; gap:10px; border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; font-size:12.5px; line-height:1.45; }
   .alert-banner.warn{ background:#FDF3E3; color:#8A5A00; border:1px solid #F3DEA0; }
   .alert-banner.danger{ background:#FDE3E5; color:#8A2E2E; border:1px solid #F3B8BC; }
@@ -785,6 +788,14 @@
             <div class="accordion-body">
               <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set each bank's statement cycle start day (e.g. "4" if your cycle runs 4th–3rd) and, optionally, a credit limit — used to show how much you've used this cycle.</div>
               <div id="cardUsageList"></div>
+            </div>
+          </div>
+
+          <div class="accordion" data-key="activity-log">
+            <button type="button" class="accordion-header"><span>Recent activity</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion-body">
+              <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">A log of recent additions, edits, and deletions to your transactions and card expenses.</div>
+              <div id="activityLogList"></div>
             </div>
           </div>
         </div>
@@ -2027,6 +2038,7 @@
       iouIn: [],
       bankSettings: {},
       bankSummaries: [],
+      activityLog: [],
       devices: [
         {id:'d1', name:'Living Room Lights', room:'Living Room', on:false, country:'resident'},
         {id:'d2', name:'Kitchen Lights', room:'Kitchen', on:false, country:'resident'},
@@ -2052,6 +2064,25 @@
     if(!id) return defaultUserData();
     if(!state.userData[id]) state.userData[id] = defaultUserData();
     return state.userData[id];
+  }
+  // ---- Lightweight activity log: who added/edited/deleted what, and when.
+  // Scoped per-user like the rest of the data model (a shared household member's
+  // Cards/Debts/Budget are already only visible to them + admin). ----
+  function logActivity(action, detail){
+    const data = currentData();
+    if(!data.activityLog) data.activityLog = [];
+    data.activityLog.unshift({ ts: Date.now(), by: (currentUser && currentUser.name) || 'Someone', action, detail: detail || '' });
+    if(data.activityLog.length > 200) data.activityLog.length = 200; // cap growth
+  }
+  function renderActivityLog(){
+    const list = document.getElementById('activityLogList');
+    if(!list) return;
+    const entries = (currentData().activityLog || []).slice(0, 15);
+    if(!entries.length){ list.innerHTML = '<div class="empty" style="padding:10px;">No activity yet.</div>'; return; }
+    list.innerHTML = entries.map(e => {
+      const when = new Date(e.ts).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      return `<div class="activity-row"><span class="activity-dot"></span><div><div>${escapeHtml(e.action)}${e.detail ? ' — ' + escapeHtml(e.detail) : ''}</div><div style="font-size:10.5px;color:var(--ink-soft);">${escapeHtml(e.by)} · ${escapeHtml(when)}</div></div></div>`;
+    }).join('');
   }
   const SAVINGS_QUOTES = [
     'A penny saved is a penny earned.',
@@ -3240,9 +3271,11 @@
       list.appendChild(li);
     });
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
+      const removed = data.transactions.find(x => x.id === el.dataset.id);
       data.transactions = data.transactions.filter(x => x.id !== el.dataset.id);
       currentData().countries[countryKey].transactions = data.transactions;
       if(editingTxId(countryKey) === el.dataset.id) cancelEditTxCountry(countryKey);
+      if(removed) logActivity('Deleted transaction', `${removed.label} (${countryKey}, ${fmt(removed.amount)})`);
       save(); renderBudgetCountry(countryKey); renderOverview();
     }));
     list.querySelectorAll('.edit-btn').forEach(el => el.addEventListener('click', () => startEditTxCountry(countryKey, el.dataset.id)));
@@ -3443,8 +3476,10 @@
       const idx = data.transactions.findIndex(x => x.id === curEditId);
       if(idx > -1) data.transactions[idx] = Object.assign({id: curEditId}, record);
       cancelEditTxCountry(countryKey);
+      logActivity('Edited transaction', `${record.label} (${countryKey}, ${fmt(record.amount)})`);
     } else {
       data.transactions.push(Object.assign({id: uid()}, record));
+      logActivity('Added transaction', `${record.label} (${countryKey}, ${fmt(record.amount)})`);
       label.value = ''; amount.value = ''; person.value = ''; due.value = '';
       if(recurringEl) recurringEl.checked = false;
       renderCardMapRows(countryKey, []);
@@ -4046,8 +4081,10 @@
       save(); renderCards();
     }));
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
+      const removed = currentData().cards.find(x => x.id === el.dataset.id);
       currentData().cards = currentData().cards.filter(x => x.id !== el.dataset.id);
       if(editingCardId === el.dataset.id) cancelEditCard();
+      if(removed) logActivity('Deleted card expense', `${removed.bank}${removed.desc ? ' — ' + removed.desc : ''} (${fmt(removed.amount)})`);
       save(); renderCards(); renderOverview();
     }));
     list.querySelectorAll('.edit-btn').forEach(el => el.addEventListener('click', () => startEditCard(el.dataset.id)));
@@ -4192,8 +4229,10 @@
       const idx = currentData().cards.findIndex(c => c.id === editingCardId);
       if(idx > -1) currentData().cards[idx] = Object.assign({id: editingCardId}, record);
       cancelEditCard();
+      logActivity('Edited card expense', `${bank}${desc ? ' — ' + desc : ''} (${fmt(amount)})`);
     } else {
       currentData().cards.push(Object.assign({id: uid()}, record));
+      logActivity('Added card expense', `${bank}${desc ? ' — ' + desc : ''} (${fmt(amount)})`);
       document.getElementById('cardLabel').value = '';
       setCardDescValue('');
       document.getElementById('cardAmount').value = '';
@@ -5294,7 +5333,20 @@
       </div>`;
     }).join('');
     const avgEl = document.getElementById('monthlySpendAvg');
-    if(avgEl) avgEl.textContent = curFmt(avg) + ' average per month';
+    if(avgEl){
+      let avgLine = curFmt(avg) + ' average per month';
+      const curV = values[values.length - 1];
+      const prevV = values[values.length - 2];
+      if(prevV > 0){
+        const pctChange = ((curV - prevV) / prevV) * 100;
+        const up = pctChange > 0;
+        const flat = Math.abs(pctChange) < 0.5;
+        const arrow = flat ? '→' : (up ? '▲' : '▼');
+        const color = flat ? 'var(--ink-soft)' : (up ? 'var(--coral)' : 'var(--teal)');
+        avgLine += ` <span style="color:${color};font-weight:600;">${arrow} ${Math.abs(pctChange).toFixed(0)}% vs last month</span>`;
+      }
+      avgEl.innerHTML = avgLine;
+    }
     wrap.querySelectorAll('.msb-col').forEach(col => {
       col.addEventListener('click', () => {
         const key = col.dataset.month;
@@ -7465,6 +7517,7 @@
     updateRequestsSectionVisibility();
     populateOverviewMonthOptions();
     renderOverviewAlerts();
+    renderActivityLog();
     const monthFilter = overviewMonthFilter();
     const periodLabelEl = document.getElementById('statBudgetPeriodLabel');
     if(periodLabelEl) periodLabelEl.textContent = monthFilter ? `balance — ${monthLabel(monthFilter)}` : 'balance — all time';
