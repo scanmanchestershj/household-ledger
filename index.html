@@ -23,19 +23,19 @@
 </style>
 <style>
   :root{
-    --paper: #F5F7F6;
-    --paper-deep: #EAF6F1;
+    --paper: #F7F4FB;
+    --paper-deep: #EBE2F5;
     --card: #FFFFFF;
-    --ink: #2A2E2D;
-    --ink-soft: #7C8681;
-    --teal: #00C896;
-    --teal-dark: #00A87D;
-    --gold: #F5A623;
-    --coral: #F4515F;
-    --amber: #F5A623;
-    --blue: #4A90E2;
-    --line: #E6ECE9;
-    --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 18px rgba(0,200,150,0.08);
+    --ink: #2A2233;
+    --ink-soft: #7C7488;
+    --teal: #5B2A86;
+    --teal-dark: #3E1C5E;
+    --gold: #C9A227;
+    --coral: #C0392B;
+    --amber: #C9A227;
+    --blue: #4A5FC1;
+    --line: #D9C7EC;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 18px rgba(91,42,134,0.10);
     --radius: 14px;
   }
   *{box-sizing:border-box;}
@@ -1113,6 +1113,13 @@
             <input type="date" id="uaeTxDate">
           </div>
           <div class="full">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;">
+              <input type="checkbox" id="uaeTxRecurring" style="width:auto;">
+              Repeat this every month
+            </label>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">Automatically re-adds this transaction on the same day each month (e.g. rent, salary, subscriptions) — up to today, so you never have to re-enter it.</div>
+          </div>
+          <div class="full">
             <label class="field-label">Map from card(s) (optional)</label>
             <div id="uaeTxCardMapRows"></div>
             <button type="button" class="add-btn ghost" id="uaeTxCardMapAdd" style="margin-top:4px;">+ Add mapping</button>
@@ -1525,6 +1532,13 @@
             <input type="date" id="indiaTxDate">
           </div>
           <div class="full">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;">
+              <input type="checkbox" id="indiaTxRecurring" style="width:auto;">
+              Repeat this every month
+            </label>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">Automatically re-adds this transaction on the same day each month (e.g. rent, salary, subscriptions) — up to today, so you never have to re-enter it.</div>
+          </div>
+          <div class="full">
             <label class="field-label">Map from card(s) (optional)</label>
             <div id="indiaTxCardMapRows"></div>
             <button type="button" class="add-btn ghost" id="indiaTxCardMapAdd" style="margin-top:4px;">+ Add mapping</button>
@@ -1864,6 +1878,7 @@
 
   // ---- Theme (choosable colors, avoiding the default green/blue) ----
   const THEMES = {
+    royal:  { name: 'Royal Purple',swatch: '#5B2A86', paper:'#F7F4FB', paperDeep:'#EBE2F5', teal:'#5B2A86', tealDark:'#3E1C5E', line:'#D9C7EC', gold:'#C9A227' },
     sand:   { name: 'Warm Sand',   swatch: '#C97B4A', paper:'#FBF7F2', paperDeep:'#F3EAE0', teal:'#C97B4A', tealDark:'#A85E33', line:'#EADFD2' },
     rose:   { name: 'Soft Rose',   swatch: '#D9758F', paper:'#FDF5F6', paperDeep:'#F8E8EA', teal:'#D9758F', tealDark:'#B85670', line:'#F0DCE0' },
     gray:   { name: 'Warm Gray',   swatch: '#8A7F72', paper:'#F7F6F4', paperDeep:'#ECEAE6', teal:'#8A7F72', tealDark:'#696055', line:'#E2DED8' },
@@ -1930,7 +1945,7 @@
     } else if(saved && saved.preset && THEMES[saved.preset]){
       applyTheme(saved.preset);
     } else {
-      renderThemeSwatches(null, null);
+      applyTheme('royal'); // default look for new/never-customized households
     }
   }
   const themeCustomColorEl = document.getElementById('themeCustomColor');
@@ -2644,6 +2659,7 @@
     renderAll();
     startIdleWatch();
     initThemeFromSettings();
+    generateRecurringTransactions();
   }
 
   async function logout(){
@@ -3191,6 +3207,7 @@
       const borrowTag = t.type === 'borrowing'
         ? (t.borrowSource === 'card' ? 'Card debt (see Cards tab)' : 'Debt')
         : meta.tag;
+      const recurTag = t.recurring ? '🔁 Recurring' : '';
       const repaidChip = t.type === 'borrowing'
         ? `<button class="perm-chip ${t.repaid ? 'on' : ''} tx-repaid-toggle" data-id="${t.id}" style="margin-left:6px;">${t.repaid ? 'Repaid ✓' : 'Mark repaid'}</button>`
         : '';
@@ -3204,7 +3221,7 @@
         cardMapLine = ` · 🔗 ${parts.join(', ')}`;
       }
       li.innerHTML = `
-        <div class="item-text">${escapeHtml(t.label)}${borrowTag ? ' <span class="item-meta">'+escapeHtml(borrowTag)+'</span>' : ''}${repaidChip}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(t.date || '')}${personLine}${dueLine}${cardMapLine}</div></div>
+        <div class="item-text">${escapeHtml(t.label)}${borrowTag ? ' <span class="item-meta">'+escapeHtml(borrowTag)+'</span>' : ''}${recurTag ? ' <span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">'+recurTag+'</span>' : ''}${repaidChip}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(t.date || '')}${personLine}${dueLine}${cardMapLine}</div></div>
         <div class="tx-amount ${meta.cls}">${meta.sign}${budgetFmt(t.amount, countryKey)}</div>
         <button class="edit-btn" data-id="${t.id}" aria-label="Edit transaction">✎</button>
         <button class="del-btn" data-id="${t.id}" aria-label="Delete transaction">×</button>
@@ -3264,6 +3281,37 @@
     renderBudgetCountry('India');
   }
 
+  // ---- Recurring transactions: auto re-add monthly items (rent, salary, subscriptions)
+  // up to the current date, so they never need to be manually re-entered. ----
+  function generateRecurringTransactions(){
+    let changed = false;
+    ['UAE','India'].forEach(countryKey => {
+      const data = currentData().countries[countryKey];
+      if(!data || !data.transactions) return;
+      const groups = {};
+      data.transactions.forEach(t => {
+        if(t.recurring && t.recurringGroupId){
+          if(!groups[t.recurringGroupId] || t.date > groups[t.recurringGroupId].date) groups[t.recurringGroupId] = t;
+        }
+      });
+      Object.values(groups).forEach(latest => {
+        let nextDate = addMonthsToDate(latest.date, 1);
+        let guard = 0;
+        while(nextDate <= todayStr() && guard < 36){
+          const dup = data.transactions.find(x => x.recurringGroupId === latest.recurringGroupId && x.date === nextDate);
+          if(!dup){
+            const clone = Object.assign({}, latest, { id: uid(), date: nextDate, repaid: false, purposeDate: nextDate });
+            data.transactions.push(clone);
+            changed = true;
+          }
+          nextDate = addMonthsToDate(nextDate, 1);
+          guard++;
+        }
+      });
+    });
+    if(changed){ save(); renderBudget(); renderOverview(); }
+  }
+
   function startEditTxCountry(countryKey, id){
     const prefix = budgetPrefix(countryKey);
     const t = currentData().countries[countryKey].transactions.find(x => x.id === id);
@@ -3282,6 +3330,7 @@
     const ppEl = document.getElementById(prefix + 'TxPurposePerson'); if(ppEl) ppEl.value = t.purposePerson || '';
     const pdEl = document.getElementById(prefix + 'TxPurposeDate'); if(pdEl) pdEl.value = t.purposeDate || '';
     const ptEl = document.getElementById(prefix + 'TxPurposeTime'); if(ptEl) ptEl.value = t.purposeTime || '';
+    const recEl = document.getElementById(prefix + 'TxRecurring'); if(recEl) recEl.checked = !!t.recurring;
     const cmListEdit = (t.cardMaps && t.cardMaps.length) ? t.cardMaps : (t.cardMapId ? [{cardId: t.cardMapId, amount: t.amount}] : []);
     renderCardMapRows(countryKey, cmListEdit);
     updateTxPersonVisibilityCountry(countryKey);
@@ -3305,6 +3354,7 @@
     const ppElC = document.getElementById(prefix + 'TxPurposePerson'); if(ppElC) ppElC.value = '';
     const pdElC = document.getElementById(prefix + 'TxPurposeDate'); if(pdElC) pdElC.value = '';
     const ptElC = document.getElementById(prefix + 'TxPurposeTime'); if(ptElC) ptElC.value = '';
+    const recElC = document.getElementById(prefix + 'TxRecurring'); if(recElC) recElC.checked = false;
     renderCardMapRows(countryKey, []);
     updateTxPersonVisibilityCountry(countryKey);
     document.getElementById(prefix + 'TxAdd').textContent = 'Add transaction';
@@ -3379,7 +3429,10 @@
       purposeDate = (document.getElementById(prefix + 'TxPurposeDate') || {}).value || (date.value || todayStr());
       purposeTime = (document.getElementById(prefix + 'TxPurposeTime') || {}).value || '';
     }
-    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime };
+    const recurringEl = document.getElementById(prefix + 'TxRecurring');
+    const isRecurring = !!(recurringEl && recurringEl.checked);
+    const existingRecurGroup = curEditId ? (data.transactions.find(x=>x.id===curEditId)||{}).recurringGroupId : null;
+    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null) };
     if(curEditId){
       const idx = data.transactions.findIndex(x => x.id === curEditId);
       if(idx > -1) data.transactions[idx] = Object.assign({id: curEditId}, record);
@@ -3387,6 +3440,7 @@
     } else {
       data.transactions.push(Object.assign({id: uid()}, record));
       label.value = ''; amount.value = ''; person.value = ''; due.value = '';
+      if(recurringEl) recurringEl.checked = false;
       renderCardMapRows(countryKey, []);
       if(purposeEl) purposeEl.value = '';
       const cdEl = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdEl) cdEl.value = '';
@@ -3396,6 +3450,7 @@
       updateTxPurposeVisibilityCountry(countryKey);
     }
     save(); renderBudgetCountry(countryKey); renderOverview();
+    generateRecurringTransactions();
   }
 
   // ---- Excel import/export: Expenses / Budget sheet ----
