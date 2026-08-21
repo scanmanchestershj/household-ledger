@@ -65,6 +65,10 @@
     .panel{ padding:12px !important; }
     .form-grid{ grid-template-columns:1fr; padding:10px; }
     input, select, textarea{ font-size:16px; } /* prevents iOS zoom-on-focus */
+    .report-grid{ grid-template-columns:1fr; }
+    .stat-grid{ grid-template-columns:1fr; }
+    .glance-range-picker{ flex-wrap:wrap; }
+    .glance-range-date{ min-width:0; flex:1 1 100px; }
   }
   button.add-btn.gate-tab-btn{ flex:1; white-space:normal !important; font-size:11.5px; padding:9px 4px; text-align:center; line-height:1.25; word-break:break-word; }
   @media (max-width:380px){
@@ -431,14 +435,17 @@
   <header class="top">
     <div class="top-row">
       <div class="eyebrow" id="dateLine">—</div>
-      <select class="currency-picker" id="currencyPicker">
-        <option value="AED">AED — UAE Dirham</option>
-        <option value="INR">INR — Indian Rupee</option>
-        <option value="USD">USD — US Dollar</option>
-        <option value="GBP">GBP — British Pound</option>
-        <option value="EUR">EUR — Euro</option>
-        <option value="SAR">SAR — Saudi Riyal</option>
-      </select>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="add-btn ghost" id="privacyToggleBtn" title="Hide amounts" aria-label="Hide amounts" style="padding:6px 10px; font-size:14px; line-height:1;">👁️</button>
+        <select class="currency-picker" id="currencyPicker">
+          <option value="AED">AED — UAE Dirham</option>
+          <option value="INR">INR — Indian Rupee</option>
+          <option value="USD">USD — US Dollar</option>
+          <option value="GBP">GBP — British Pound</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="SAR">SAR — Saudi Riyal</option>
+        </select>
+      </div>
     </div>
     <h1 id="appTitle" contenteditable="true" spellcheck="false">The Household Ledger</h1>
     <div class="subline">Chores, groceries, budget, cards & devices — all in one binder.</div>
@@ -1936,6 +1943,17 @@
   });
 
   const CURRENCIES = { AED: 'AED', INR: '₹', USD: '$', GBP: '£', EUR: '€', SAR: 'SAR', PKR: 'PKR', PHP: '₱', BDT: '৳', EGP: 'EGP', QAR: 'QAR', KWD: 'KWD', OMR: 'OMR', BHD: 'BHD', CAD: 'C$', AUD: 'A$', SGD: 'S$' };
+
+  // ---- Privacy mode: hides money amounts everywhere when the eye toggle is off ----
+  const PRIVACY_MASK = '•••••';
+  let privacyMode = (localStorage.getItem('shb_privacy_mode') === '1');
+  function setPrivacyMode(on){
+    privacyMode = on;
+    localStorage.setItem('shb_privacy_mode', on ? '1' : '0');
+    const btn = document.getElementById('privacyToggleBtn');
+    if(btn){ btn.textContent = on ? '🙈' : '👁️'; btn.title = on ? 'Show amounts' : 'Hide amounts'; btn.setAttribute('aria-label', btn.title); }
+    renderAll();
+  }
   const COUNTRY_DB = [
     { name: 'United Arab Emirates', currency: 'AED', banks: ['Emirates NBD','ADCB','FAB (First Abu Dhabi Bank)','Mashreq','ADIB','Dubai Islamic Bank','RAKBANK','CBD (Commercial Bank of Dubai)','HSBC UAE','Citibank UAE','Standard Chartered UAE'] },
     { name: 'India', currency: 'INR', banks: ['SBI','HDFC Bank','ICICI Bank','Axis Bank','Kotak Mahindra Bank','Punjab National Bank','Bank of Baroda','IDFC First Bank','Yes Bank','Canara Bank','Indian Bank','Indian Overseas Bank','Union Bank of India','Central Bank of India','UCO Bank','Bank of India'] },
@@ -2228,6 +2246,13 @@
   }
 
   async function initApp(){
+    const privacyBtn = document.getElementById('privacyToggleBtn');
+    if(privacyBtn){
+      privacyBtn.textContent = privacyMode ? '🙈' : '👁️';
+      privacyBtn.title = privacyMode ? 'Show amounts' : 'Hide amounts';
+      privacyBtn.setAttribute('aria-label', privacyBtn.title);
+      privacyBtn.addEventListener('click', () => setPrivacyMode(!privacyMode));
+    }
     document.getElementById('currencyPicker').value = state.settings.currency;
     document.getElementById('uaeTxDate').value = todayStr();
     document.getElementById('indiaTxDate').value = todayStr();
@@ -2672,6 +2697,7 @@
 
   function fmt(amount){
     const sym = CURRENCIES[state.settings.currency] || state.settings.currency;
+    if(privacyMode){ return sym.length > 1 ? sym + ' ' + PRIVACY_MASK : sym + PRIVACY_MASK; }
     const abs = Math.abs(Number(amount) || 0).toFixed(2);
     const sign = amount < 0 ? '−' : '';
     if(sym.length > 1) return sign + sym + ' ' + abs;
@@ -3060,9 +3086,10 @@
     const otherCode = countryKey === 'UAE' ? state.countryConfig.country2.currency : state.countryConfig.country1.currency;
     const sym = CURRENCIES[curCode] || curCode;
     const otherSym = CURRENCIES[otherCode] || otherCode;
-    const nativeStr = sym + ' ' + Number(amount).toFixed(2);
+    const nativeStr = privacyMode ? (sym + ' ' + PRIVACY_MASK) : (sym + ' ' + Number(amount).toFixed(2));
     const showOther = currentUser && currentUser.role === 'admin' ? currentUser.showINR !== false : true;
     if(!showOther) return nativeStr;
+    if(privacyMode) return nativeStr + ' <span style="color:var(--ink-soft);font-size:11px;">(' + otherSym + ' ' + PRIVACY_MASK + ')</span>';
     const converted = countryKey === 'UAE' ? Number(amount) * state.exchangeRate : Number(amount) / (state.exchangeRate || 1);
     return nativeStr + ' <span style="color:var(--ink-soft);font-size:11px;">(' + otherSym + ' ' + converted.toFixed(2) + ')</span>';
   }
@@ -5145,7 +5172,7 @@
       detailEl.innerHTML = dueItems.length ? dueItems.map(it => `
         <div class="glance-due-row">
           <span>${escapeHtml(it.label)} <span class="gdr-meta">(${escapeHtml(it.country)})</span></span>
-          <span><strong>${escapeHtml(String(CURRENCIES[it.currency] || it.currency))} ${Number(it.amount).toFixed(2)}</strong> <span class="gdr-meta">${escapeHtml(it.dueDate)}</span></span>
+          <span><strong>${escapeHtml(String(CURRENCIES[it.currency] || it.currency))} ${privacyMode ? PRIVACY_MASK : Number(it.amount).toFixed(2)}</strong> <span class="gdr-meta">${escapeHtml(it.dueDate)}</span></span>
         </div>
       `).join('') : '<div class="empty" style="padding:10px;">Nothing due in this range.</div>';
     }
@@ -6449,7 +6476,7 @@
   function fmtCountry(amount, country){
     const cfg = country === 'UAE' ? state.countryConfig.country1 : state.countryConfig.country2;
     const sym = CURRENCIES[cfg.currency] || cfg.currency;
-    const abs = Number(amount || 0).toFixed(2);
+    const abs = privacyMode ? PRIVACY_MASK : Number(amount || 0).toFixed(2);
     return sym.length > 1 ? sym + ' ' + abs : sym + abs;
   }
 
@@ -6461,7 +6488,7 @@
       const li = document.createElement('li');
       li.innerHTML = `
         <div class="item-text">${escapeHtml(item.label)}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(item.date || '')}</div></div>
-        <div class="tx-amount">${currencyLabel} ${Number(item.amount).toFixed(2)}</div>
+        <div class="tx-amount">${currencyLabel} ${privacyMode ? PRIVACY_MASK : Number(item.amount).toFixed(2)}</div>
         <button class="del-btn" data-id="${item.id}">×</button>
       `;
       list.appendChild(li);
@@ -6518,7 +6545,7 @@
         <div class="item-text">To ${escapeHtml(r.to)}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(r.date)}</div>${cardLine}</div>
         <div style="text-align:right;">
           <div class="tx-amount expense">${budgetFmt(r.amount, countryKey)}</div>
-          <div style="font-size:11px;color:var(--ink-soft);">≈ ₹${creditedInr.toFixed(2)} credited</div>
+          <div style="font-size:11px;color:var(--ink-soft);">≈ ₹${privacyMode ? PRIVACY_MASK : creditedInr.toFixed(2)} credited</div>
         </div>
         <button class="edit-btn" data-id="${r.id}" aria-label="Edit remittance">✎</button>
         <button class="del-btn" data-id="${r.id}" aria-label="Delete remittance">×</button>
