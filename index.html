@@ -128,6 +128,12 @@
   .activity-row{ display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:12px; }
   .activity-row:last-child{ border-bottom:none; }
   .activity-dot{ width:7px; height:7px; border-radius:50%; background:var(--teal); margin-top:5px; flex:0 0 auto; }
+  .catbudget-row{ margin-bottom:12px; }
+  .catbudget-head{ display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; }
+  .catbudget-track{ height:8px; border-radius:5px; background:var(--paper-deep); overflow:hidden; }
+  .catbudget-fill{ height:100%; border-radius:5px; background:var(--teal); transition:width .3s; }
+  .catbudget-fill.warn{ background:var(--amber); }
+  .catbudget-fill.over{ background:var(--coral); }
   .alert-banner{ display:flex; align-items:flex-start; gap:10px; border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; font-size:12.5px; line-height:1.45; }
   .alert-banner.warn{ background:#FDF3E3; color:#8A5A00; border:1px solid #F3DEA0; }
   .alert-banner.danger{ background:#FDE3E5; color:#8A2E2E; border:1px solid #F3B8BC; }
@@ -889,6 +895,11 @@
       <div id="overspendGauge"></div>
       <div id="overspendSuggestions"></div>
 
+      <div class="section-title">Category budgets <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(this month, card spend)</span></div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a cap per category — leave blank for categories you don't want to track.</div>
+      <div id="categoryBudgetForm" class="form-grid" style="margin-bottom:8px;"></div>
+      <div id="categoryBudgetBars"></div>
+
       <div id="reportCountrySplitWrap">
         <div class="section-title">Resident vs Home — this period</div>
         <div style="font-size:11.5px;color:var(--ink-soft);margin:-8px 0 8px 0;">Each country's own figures, in its own currency. Remittance received in Home isn't counted as income here either.</div>
@@ -1201,8 +1212,10 @@
         <div class="add-row">
           <input type="text" id="resDeviceName" placeholder="Device name (e.g. Living Room Lights)">
           <input type="text" id="resDeviceRoom" placeholder="Room">
+          <input type="number" id="resDeviceWattage" placeholder="Watts (optional)" step="1" style="max-width:130px;">
           <button class="add-btn" id="resDeviceAdd">Add device</button>
         </div>
+        <div style="font-size:11px;color:var(--ink-soft);margin:-4px 0 8px 0;">Add the device's wattage to see estimated runtime cost below each card. <span style="white-space:nowrap;">Rate: <input type="number" id="energyRatePerKwh" step="0.01" style="width:70px;padding:3px 5px;font-size:11px;" placeholder="0.30"> / kWh</span></div>
         <div class="device-grid" id="resDeviceGrid"></div>
       </div>
 
@@ -1620,8 +1633,10 @@
         <div class="add-row">
           <input type="text" id="homeDeviceName" placeholder="Device name">
           <input type="text" id="homeDeviceRoom" placeholder="Room">
+          <input type="number" id="homeDeviceWattage" placeholder="Watts (optional)" step="1" style="max-width:130px;">
           <button class="add-btn" id="homeDeviceAdd">Add device</button>
         </div>
+        <div style="font-size:11px;color:var(--ink-soft);margin:-4px 0 8px 0;">Add the device's wattage to see estimated runtime cost below each card.</div>
         <div class="device-grid" id="homeDeviceGrid"></div>
       </div>
 
@@ -2294,7 +2309,48 @@
       if(profile.role !== 'admin') state.permissions[authUser.id] = ALL_TABS.reduce((acc,t) => { acc[t] = true; return acc; }, {});
       await save();
     }
+    setupRealtimeSync();
     return state.users.find(u => u.id === authUser.id);
+  }
+
+  // ---- Realtime sync: live "someone just changed something" awareness across
+  // household members' open sessions (e.g. two people editing the shared
+  // groceries list at once). Households share one row in household_data, so any
+  // save() by anyone triggers this for everyone else currently online. ----
+  let realtimeChannel = null;
+  let lastLocalSaveAt = 0;
+  function setupRealtimeSync(){
+    if(!householdId || typeof sb.channel !== 'function') return;
+    if(realtimeChannel){ try{ sb.removeChannel(realtimeChannel); }catch(e){} }
+    realtimeChannel = sb.channel('household_data_' + householdId)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'household_data', filter: 'household_id=eq.' + householdId }, (payload) => {
+        const isOwnEcho = (Date.now() - lastLocalSaveAt) < 4000; // our own save() just landed — no toast needed
+        const newData = payload.new && payload.new.data;
+        if(!newData) return;
+        if(!isOwnEcho){
+          try{
+            const oldGroceryCount = Object.values(state.userData || {}).reduce((s,u) => s + ((u.groceries||[]).length), 0);
+            const newGroceryCount = Object.values(newData.userData || {}).reduce((s,u) => s + ((u.groceries||[]).length), 0);
+            if(newGroceryCount > oldGroceryCount) showSyncToast('🛒 Someone just added an item to a shopping list');
+          }catch(e){ /* non-critical UI hint — ignore parsing errors */ }
+        }
+        state = Object.assign(state, newData);
+        if(currentUser) renderAll();
+      })
+      .subscribe();
+  }
+  function showSyncToast(msg){
+    let el = document.getElementById('syncToast');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'syncToast';
+      el.style.cssText = 'position:fixed;bottom:78px;left:50%;transform:translateX(-50%);background:var(--teal-dark);color:#fff;padding:9px 16px;border-radius:20px;font-size:12px;box-shadow:var(--shadow);z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:88vw;text-align:center;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => { el.style.opacity = '0'; }, 3200);
   }
 
   async function initApp(){
@@ -2345,6 +2401,7 @@
 
   async function save(){
     if(!householdId) return; // not signed in yet — nothing to save to
+    lastLocalSaveAt = Date.now();
     try{
       const { error } = await sb.from('household_data').upsert({ household_id: householdId, data: state, updated_at: new Date().toISOString() });
       if(error) console.error('Could not save to Supabase', error);
@@ -4835,6 +4892,25 @@
     }
     return true;
   }
+  // ---- Device runtime & estimated energy cost ----
+  function deviceRuntimeSeconds(d){
+    let secs = d.totalOnSeconds || 0;
+    if(d.on && d.lastOnAt) secs += (Date.now() - d.lastOnAt) / 1000;
+    return secs;
+  }
+  function deviceEnergyLineHtml(d){
+    const secs = deviceRuntimeSeconds(d);
+    const hrs = secs / 3600;
+    const hrsLabel = hrs < 1 ? Math.round(hrs * 60) + ' min' : hrs.toFixed(1) + ' hr';
+    if(!d.wattage){
+      return `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;">Runtime: ${hrsLabel} total · add wattage to see est. cost</div>`;
+    }
+    const kwh = (d.wattage * hrs) / 1000;
+    const rate = state.settings.energyRatePerKwh || 0;
+    const cost = kwh * rate;
+    const costLabel = rate > 0 ? ` · ${privacyMode ? PRIVACY_MASK : fmt(cost)} est.` : '';
+    return `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;">Runtime: ${hrsLabel} total · ${kwh.toFixed(2)} kWh${costLabel}</div>`;
+  }
   function renderDevicesFor(country, gridId){
     const grid = document.getElementById(gridId);
     grid.innerHTML = '';
@@ -4854,6 +4930,7 @@
             <button class="del-btn" data-id="${d.id}" aria-label="Remove device">×</button>
           </span>
         </div>
+        ${deviceEnergyLineHtml(d)}
         <div class="dc-panel-mount" data-id="${d.id}"></div>
       `;
       grid.appendChild(card);
@@ -4866,6 +4943,12 @@
       el.style.opacity = '0.6';
       try{
         await driveDeviceConnection(d, goingOn);
+        if(goingOn){
+          d.lastOnAt = Date.now();
+        } else if(d.lastOnAt){
+          d.totalOnSeconds = (d.totalOnSeconds || 0) + (Date.now() - d.lastOnAt) / 1000;
+          d.lastOnAt = null;
+        }
         d.on = goingOn;
         save(); renderDevices(); renderOverview();
       }catch(err){
@@ -4888,20 +4971,31 @@
     }));
   }
   function renderDevices(){
+    const rateEl = document.getElementById('energyRatePerKwh');
+    if(rateEl && document.activeElement !== rateEl) rateEl.value = state.settings.energyRatePerKwh || '';
     renderDevicesFor('resident', 'resDeviceGrid');
     renderDevicesFor('home', 'homeDeviceGrid');
   }
-  function addDeviceFor(country, nameId, roomId){
+  function addDeviceFor(country, nameId, roomId, wattageId){
     const nameInput = document.getElementById(nameId);
     const roomInput = document.getElementById(roomId);
+    const wattageInput = wattageId ? document.getElementById(wattageId) : null;
     const name = nameInput.value.trim();
     if(!name) return;
-    currentData().devices.push({ id: uid(), name, room: roomInput.value.trim() || 'Home', on: false, country, connectionType: 'none', config: {} });
-    nameInput.value = ''; roomInput.value = '';
+    const wattage = wattageInput ? (parseFloat(wattageInput.value) || 0) : 0;
+    currentData().devices.push({ id: uid(), name, room: roomInput.value.trim() || 'Home', on: false, country, connectionType: 'none', config: {}, wattage, totalOnSeconds: 0, lastOnAt: null });
+    nameInput.value = ''; roomInput.value = ''; if(wattageInput) wattageInput.value = '';
     save(); renderDevices(); renderOverview();
   }
-  document.getElementById('resDeviceAdd').addEventListener('click', () => addDeviceFor('resident', 'resDeviceName', 'resDeviceRoom'));
-  document.getElementById('homeDeviceAdd').addEventListener('click', () => addDeviceFor('home', 'homeDeviceName', 'homeDeviceRoom'));
+  document.getElementById('resDeviceAdd').addEventListener('click', () => addDeviceFor('resident', 'resDeviceName', 'resDeviceRoom', 'resDeviceWattage'));
+  document.getElementById('homeDeviceAdd').addEventListener('click', () => addDeviceFor('home', 'homeDeviceName', 'homeDeviceRoom', 'homeDeviceWattage'));
+  const energyRateEl = document.getElementById('energyRatePerKwh');
+  if(energyRateEl){
+    energyRateEl.addEventListener('input', () => {
+      state.settings.energyRatePerKwh = parseFloat(energyRateEl.value) || 0;
+      save(); renderDevices();
+    });
+  }
 
   // ---- Report ----
   // The Report tab is a combined view across both countries. Since Budget now lives
@@ -5373,6 +5467,72 @@
   function overspendTargetKey(scope){
     return 'overspend_' + (scope || 'all');
   }
+
+  // ---- Category-level budgets: a cap per spend category (Tea/Lunch/Dinner/
+  // Groceries/Others — same taxonomy as the Cards spend-analysis summary chips),
+  // so overspending can be caught per-category, not just as one overall number. ----
+  const CATEGORY_BUDGET_CATS = ['Tea', 'Lunch', 'Dinner', 'Groceries', 'Others'];
+  function categoryBudgetKey(scope, cat){
+    return 'catbudget_' + (scope || 'all') + '_' + cat;
+  }
+  function renderCategoryBudgets(r, scope, curFmt){
+    const formEl = document.getElementById('categoryBudgetForm');
+    const barsEl = document.getElementById('categoryBudgetBars');
+    if(!formEl || !barsEl) return;
+    if(!state.settings.categoryBudgets) state.settings.categoryBudgets = {};
+
+    // Build the input row once per scope change (avoid re-rendering over an active input).
+    if(formEl.dataset.scope !== String(scope || 'all')){
+      formEl.dataset.scope = String(scope || 'all');
+      formEl.innerHTML = CATEGORY_BUDGET_CATS.map(cat => `
+        <div>
+          <label class="field-label">${escapeHtml(cat)}</label>
+          <input type="number" class="catbudget-input" data-cat="${escapeHtml(cat)}" placeholder="e.g. 500" step="1" value="${state.settings.categoryBudgets[categoryBudgetKey(scope, cat)] || ''}">
+        </div>
+      `).join('');
+      formEl.querySelectorAll('.catbudget-input').forEach(inp => {
+        inp.addEventListener('input', () => {
+          state.settings.categoryBudgets[categoryBudgetKey(scope, inp.dataset.cat)] = parseFloat(inp.value) || 0;
+          save();
+          const period = currentPeriod();
+          const r2 = computeReportData(period, scope);
+          const curFmt2 = scope ? (amt) => fmtCountry(amt, scope) : fmt;
+          renderCategoryBudgetBars(r2, scope, curFmt2);
+        });
+      });
+    }
+    renderCategoryBudgetBars(r, scope, curFmt);
+  }
+  function renderCategoryBudgetBars(r, scope, curFmt){
+    const barsEl = document.getElementById('categoryBudgetBars');
+    if(!barsEl) return;
+    const spend = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, Others: 0 };
+    r.cardsBySpend.forEach(c => {
+      const label = (c.desc || '').trim();
+      if(spend.hasOwnProperty(label)) spend[label] += Number(c.amount);
+      else spend.Others += Number(c.amount);
+    });
+    const rows = CATEGORY_BUDGET_CATS.map(cat => {
+      const target = state.settings.categoryBudgets[categoryBudgetKey(scope, cat)] || 0;
+      const spent = spend[cat] || 0;
+      return { cat, target, spent };
+    }).filter(x => x.target > 0 || x.spent > 0);
+    if(!rows.length){ barsEl.innerHTML = '<div class="empty">Set a cap above for any category to start tracking it.</div>'; return; }
+    barsEl.innerHTML = rows.map(({cat, target, spent}) => {
+      if(target <= 0){
+        return `<div class="catbudget-row"><div class="catbudget-head"><span>${escapeHtml(cat)}</span><span>${curFmt(spent)} spent — no cap set</span></div></div>`;
+      }
+      const pct = Math.min(100, (spent / target) * 100);
+      const cls = spent > target ? 'over' : (pct >= 80 ? 'warn' : '');
+      return `
+        <div class="catbudget-row">
+          <div class="catbudget-head"><span>${escapeHtml(cat)}</span><span>${curFmt(spent)} of ${curFmt(target)}${spent > target ? ' — over' : ''}</span></div>
+          <div class="catbudget-track"><div class="catbudget-fill ${cls}" style="width:${pct}%;"></div></div>
+        </div>
+      `;
+    }).join('');
+  }
+
   function renderOverspendCheck(r, scope, curFmt){
     const targetEl = document.getElementById('overspendTarget');
     const gaugeEl = document.getElementById('overspendGauge');
@@ -5449,6 +5609,7 @@
     const r = computeReportData(period, scope);
     const curFmt = scope ? (amt) => fmtCountry(amt, scope) : fmt;
     renderOverspendCheck(r, scope, curFmt);
+    renderCategoryBudgets(r, scope, curFmt);
   });
 
   function renderReport(){
@@ -5475,6 +5636,7 @@
     document.getElementById('repExpense').textContent = curFmt(r.totalOutflow);
 
     renderOverspendCheck(r, scope, curFmt);
+    renderCategoryBudgets(r, scope, curFmt);
 
     const maxVal = Math.max(r.income, r.totalOutflow, 1);
     document.getElementById('barIncome').style.width = Math.min(100, (r.income/maxVal)*100) + '%';
