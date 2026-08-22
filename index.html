@@ -38,6 +38,12 @@
     --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 18px rgba(0,200,150,0.08);
     --radius: 14px;
   }
+  html.dark-mode{
+    --card: #242726;
+    --ink: #EDEFEE;
+    --ink-soft: #9AA39E;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 6px 18px rgba(0,0,0,0.3);
+  }
   *{box-sizing:border-box;}
   body{
     margin:0;
@@ -450,6 +456,7 @@
     <div class="top-row">
       <div class="eyebrow" id="dateLine">—</div>
       <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="add-btn ghost" id="darkModeToggleBtn" title="Switch to dark mode" aria-label="Switch to dark mode" style="padding:6px 10px; font-size:14px; line-height:1;">🌙</button>
         <button type="button" class="add-btn ghost" id="privacyToggleBtn" title="Hide amounts" aria-label="Hide amounts" style="padding:6px 10px; font-size:14px; line-height:1;">👁️</button>
         <select class="currency-picker" id="currencyPicker">
           <option value="AED">AED — UAE Dirham</option>
@@ -995,6 +1002,12 @@
             <option value="Partner">Partner</option>
             <option value="Kids">Kids</option>
           </select>
+          <select class="who-select" id="uaeChoreRepeat">
+            <option value="">One-off</option>
+            <option value="daily">Repeats daily</option>
+            <option value="weekly">Repeats weekly</option>
+            <option value="monthly">Repeats monthly</option>
+          </select>
           <button class="add-btn" id="uaeChoreAdd">Add</button>
         </div>
         <ul class="item-list" id="uaeChoreList"></ul>
@@ -1437,6 +1450,12 @@
             <option value="Me">Me</option>
             <option value="Partner">Partner</option>
             <option value="Kids">Kids</option>
+          </select>
+          <select class="who-select" id="indiaChoreRepeat">
+            <option value="">One-off</option>
+            <option value="daily">Repeats daily</option>
+            <option value="weekly">Repeats weekly</option>
+            <option value="monthly">Repeats monthly</option>
           </select>
           <button class="add-btn" id="indiaChoreAdd">Add</button>
         </div>
@@ -1989,6 +2008,23 @@
     save();
   });
 
+  // ---- Dark mode: a personal, per-device preference (not shared with the household) ----
+  let darkMode = (localStorage.getItem('shb_dark_mode') === '1');
+  function applyDarkMode(on){
+    darkMode = on;
+    localStorage.setItem('shb_dark_mode', on ? '1' : '0');
+    document.documentElement.classList.toggle('dark-mode', on);
+    if(on){
+      document.documentElement.style.setProperty('--paper', '#1B1D1C');
+      document.documentElement.style.setProperty('--paper-deep', '#242726');
+      document.documentElement.style.setProperty('--line', '#3A3D3C');
+    } else {
+      initThemeFromSettings(); // restores the household's chosen paper/paper-deep/line
+    }
+    const btn = document.getElementById('darkModeToggleBtn');
+    if(btn){ btn.textContent = on ? '☀️' : '🌙'; btn.title = on ? 'Switch to light mode' : 'Switch to dark mode'; btn.setAttribute('aria-label', btn.title); }
+  }
+
   const CURRENCIES = { AED: 'AED', INR: '₹', USD: '$', GBP: '£', EUR: '€', SAR: 'SAR', PKR: 'PKR', PHP: '₱', BDT: '৳', EGP: 'EGP', QAR: 'QAR', KWD: 'KWD', OMR: 'OMR', BHD: 'BHD', CAD: 'C$', AUD: 'A$', SGD: 'S$' };
 
   // ---- Privacy mode: hides money amounts everywhere when the eye toggle is off ----
@@ -2353,6 +2389,27 @@
     el._hideTimer = setTimeout(() => { el.style.opacity = '0'; }, 3200);
   }
 
+  // ---- Undo-on-delete: a 5-second "Undo" toast for any accidental delete.
+  // Call showUndoToast(label, undoFn) right after removing something. ----
+  function showUndoToast(label, undoFn){
+    let el = document.getElementById('undoToast');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'undoToast';
+      el.style.cssText = 'position:fixed;bottom:78px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:var(--ink);color:#fff;padding:9px 10px 9px 16px;border-radius:20px;font-size:12px;box-shadow:var(--shadow);z-index:1000;opacity:0;transition:opacity .25s;max-width:92vw;';
+      document.body.appendChild(el);
+    }
+    clearTimeout(el._hideTimer);
+    el.innerHTML = `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(label)}</span><button type="button" id="undoToastBtn" style="background:none;border:none;color:var(--gold);font-weight:700;font-size:12px;cursor:pointer;padding:4px 8px;flex:0 0 auto;">UNDO</button>`;
+    el.style.opacity = '1';
+    document.getElementById('undoToastBtn').onclick = () => {
+      undoFn();
+      el.style.opacity = '0';
+      clearTimeout(el._hideTimer);
+    };
+    el._hideTimer = setTimeout(() => { el.style.opacity = '0'; }, 5000);
+  }
+
   async function initApp(){
     const privacyBtn = document.getElementById('privacyToggleBtn');
     if(privacyBtn){
@@ -2360,6 +2417,13 @@
       privacyBtn.title = privacyMode ? 'Show amounts' : 'Hide amounts';
       privacyBtn.setAttribute('aria-label', privacyBtn.title);
       privacyBtn.addEventListener('click', () => setPrivacyMode(!privacyMode));
+    }
+    const darkBtn = document.getElementById('darkModeToggleBtn');
+    if(darkBtn){
+      darkBtn.textContent = darkMode ? '☀️' : '🌙';
+      darkBtn.title = darkMode ? 'Switch to light mode' : 'Switch to dark mode';
+      darkBtn.setAttribute('aria-label', darkBtn.title);
+      darkBtn.addEventListener('click', () => applyDarkMode(!darkMode));
     }
     document.getElementById('currencyPicker').value = state.settings.currency;
     document.getElementById('uaeTxDate').value = todayStr();
@@ -2753,7 +2817,9 @@
     renderAll();
     startIdleWatch();
     initThemeFromSettings();
+    if(darkMode) applyDarkMode(true); // household theme sets teal/accent; re-apply dark backdrop on top
     generateRecurringTransactions();
+    generateRecurringChoresCheck();
   }
 
   async function logout(){
@@ -2880,9 +2946,10 @@
     if(chores.length === 0){ list.innerHTML = '<li class="empty">No chores yet — add one above.</li>'; }
     chores.forEach(c => {
       const li = document.createElement('li');
+      const repeatTag = c.repeat ? `<span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">🔁 ${escapeHtml(c.repeat)}</span>` : '';
       li.innerHTML = `
         <div class="check ${c.done ? 'done' : ''}" data-id="${c.id}">${c.done ? '✓' : ''}</div>
-        <div class="item-text ${c.done ? 'done' : ''}">${escapeHtml(c.text)}</div>
+        <div class="item-text ${c.done ? 'done' : ''}">${escapeHtml(c.text)}${repeatTag}</div>
         ${c.who ? `<div class="item-meta">${escapeHtml(c.who)}</div>` : ''}
         <button class="del-btn" data-id="${c.id}" aria-label="Delete chore">×</button>
       `;
@@ -2890,11 +2957,22 @@
     });
     list.querySelectorAll('.check').forEach(el => el.addEventListener('click', () => {
       const c = currentData().countries[countryKey].chores.find(x => x.id === el.dataset.id);
-      c.done = !c.done; save(); renderChoresCountry(countryKey); renderOverview();
+      c.done = !c.done;
+      if(c.done) c.lastResetDate = todayStr();
+      save(); renderChoresCountry(countryKey); renderOverview();
     }));
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
-      currentData().countries[countryKey].chores = currentData().countries[countryKey].chores.filter(x => x.id !== el.dataset.id);
+      const choresArr = currentData().countries[countryKey].chores;
+      const removed = choresArr.find(x => x.id === el.dataset.id);
+      const removedIdx = choresArr.findIndex(x => x.id === el.dataset.id);
+      currentData().countries[countryKey].chores = choresArr.filter(x => x.id !== el.dataset.id);
       save(); renderChoresCountry(countryKey); renderOverview();
+      if(removed){
+        showUndoToast(`Deleted "${removed.text}"`, () => {
+          currentData().countries[countryKey].chores.splice(Math.min(removedIdx, currentData().countries[countryKey].chores.length), 0, removed);
+          save(); renderChoresCountry(countryKey); renderOverview();
+        });
+      }
     }));
   }
   function renderChores(){
@@ -2905,16 +2983,44 @@
     const prefix = choresPrefix(countryKey);
     const input = document.getElementById(prefix + 'ChoreInput');
     const who = document.getElementById(prefix + 'ChoreWho');
+    const repeatEl = document.getElementById(prefix + 'ChoreRepeat');
     const text = input.value.trim();
     if(!text) return;
-    currentData().countries[countryKey].chores.push({ id: uid(), text, who: who.value, done:false });
+    currentData().countries[countryKey].chores.push({ id: uid(), text, who: who.value, done:false, repeat: repeatEl ? repeatEl.value : '', lastResetDate: todayStr() });
     input.value = '';
+    if(repeatEl) repeatEl.value = '';
     save(); renderChoresCountry(countryKey); renderOverview();
   }
   document.getElementById('uaeChoreAdd').addEventListener('click', () => addChoreCountry('UAE'));
   document.getElementById('uaeChoreInput').addEventListener('keydown', e => { if(e.key === 'Enter') addChoreCountry('UAE'); });
   document.getElementById('indiaChoreAdd').addEventListener('click', () => addChoreCountry('India'));
   document.getElementById('indiaChoreInput').addEventListener('keydown', e => { if(e.key === 'Enter') addChoreCountry('India'); });
+
+  // ---- Recurring chores: daily/weekly/monthly chores automatically un-check
+  // themselves once their cycle rolls over, so you don't have to re-add them. ----
+  function choreCycleElapsed(repeat, lastResetDate){
+    if(!lastResetDate) return true;
+    const last = new Date(lastResetDate + 'T00:00:00');
+    const now = new Date(todayStr() + 'T00:00:00');
+    const diffDays = Math.round((now - last) / 86400000);
+    if(repeat === 'daily') return diffDays >= 1;
+    if(repeat === 'weekly') return diffDays >= 7;
+    if(repeat === 'monthly') return diffDays >= 30;
+    return false;
+  }
+  function generateRecurringChoresCheck(){
+    let changed = false;
+    ['UAE','India'].forEach(countryKey => {
+      (currentData().countries[countryKey].chores || []).forEach(c => {
+        if(c.repeat && c.done && choreCycleElapsed(c.repeat, c.lastResetDate)){
+          c.done = false;
+          c.lastResetDate = todayStr();
+          changed = true;
+        }
+      });
+    });
+    if(changed){ save(); renderChores(); }
+  }
 
   // ---- Groceries ----
   function renderGroceriesFor(country, listId){
@@ -3329,11 +3435,18 @@
     });
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
       const removed = data.transactions.find(x => x.id === el.dataset.id);
+      const removedIdx = data.transactions.findIndex(x => x.id === el.dataset.id);
       data.transactions = data.transactions.filter(x => x.id !== el.dataset.id);
       currentData().countries[countryKey].transactions = data.transactions;
       if(editingTxId(countryKey) === el.dataset.id) cancelEditTxCountry(countryKey);
       if(removed) logActivity('Deleted transaction', `${removed.label} (${countryKey}, ${fmt(removed.amount)})`);
       save(); renderBudgetCountry(countryKey); renderOverview();
+      if(removed){
+        showUndoToast(`Deleted "${removed.label}"`, () => {
+          currentData().countries[countryKey].transactions.splice(Math.min(removedIdx, currentData().countries[countryKey].transactions.length), 0, removed);
+          save(); renderBudgetCountry(countryKey); renderOverview();
+        });
+      }
     }));
     list.querySelectorAll('.edit-btn').forEach(el => el.addEventListener('click', () => startEditTxCountry(countryKey, el.dataset.id)));
     list.querySelectorAll('.tx-repaid-toggle').forEach(el => el.addEventListener('click', () => {
@@ -4139,10 +4252,17 @@
     }));
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
       const removed = currentData().cards.find(x => x.id === el.dataset.id);
+      const removedIdx = currentData().cards.findIndex(x => x.id === el.dataset.id);
       currentData().cards = currentData().cards.filter(x => x.id !== el.dataset.id);
       if(editingCardId === el.dataset.id) cancelEditCard();
       if(removed) logActivity('Deleted card expense', `${removed.bank}${removed.desc ? ' — ' + removed.desc : ''} (${fmt(removed.amount)})`);
       save(); renderCards(); renderOverview();
+      if(removed){
+        showUndoToast(`Deleted "${removed.bank}${removed.desc ? ' — ' + removed.desc : ''}"`, () => {
+          currentData().cards.splice(Math.min(removedIdx, currentData().cards.length), 0, removed);
+          save(); renderCards(); renderOverview();
+        });
+      }
     }));
     list.querySelectorAll('.edit-btn').forEach(el => el.addEventListener('click', () => startEditCard(el.dataset.id)));
   }
@@ -7746,6 +7866,7 @@
   }
 
   setDateLine();
+  if(darkMode) applyDarkMode(true); // apply immediately, even on the login screen
   initApp();
 })();
 </script>
