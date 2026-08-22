@@ -457,7 +457,6 @@
       <div class="eyebrow" id="dateLine">—</div>
       <div style="display:flex; align-items:center; gap:8px;">
         <button type="button" class="add-btn ghost" id="darkModeToggleBtn" title="Switch to dark mode" aria-label="Switch to dark mode" style="padding:6px 10px; font-size:14px; line-height:1;">🌙</button>
-        <button type="button" class="add-btn ghost" id="privacyToggleBtn" title="Hide amounts" aria-label="Hide amounts" style="padding:6px 10px; font-size:14px; line-height:1;">👁️</button>
         <select class="currency-picker" id="currencyPicker">
           <option value="AED">AED — UAE Dirham</option>
           <option value="INR">INR — Indian Rupee</option>
@@ -865,6 +864,7 @@
           <option value="UAE">Resident Country report</option>
           <option value="India">Home Country report</option>
         </select>
+        <button type="button" class="add-btn ghost" id="privacyToggleBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1; flex:0 0 auto;">🙈</button>
       </div>
 
       <div class="report-grid">
@@ -1201,6 +1201,26 @@
               <button type="button" class="add-btn ghost" id="uaeTxExportCsv" title="Download shown transactions as CSV">⬇ CSV</button>
             </div>
             <ul class="item-list" id="uaeTxList"></ul>
+          </div>
+        </div>
+
+        <div class="accordion" data-key="budget-spend-analysis">
+          <button type="button" class="accordion-header"><span>Spend analysis — by category</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Every expense grouped by its Description (e.g. Tea, Lunch, Dinner), showing each one's share of the total for the period below.</div>
+            <div class="form-grid">
+              <div>
+                <label class="field-label">From date</label>
+                <input type="date" id="uaeTxSpendAnalysisFrom">
+              </div>
+              <div>
+                <label class="field-label">To date</label>
+                <input type="date" id="uaeTxSpendAnalysisTo">
+              </div>
+            </div>
+            <div id="uaeTxSpendAnalysisChart"></div>
+            <div id="uaeTxSpendAnalysisCategorySummary" class="sa-cat-summary"></div>
+            <div id="uaeTxSpendAnalysisTotal" class="spend-analysis-total"></div>
           </div>
         </div>
 
@@ -1657,6 +1677,26 @@
           </div>
         </div>
 
+        <div class="accordion" data-key="budget-spend-analysis">
+          <button type="button" class="accordion-header"><span>Spend analysis — by category</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Every expense grouped by its Description (e.g. Tea, Lunch, Dinner), showing each one's share of the total for the period below.</div>
+            <div class="form-grid">
+              <div>
+                <label class="field-label">From date</label>
+                <input type="date" id="indiaTxSpendAnalysisFrom">
+              </div>
+              <div>
+                <label class="field-label">To date</label>
+                <input type="date" id="indiaTxSpendAnalysisTo">
+              </div>
+            </div>
+            <div id="indiaTxSpendAnalysisChart"></div>
+            <div id="indiaTxSpendAnalysisCategorySummary" class="sa-cat-summary"></div>
+            <div id="indiaTxSpendAnalysisTotal" class="spend-analysis-total"></div>
+          </div>
+        </div>
+
         <div class="accordion" data-key="monthly-closing">
           <button type="button" class="accordion-header"><span>Monthly closing summary</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
@@ -2081,7 +2121,7 @@
 
   // ---- Privacy mode: hides money amounts everywhere when the eye toggle is off ----
   const PRIVACY_MASK = '•••••';
-  let privacyMode = (localStorage.getItem('shb_privacy_mode') === '1');
+  let privacyMode = (localStorage.getItem('shb_privacy_mode') === null) ? true : (localStorage.getItem('shb_privacy_mode') === '1');
   function setPrivacyMode(on){
     privacyMode = on;
     localStorage.setItem('shb_privacy_mode', on ? '1' : '0');
@@ -3459,14 +3499,15 @@
     [...displayedTx].reverse().forEach(t => {
       const li = document.createElement('li');
       const meta = typeMeta[t.type] || typeMeta.expense;
-      const personLine = t.person ? ` · ${escapeHtml(t.person)}` : '';
-      const dueLine = t.dueDate ? ` · due ${escapeHtml(t.dueDate)}` : '';
+      const timeStr = t.time ? ` ${escapeHtml(t.time)}` : '';
       const borrowTag = t.type === 'borrowing'
         ? (t.borrowSource === 'card' ? 'Card debt (see Cards tab)' : 'Debt')
         : meta.tag;
       const recurTag = t.recurring ? '🔁 Recurring' : '';
-      const returnTag = t.spendFor === 'returnable' ? `↩ Returnable${t.returnName ? ' — ' + escapeHtml(t.returnName) : ''}` : '';
-      const timeLine = t.time ? ` · ${escapeHtml(t.time)}` : '';
+      const returnBadge = t.spendFor === 'returnable'
+        ? `<div class="item-meta tag-returnable">Returnable${t.returnName ? ' · ' + escapeHtml(t.returnName) : ''}</div>`
+        : (t.type === 'expense' ? `<div class="item-meta tag-nonreturnable">Non-returnable</div>` : '');
+      const dueBadge = t.dueDate ? `<div class="item-meta">due ${escapeHtml(t.dueDate)}</div>` : '';
       const repaidChip = t.type === 'borrowing'
         ? `<button class="perm-chip ${t.repaid ? 'on' : ''} tx-repaid-toggle" data-id="${t.id}" style="margin-left:6px;">${t.repaid ? 'Repaid ✓' : 'Mark repaid'}</button>`
         : '';
@@ -3477,13 +3518,28 @@
           const mc = currentData().cards.find(x => x.id === m.cardId);
           return mc ? `${escapeHtml(mc.bank)}${mc.desc ? ' · ' + escapeHtml(mc.desc) : ''} (${fmt(m.amount)})` : '(mapped card no longer exists)';
         });
-        cardMapLine = ` · 🔗 ${parts.join(', ')}`;
+        cardMapLine = `<div class="card-desc" style="margin-top:2px;">🔗 ${parts.join(', ')}</div>`;
       }
       li.innerHTML = `
-        <div class="item-text">${escapeHtml(t.label)}${borrowTag ? ' <span class="item-meta">'+escapeHtml(borrowTag)+'</span>' : ''}${recurTag ? ' <span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">'+recurTag+'</span>' : ''}${returnTag ? ' <span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">'+returnTag+'</span>' : ''}${repaidChip}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(t.date || '')}${timeLine}${personLine}${dueLine}${cardMapLine}</div></div>
-        <div class="tx-amount ${meta.cls}">${meta.sign}${budgetFmt(t.amount, countryKey)}</div>
-        <button class="edit-btn" data-id="${t.id}" aria-label="Edit transaction">✎</button>
-        <button class="del-btn" data-id="${t.id}" aria-label="Delete transaction">×</button>
+        <div style="width:100%;">
+          <div class="card-row-top">
+            <div class="card-bank">${escapeHtml(t.label)}</div>
+            <div class="tx-amount ${meta.cls}">${meta.sign}${budgetFmt(t.amount, countryKey)}</div>
+          </div>
+          <div class="card-desc" style="margin-top:2px;">${escapeHtml(t.date || '')}${timeStr}${t.person ? ' · ' + escapeHtml(t.person) : ''}</div>
+          ${cardMapLine}
+          <div class="card-tags">
+            ${borrowTag ? `<div class="item-meta">${escapeHtml(borrowTag)}</div>` : ''}
+            ${returnBadge}
+            ${recurTag ? `<div class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">${recurTag}</div>` : ''}
+            ${dueBadge}
+            ${repaidChip}
+          </div>
+          <div style="text-align:right; margin-top:6px;">
+            <button class="edit-btn" data-id="${t.id}" aria-label="Edit transaction">✎ Edit</button>
+            <button class="del-btn" data-id="${t.id}" aria-label="Delete transaction">×</button>
+          </div>
+        </div>
       `;
       li.style.cursor = 'pointer';
       li.addEventListener('click', (e) => {
@@ -3542,6 +3598,7 @@
     }
     renderBudgetCardSpendByBankCountry(countryKey);
     renderMonthlyClosing(countryKey);
+    renderBudgetSpendAnalysis(countryKey);
   }
   function renderBudget(){
     renderBudgetCurrencyControls();
@@ -3561,6 +3618,75 @@
     const s = String(val == null ? '' : val);
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
+  // ---- Budget spend analysis — by category (mirrors Cards' version, but scoped
+  // to this country's Budget expense transactions, grouped by Description). ----
+  function renderBudgetSpendAnalysis(countryKey){
+    const prefix = budgetPrefix(countryKey);
+    const chartEl = document.getElementById(prefix + 'TxSpendAnalysisChart');
+    const totalEl = document.getElementById(prefix + 'TxSpendAnalysisTotal');
+    const summaryEl = document.getElementById(prefix + 'TxSpendAnalysisCategorySummary');
+    if(!chartEl || !totalEl) return;
+    const fromEl = document.getElementById(prefix + 'TxSpendAnalysisFrom');
+    const toEl = document.getElementById(prefix + 'TxSpendAnalysisTo');
+    if(fromEl && !fromEl.value) fromEl.value = todayStr().slice(0,8) + '01';
+    if(toEl && !toEl.value) toEl.value = endOfMonthStr(todayStr());
+    const from = fromEl ? fromEl.value : todayStr();
+    const to = toEl ? toEl.value : todayStr();
+
+    const txs = (currentData().countries[countryKey].transactions || [])
+      .filter(t => t.type === 'expense' && t.date >= from && t.date <= to);
+    const groups = {};
+    txs.forEach(t => {
+      const cleanLabel = (t.label || 'Uncategorized').trim() || 'Uncategorized';
+      const key = cleanLabel.toLowerCase();
+      if(!groups[key]) groups[key] = { label: cleanLabel, amount: 0 };
+      groups[key].amount += Number(t.amount) || 0;
+    });
+    const rows = Object.values(groups).sort((a,b) => b.amount - a.amount);
+    const total = rows.reduce((s,r) => s + r.amount, 0);
+
+    if(rows.length === 0){
+      chartEl.innerHTML = '<div class="empty" style="padding:10px 0;">No expenses in this range.</div>';
+      totalEl.style.display = 'none';
+      if(summaryEl) summaryEl.innerHTML = '';
+      return;
+    }
+    totalEl.style.display = '';
+    chartEl.innerHTML = rows.map(r => {
+      const pct = total > 0 ? (r.amount / total * 100) : 0;
+      return `
+        <div class="spend-analysis-row">
+          <div class="spend-analysis-row-head">
+            <span class="sa-label">${escapeHtml(r.label)}</span>
+            <span class="sa-figs">${pct.toFixed(1)}% · ${privacyMode ? PRIVACY_MASK : fmt(r.amount)}</span>
+          </div>
+          <div class="spend-analysis-bar-track"><div class="spend-analysis-bar-fill" style="width:${pct.toFixed(1)}%;"></div></div>
+        </div>
+      `;
+    }).join('');
+    totalEl.innerHTML = `<span>Total</span><span>${privacyMode ? PRIVACY_MASK : fmt(total)}</span>`;
+
+    if(summaryEl){
+      const buckets = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, Others: 0 };
+      rows.forEach(r => {
+        const label = r.label.trim();
+        if(buckets.hasOwnProperty(label)) buckets[label] += r.amount;
+        else buckets.Others += r.amount;
+      });
+      summaryEl.innerHTML = Object.entries(buckets)
+        .filter(([,amt]) => amt > 0)
+        .map(([label, amt]) => `<div class="sa-cat-chip"><span>${escapeHtml(label)}</span><span>${privacyMode ? PRIVACY_MASK : fmt(amt)}</span></div>`)
+        .join('');
+    }
+  }
+  ['uae', 'india'].forEach(prefix => {
+    const countryKey = prefix === 'uae' ? 'UAE' : 'India';
+    const fromEl = document.getElementById(prefix + 'TxSpendAnalysisFrom');
+    const toEl = document.getElementById(prefix + 'TxSpendAnalysisTo');
+    if(fromEl) fromEl.addEventListener('input', () => renderBudgetSpendAnalysis(countryKey));
+    if(toEl) toEl.addEventListener('input', () => renderBudgetSpendAnalysis(countryKey));
+  });
+
   function exportTransactionsCsv(countryKey){
     const prefix = budgetPrefix(countryKey);
     const data = currentData().countries[countryKey];
@@ -4959,7 +5085,10 @@
         : '';
       return `
         <div class="debt-card">
-          <div class="debt-top"><strong>${escapeHtml(bank)}</strong></div>
+          <div class="debt-top">
+            <label class="field-label" style="margin-bottom:2px;">Bank name</label>
+            <input type="text" class="bank-rename" data-bank="${escapeHtml(bank)}" value="${escapeHtml(bank)}" style="font-weight:600;">
+          </div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
             <div style="flex:1;min-width:120px;">
               <label class="field-label">Cycle starts on (day)</label>
@@ -4970,12 +5099,29 @@
               <input type="number" class="bank-limit" data-bank="${escapeHtml(bank)}" value="${settings.creditLimit || ''}" placeholder="No limit set">
             </div>
           </div>
-          <div class="breakdown-row" style="margin-top:8px;"><span class="label">This cycle (${fmtDateShort(start)} – ${fmtDateShort(end)})</span><span><strong>${fmt(cycleUsage)}</strong></span></div>
-          <div class="breakdown-row"><span class="label">Total used (all-time)</span><span>${fmt(totalUsage)}</span></div>
+          <div class="breakdown-row" style="margin-top:8px;"><span class="label">This cycle (${fmtDateShort(start)} – ${fmtDateShort(end)})</span><span><strong>${privacyMode ? PRIVACY_MASK : fmt(cycleUsage)}</strong></span></div>
+          <div class="breakdown-row"><span class="label">Total used (all-time)</span><span>${privacyMode ? PRIVACY_MASK : fmt(totalUsage)}</span></div>
           ${limitLine}
         </div>
       `;
     }).join('');
+    el.querySelectorAll('.bank-rename').forEach(input => input.addEventListener('change', () => {
+      const oldName = input.dataset.bank;
+      const newName = input.value.trim();
+      if(!newName || newName === oldName){ input.value = oldName; return; }
+      const clash = currentData().cards.some(c => c.bank === newName);
+      if(clash && !confirm(`"${newName}" already has expenses logged. Merge "${oldName}" into it?`)){
+        input.value = oldName;
+        return;
+      }
+      currentData().cards.forEach(c => { if(c.bank === oldName) c.bank = newName; });
+      if(currentData().bankSettings[oldName]){
+        currentData().bankSettings[newName] = Object.assign({}, currentData().bankSettings[newName] || {}, currentData().bankSettings[oldName]);
+        delete currentData().bankSettings[oldName];
+      }
+      logActivity('Renamed bank', `${oldName} → ${newName}`);
+      save(); renderCards();
+    }));
     el.querySelectorAll('.bank-cycle-day').forEach(input => input.addEventListener('change', () => {
       const bank = input.dataset.bank;
       if(!currentData().bankSettings[bank]) currentData().bankSettings[bank] = { cycleStartDay: 1, creditLimit: null };
