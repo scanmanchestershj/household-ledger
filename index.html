@@ -1174,6 +1174,10 @@
           <button type="button" class="accordion-header"><span>All transactions</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
             <div style="font-size:10.5px;color:var(--ink-soft);margin:-2px 0 8px 0;">Follows the "Viewing month" selector above.</div>
+            <div class="add-row" style="margin-bottom:8px;">
+              <input type="text" id="uaeTxSearch" placeholder="Search by label or person…" style="flex:1;">
+              <button type="button" class="add-btn ghost" id="uaeTxExportCsv" title="Download shown transactions as CSV">⬇ CSV</button>
+            </div>
             <ul class="item-list" id="uaeTxList"></ul>
           </div>
         </div>
@@ -1601,6 +1605,10 @@
           <button type="button" class="accordion-header"><span>All transactions</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
             <div style="font-size:10.5px;color:var(--ink-soft);margin:-2px 0 8px 0;">Follows the "Viewing month" selector above.</div>
+            <div class="add-row" style="margin-bottom:8px;">
+              <input type="text" id="indiaTxSearch" placeholder="Search by label or person…" style="flex:1;">
+              <button type="button" class="add-btn ghost" id="indiaTxExportCsv" title="Download shown transactions as CSV">⬇ CSV</button>
+            </div>
             <ul class="item-list" id="indiaTxList"></ul>
           </div>
         </div>
@@ -3392,14 +3400,19 @@
     if(noteEl) noteEl.textContent = filterMonth ? `Showing ${monthLabel(filterMonth)} — income, expenses, debt and card spend below are all for this month.` : `Showing all-time totals.`;
 
     list.innerHTML = '';
-    if(shownTx.length === 0){ list.innerHTML = `<li class="empty">No transactions ${filterPeriod ? 'in this month' : 'yet'}.</li>`; }
+    const searchEl = document.getElementById(prefix + 'TxSearch');
+    const searchQ = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    const displayedTx = searchQ
+      ? shownTx.filter(t => (t.label || '').toLowerCase().includes(searchQ) || (t.person || '').toLowerCase().includes(searchQ))
+      : shownTx;
+    if(displayedTx.length === 0){ list.innerHTML = `<li class="empty">No transactions ${searchQ ? 'match your search' : (filterPeriod ? 'in this month' : 'yet')}.</li>`; }
     const typeMeta = {
       income: {sign:'+', cls:'income', tag:''},
       expense: {sign:'−', cls:'expense', tag:''},
       lending: {sign:'−', cls:'expense', tag:'Lent'},
       borrowing: {sign:'', cls:'expense', tag:'Debt'}
     };
-    [...shownTx].reverse().forEach(t => {
+    [...displayedTx].reverse().forEach(t => {
       const li = document.createElement('li');
       const meta = typeMeta[t.type] || typeMeta.expense;
       const personLine = t.person ? ` · ${escapeHtml(t.person)}` : '';
@@ -3488,6 +3501,47 @@
     renderBudgetCurrencyControls();
     renderBudgetCountry('UAE');
     renderBudgetCountry('India');
+  }
+
+  // ---- Transaction search (label/person) and CSV export, per country ----
+  ['uae', 'india'].forEach(prefix => {
+    const countryKey = prefix === 'uae' ? 'UAE' : 'India';
+    const searchEl = document.getElementById(prefix + 'TxSearch');
+    if(searchEl) searchEl.addEventListener('input', () => renderBudgetCountry(countryKey));
+    const csvBtn = document.getElementById(prefix + 'TxExportCsv');
+    if(csvBtn) csvBtn.addEventListener('click', () => exportTransactionsCsv(countryKey));
+  });
+  function csvEscape(val){
+    const s = String(val == null ? '' : val);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function exportTransactionsCsv(countryKey){
+    const prefix = budgetPrefix(countryKey);
+    const data = currentData().countries[countryKey];
+    const filterMonth = budgetMonthFilter(countryKey);
+    const filterPeriod = filterMonth ? { type: 'monthly', key: filterMonth } : null;
+    const shownTx = filterPeriod ? data.transactions.filter(t => inPeriod(t.date, filterPeriod)) : data.transactions;
+    const searchEl = document.getElementById(prefix + 'TxSearch');
+    const searchQ = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    const rows = searchQ
+      ? shownTx.filter(t => (t.label || '').toLowerCase().includes(searchQ) || (t.person || '').toLowerCase().includes(searchQ))
+      : shownTx;
+    if(!rows.length){ alert('Nothing to export for the current month/search.'); return; }
+    const header = ['Date', 'Label', 'Type', 'Amount', 'Person', 'Due date', 'Recurring', 'Repaid'];
+    const lines = [header.map(csvEscape).join(',')];
+    [...rows].reverse().forEach(t => {
+      lines.push([
+        t.date || '', t.label || '', t.type || '', Number(t.amount).toFixed(2),
+        t.person || '', t.dueDate || '', t.recurring ? 'Yes' : '', t.type === 'borrowing' ? (t.repaid ? 'Yes' : 'No') : ''
+      ].map(csvEscape).join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const label = filterMonth ? filterMonth : 'all-time';
+    a.href = url; a.download = `${countryKey.toLowerCase()}-transactions-${label}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // ---- Recurring transactions: auto re-add monthly items (rent, salary, subscriptions)
