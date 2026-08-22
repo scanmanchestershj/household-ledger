@@ -1089,8 +1089,15 @@
 
         <div class="form-grid">
           <div class="full">
-            <label class="field-label">Label</label>
-            <input type="text" id="uaeTxLabel" placeholder="e.g. Groceries, Rent, Paycheck">
+            <label class="field-label">Description</label>
+            <select id="uaeTxLabelSelect">
+              <option value="Tea">Tea</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Dinner">Dinner</option>
+              <option value="Groceries">Groceries</option>
+              <option value="Others">Others</option>
+            </select>
+            <input type="text" id="uaeTxLabel" placeholder="e.g. Rent, Paycheck, Groceries" style="margin-top:8px;">
           </div>
           <div>
             <label class="field-label">Amount</label>
@@ -1149,9 +1156,24 @@
             <label class="field-label" id="uaeTxDueLabel">Repayment due date</label>
             <input type="date" id="uaeTxDue">
           </div>
-          <div class="full">
+          <div>
             <label class="field-label">Date</label>
             <input type="date" id="uaeTxDate">
+          </div>
+          <div>
+            <label class="field-label">Spend time</label>
+            <input type="time" id="uaeTxTime">
+          </div>
+          <div class="full" id="uaeTxSpendForWrap">
+            <label class="field-label">Spend for</label>
+            <select id="uaeTxSpendFor">
+              <option value="own">Own spend only</option>
+              <option value="returnable">Returnable (will be paid back)</option>
+            </select>
+            <div id="uaeTxReturnNameWrap" style="display:none; margin-top:8px;">
+              <label class="field-label">Who owes it back?</label>
+              <input type="text" id="uaeTxReturnName" placeholder="Name" list="knownPeopleList">
+            </div>
           </div>
           <div class="full">
             <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;">
@@ -1520,8 +1542,15 @@
 
         <div class="form-grid">
           <div class="full">
-            <label class="field-label">Label</label>
-            <input type="text" id="indiaTxLabel" placeholder="e.g. Groceries, Rent, Paycheck">
+            <label class="field-label">Description</label>
+            <select id="indiaTxLabelSelect">
+              <option value="Tea">Tea</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Dinner">Dinner</option>
+              <option value="Groceries">Groceries</option>
+              <option value="Others">Others</option>
+            </select>
+            <input type="text" id="indiaTxLabel" placeholder="e.g. Rent, Paycheck, Groceries" style="margin-top:8px;">
           </div>
           <div>
             <label class="field-label">Amount</label>
@@ -1580,9 +1609,24 @@
             <label class="field-label" id="indiaTxDueLabel">Repayment due date</label>
             <input type="date" id="indiaTxDue">
           </div>
-          <div class="full">
+          <div>
             <label class="field-label">Date</label>
             <input type="date" id="indiaTxDate">
+          </div>
+          <div>
+            <label class="field-label">Spend time</label>
+            <input type="time" id="indiaTxTime">
+          </div>
+          <div class="full" id="indiaTxSpendForWrap">
+            <label class="field-label">Spend for</label>
+            <select id="indiaTxSpendFor">
+              <option value="own">Own spend only</option>
+              <option value="returnable">Returnable (will be paid back)</option>
+            </select>
+            <div id="indiaTxReturnNameWrap" style="display:none; margin-top:8px;">
+              <label class="field-label">Who owes it back?</label>
+              <input type="text" id="indiaTxReturnName" placeholder="Name" list="knownPeopleList">
+            </div>
           </div>
           <div class="full">
             <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;">
@@ -3421,6 +3465,8 @@
         ? (t.borrowSource === 'card' ? 'Card debt (see Cards tab)' : 'Debt')
         : meta.tag;
       const recurTag = t.recurring ? '🔁 Recurring' : '';
+      const returnTag = t.spendFor === 'returnable' ? `↩ Returnable${t.returnName ? ' — ' + escapeHtml(t.returnName) : ''}` : '';
+      const timeLine = t.time ? ` · ${escapeHtml(t.time)}` : '';
       const repaidChip = t.type === 'borrowing'
         ? `<button class="perm-chip ${t.repaid ? 'on' : ''} tx-repaid-toggle" data-id="${t.id}" style="margin-left:6px;">${t.repaid ? 'Repaid ✓' : 'Mark repaid'}</button>`
         : '';
@@ -3434,7 +3480,7 @@
         cardMapLine = ` · 🔗 ${parts.join(', ')}`;
       }
       li.innerHTML = `
-        <div class="item-text">${escapeHtml(t.label)}${borrowTag ? ' <span class="item-meta">'+escapeHtml(borrowTag)+'</span>' : ''}${recurTag ? ' <span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">'+recurTag+'</span>' : ''}${repaidChip}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(t.date || '')}${personLine}${dueLine}${cardMapLine}</div></div>
+        <div class="item-text">${escapeHtml(t.label)}${borrowTag ? ' <span class="item-meta">'+escapeHtml(borrowTag)+'</span>' : ''}${recurTag ? ' <span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">'+recurTag+'</span>' : ''}${returnTag ? ' <span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">'+returnTag+'</span>' : ''}${repaidChip}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(t.date || '')}${timeLine}${personLine}${dueLine}${cardMapLine}</div></div>
         <div class="tx-amount ${meta.cls}">${meta.sign}${budgetFmt(t.amount, countryKey)}</div>
         <button class="edit-btn" data-id="${t.id}" aria-label="Edit transaction">✎</button>
         <button class="del-btn" data-id="${t.id}" aria-label="Delete transaction">×</button>
@@ -3575,18 +3621,58 @@
     if(changed){ save(); renderBudget(); renderOverview(); }
   }
 
+  const TX_LABEL_PRESETS = ['Tea', 'Lunch', 'Dinner', 'Groceries'];
+  function setTxLabelValue(prefix, label){
+    const sel = document.getElementById(prefix + 'TxLabelSelect');
+    const box = document.getElementById(prefix + 'TxLabel');
+    if(!sel || !box) return;
+    if(label && TX_LABEL_PRESETS.includes(label)){
+      sel.value = label;
+      box.value = label;
+    } else {
+      sel.value = 'Others';
+      box.value = label || '';
+    }
+  }
+  ['uae', 'india'].forEach(prefix => {
+    const sel = document.getElementById(prefix + 'TxLabelSelect');
+    const box = document.getElementById(prefix + 'TxLabel');
+    if(sel && box){
+      sel.addEventListener('change', function(){
+        if(this.value !== 'Others') box.value = this.value;
+        else { box.value = ''; box.focus(); }
+      });
+    }
+    const spendForEl = document.getElementById(prefix + 'TxSpendFor');
+    const returnWrap = document.getElementById(prefix + 'TxReturnNameWrap');
+    if(spendForEl && returnWrap){
+      spendForEl.addEventListener('change', () => {
+        returnWrap.style.display = spendForEl.value === 'returnable' ? '' : 'none';
+      });
+    }
+  });
   function startEditTxCountry(countryKey, id){
     const prefix = budgetPrefix(countryKey);
     const t = currentData().countries[countryKey].transactions.find(x => x.id === id);
     if(!t) return;
     setEditingTxId(countryKey, id);
     document.getElementById(prefix + 'TxLabel').value = t.label;
+    setTxLabelValue(prefix, t.label);
     document.getElementById(prefix + 'TxAmount').value = t.amount;
     document.getElementById(prefix + 'TxType').value = t.type;
     document.getElementById(prefix + 'TxDate').value = t.date || todayStr();
+    const timeElEdit = document.getElementById(prefix + 'TxTime'); if(timeElEdit) timeElEdit.value = t.time || '';
     document.getElementById(prefix + 'TxPerson').value = t.person || '';
     document.getElementById(prefix + 'TxDue').value = t.dueDate || '';
     document.getElementById(prefix + 'TxBorrowSource').value = t.borrowSource || 'person';
+    const spendForElEdit = document.getElementById(prefix + 'TxSpendFor');
+    const returnNameElEdit = document.getElementById(prefix + 'TxReturnName');
+    const returnWrapEdit = document.getElementById(prefix + 'TxReturnNameWrap');
+    if(spendForElEdit){
+      spendForElEdit.value = t.spendFor === 'returnable' ? 'returnable' : 'own';
+      if(returnWrapEdit) returnWrapEdit.style.display = spendForElEdit.value === 'returnable' ? '' : 'none';
+    }
+    if(returnNameElEdit) returnNameElEdit.value = t.returnName || '';
     const purposeEl = document.getElementById(prefix + 'TxPurpose');
     if(purposeEl) purposeEl.value = t.purpose || '';
     const cdEl = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdEl) cdEl.value = t.purposeCardDue || '';
@@ -3606,12 +3692,17 @@
     const prefix = budgetPrefix(countryKey);
     setEditingTxId(countryKey, null);
     document.getElementById(prefix + 'TxLabel').value = '';
+    const labelSelReset = document.getElementById(prefix + 'TxLabelSelect'); if(labelSelReset) labelSelReset.value = 'Tea';
     document.getElementById(prefix + 'TxAmount').value = '';
     document.getElementById(prefix + 'TxType').value = 'expense';
     document.getElementById(prefix + 'TxDate').value = todayStr();
+    const timeElReset = document.getElementById(prefix + 'TxTime'); if(timeElReset) timeElReset.value = '';
     document.getElementById(prefix + 'TxPerson').value = '';
     document.getElementById(prefix + 'TxDue').value = '';
     document.getElementById(prefix + 'TxBorrowSource').value = 'person';
+    const spendForElReset = document.getElementById(prefix + 'TxSpendFor'); if(spendForElReset) spendForElReset.value = 'own';
+    const returnNameElReset = document.getElementById(prefix + 'TxReturnName'); if(returnNameElReset) returnNameElReset.value = '';
+    const returnWrapReset = document.getElementById(prefix + 'TxReturnNameWrap'); if(returnWrapReset) returnWrapReset.style.display = 'none';
     const purposeElC = document.getElementById(prefix + 'TxPurpose'); if(purposeElC) purposeElC.value = '';
     const cdElC = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdElC) cdElC.value = '';
     const ppElC = document.getElementById(prefix + 'TxPurposePerson'); if(ppElC) ppElC.value = '';
@@ -3695,7 +3786,11 @@
     const recurringEl = document.getElementById(prefix + 'TxRecurring');
     const isRecurring = !!(recurringEl && recurringEl.checked);
     const existingRecurGroup = curEditId ? (data.transactions.find(x=>x.id===curEditId)||{}).recurringGroupId : null;
-    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null) };
+    const timeEl = document.getElementById(prefix + 'TxTime');
+    const spendForEl = document.getElementById(prefix + 'TxSpendFor');
+    const returnNameEl = document.getElementById(prefix + 'TxReturnName');
+    const spendForVal = spendForEl ? spendForEl.value : 'own';
+    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnName: spendForVal === 'returnable' ? ((returnNameEl && returnNameEl.value.trim()) || '') : '' };
     if(curEditId){
       const idx = data.transactions.findIndex(x => x.id === curEditId);
       if(idx > -1) data.transactions[idx] = Object.assign({id: curEditId}, record);
@@ -3705,6 +3800,11 @@
       data.transactions.push(Object.assign({id: uid()}, record));
       logActivity('Added transaction', `${record.label} (${countryKey}, ${fmt(record.amount)})`);
       label.value = ''; amount.value = ''; person.value = ''; due.value = '';
+      if(timeEl) timeEl.value = '';
+      if(spendForEl) spendForEl.value = 'own';
+      if(returnNameEl) returnNameEl.value = '';
+      const rnWrap = document.getElementById(prefix + 'TxReturnNameWrap'); if(rnWrap) rnWrap.style.display = 'none';
+      const labelSelEl = document.getElementById(prefix + 'TxLabelSelect'); if(labelSelEl) labelSelEl.value = 'Tea';
       if(recurringEl) recurringEl.checked = false;
       renderCardMapRows(countryKey, []);
       if(purposeEl) purposeEl.value = '';
