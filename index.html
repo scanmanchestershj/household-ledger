@@ -134,6 +134,9 @@
   .activity-row{ display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:12px; }
   .activity-row:last-child{ border-bottom:none; }
   .activity-dot{ width:7px; height:7px; border-radius:50%; background:var(--teal); margin-top:5px; flex:0 0 auto; }
+  .mval-inline{ display:inline-flex; align-items:center; gap:6px; }
+  .mval-eye{ background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px; line-height:1; opacity:0.75; }
+  .mval-eye:hover{ opacity:1; }
   .catbudget-row{ margin-bottom:12px; }
   .catbudget-head{ display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; }
   .catbudget-track{ height:8px; border-radius:5px; background:var(--paper-deep); overflow:hidden; }
@@ -1171,8 +1174,9 @@
               <option value="returnable">Returnable (will be paid back)</option>
             </select>
             <div id="uaeTxReturnNameWrap" style="display:none; margin-top:8px;">
-              <label class="field-label">Who owes it back?</label>
-              <input type="text" id="uaeTxReturnName" placeholder="Name" list="knownPeopleList">
+              <label class="field-label">Who owes it back? (split across people if needed)</label>
+              <div id="uaeTxReturnRows"></div>
+              <button type="button" class="add-btn ghost" id="uaeTxReturnAdd" style="margin-top:4px;">+ Add person</button>
             </div>
           </div>
           <div class="full">
@@ -1644,8 +1648,9 @@
               <option value="returnable">Returnable (will be paid back)</option>
             </select>
             <div id="indiaTxReturnNameWrap" style="display:none; margin-top:8px;">
-              <label class="field-label">Who owes it back?</label>
-              <input type="text" id="indiaTxReturnName" placeholder="Name" list="knownPeopleList">
+              <label class="field-label">Who owes it back? (split across people if needed)</label>
+              <div id="indiaTxReturnRows"></div>
+              <button type="button" class="add-btn ghost" id="indiaTxReturnAdd" style="margin-top:4px;">+ Add person</button>
             </div>
           </div>
           <div class="full">
@@ -2129,6 +2134,35 @@
     if(btn){ btn.textContent = on ? '🙈' : '👁️'; btn.title = on ? 'Show amounts' : 'Hide amounts'; btn.setAttribute('aria-label', btn.title); }
     renderAll();
   }
+
+  // ---- Per-field eye toggles: individual masked values that are hidden by
+  // default and revealed one at a time on click, independent of the global
+  // privacy toggle above. Used for the standout Budget/Overview/Report figures. ----
+  const revealedFields = new Set();
+  function rawValue(fn){
+    const saved = privacyMode;
+    privacyMode = false;
+    const result = fn();
+    privacyMode = saved;
+    return result;
+  }
+  function maskedField(fieldId, rawValueHtml){
+    const revealed = revealedFields.has(fieldId);
+    const icon = revealed ? '🙈' : '👁️';
+    const shown = revealed ? rawValueHtml : PRIVACY_MASK;
+    return `<span class="mval-inline">${shown} <button type="button" class="mval-eye" data-field="${escapeHtml(fieldId)}" aria-label="Toggle visibility" title="${revealed ? 'Hide' : 'Show'}">${icon}</button></span>`;
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mval-eye');
+    if(!btn) return;
+    e.stopPropagation();
+    const fieldId = btn.dataset.field;
+    if(revealedFields.has(fieldId)) revealedFields.delete(fieldId); else revealedFields.add(fieldId);
+    renderBudget();
+    renderReport();
+    const detailBox = document.getElementById('statBudgetDetail');
+    if(detailBox && detailBox.style.display !== 'none') renderOverviewBalanceDetail();
+  });
   const COUNTRY_DB = [
     { name: 'United Arab Emirates', currency: 'AED', banks: ['Emirates NBD','ADCB','FAB (First Abu Dhabi Bank)','Mashreq','ADIB','Dubai Islamic Bank','RAKBANK','CBD (Commercial Bank of Dubai)','HSBC UAE','Citibank UAE','Standard Chartered UAE'] },
     { name: 'India', currency: 'INR', banks: ['SBI','HDFC Bank','ICICI Bank','Axis Bank','Kotak Mahindra Bank','Punjab National Bank','Bank of Baroda','IDFC First Bank','Yes Bank','Canara Bank','Indian Bank','Indian Overseas Bank','Union Bank of India','Central Bank of India','UCO Bank','Bank of India'] },
@@ -3505,7 +3539,9 @@
         : meta.tag;
       const recurTag = t.recurring ? '🔁 Recurring' : '';
       const returnBadge = t.spendFor === 'returnable'
-        ? `<div class="item-meta tag-returnable">Returnable${t.returnName ? ' · ' + escapeHtml(t.returnName) : ''}</div>`
+        ? ((t.returnSplits && t.returnSplits.length)
+            ? t.returnSplits.map(r => `<div class="item-meta tag-returnable">Returnable · ${escapeHtml(r.name)}${r.amount != null ? ' (' + fmt(r.amount) + ')' : ''}</div>`).join('')
+            : `<div class="item-meta tag-returnable">Returnable${t.returnName ? ' · ' + escapeHtml(t.returnName) : ''}</div>`)
         : (t.type === 'expense' ? `<div class="item-meta tag-nonreturnable">Non-returnable</div>` : '');
       const dueBadge = t.dueDate ? `<div class="item-meta">due ${escapeHtml(t.dueDate)}</div>` : '';
       const repaidChip = t.type === 'borrowing'
@@ -3578,23 +3614,23 @@
       return sum - Number(t.amount);
     }, 0);
     const balEl = document.getElementById(prefix + 'BudgetBalance');
-    balEl.innerHTML = (balance < 0 ? '−' : '') + budgetFmt(Math.abs(balance), countryKey);
+    balEl.innerHTML = maskedField(prefix + 'BudgetBalance', rawValue(() => (balance < 0 ? '−' : '') + budgetFmt(Math.abs(balance), countryKey)));
     balEl.className = 'amount ' + (balance < 0 ? 'negative' : 'positive');
 
     const debtOwed = shownTx.filter(t => t.type === 'borrowing' && !t.repaid && t.borrowSource !== 'card').reduce((s,t) => s + Number(t.amount), 0);
-    document.getElementById(prefix + 'BudgetDebtOwed').innerHTML = budgetFmt(debtOwed, countryKey);
+    document.getElementById(prefix + 'BudgetDebtOwed').innerHTML = maskedField(prefix + 'BudgetDebtOwed', rawValue(() => budgetFmt(debtOwed, countryKey)));
     const expenseTotal = shownTx.filter(t => t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
-    document.getElementById(prefix + 'BudgetExpenseTotal').innerHTML = budgetFmt(expenseTotal, countryKey);
+    document.getElementById(prefix + 'BudgetExpenseTotal').innerHTML = maskedField(prefix + 'BudgetExpenseTotal', rawValue(() => budgetFmt(expenseTotal, countryKey)));
 
     if(countryKey === 'UAE'){
       const remitSource = filterPeriod ? (data.remittances || []).filter(r => inPeriod(r.date, filterPeriod)) : (data.remittances || []);
       const remitSent = remitSource.reduce((s,r) => s + Number(r.amount), 0);
       const el = document.getElementById('uaeBudgetRemitSent');
-      if(el) el.innerHTML = budgetFmt(remitSent, 'UAE');
+      if(el) el.innerHTML = maskedField('uaeBudgetRemitSent', rawValue(() => budgetFmt(remitSent, 'UAE')));
     } else {
       const remitReceived = shownTx.filter(t => t.linkedRemitId && t.type === 'income').reduce((s,t) => s + Number(t.amount), 0);
       const el = document.getElementById('indiaBudgetRemitReceived');
-      if(el) el.innerHTML = budgetFmt(remitReceived, 'India');
+      if(el) el.innerHTML = maskedField('indiaBudgetRemitReceived', rawValue(() => budgetFmt(remitReceived, 'India')));
     }
     renderBudgetCardSpendByBankCountry(countryKey);
     renderMonthlyClosing(countryKey);
@@ -3774,9 +3810,58 @@
     if(spendForEl && returnWrap){
       spendForEl.addEventListener('change', () => {
         returnWrap.style.display = spendForEl.value === 'returnable' ? '' : 'none';
+        if(spendForEl.value === 'returnable' && collectReturnRows(prefix === 'uae' ? 'UAE' : 'India').length === 0){
+          addReturnRow(prefix === 'uae' ? 'UAE' : 'India', {name:'', amount:''});
+        }
       });
     }
   });
+
+  // ---- Returnable split rows: "who owes it back" supports multiple people,
+  // each with their own share, mirroring the Cards split pattern. ----
+  function returnRowHtml(entry){
+    return `
+      <div class="add-row returnsplit-row" style="margin-bottom:6px;">
+        <input type="text" class="returnsplit-name" placeholder="Name" list="knownPeopleList" value="${escapeHtml(entry.name || '')}">
+        <input type="number" class="returnsplit-amount" placeholder="Amount (optional)" step="0.01" style="max-width:130px;" value="${entry.amount || entry.amount === 0 ? entry.amount : ''}">
+        <button type="button" class="del-btn returnsplit-remove" aria-label="Remove person">×</button>
+      </div>
+    `.trim();
+  }
+  function renderReturnRows(countryKey, entries){
+    const prefix = budgetPrefix(countryKey);
+    const container = document.getElementById(prefix + 'TxReturnRows');
+    if(!container) return;
+    container.innerHTML = '';
+    (entries && entries.length ? entries : [{name:'', amount:''}]).forEach(entry => addReturnRow(countryKey, entry));
+  }
+  function addReturnRow(countryKey, entry){
+    const prefix = budgetPrefix(countryKey);
+    const container = document.getElementById(prefix + 'TxReturnRows');
+    if(!container) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = returnRowHtml(entry || {name:'', amount:''});
+    const rowEl = wrap.firstElementChild;
+    container.appendChild(rowEl);
+    rowEl.querySelector('.returnsplit-remove').addEventListener('click', () => {
+      rowEl.remove();
+      if(!container.children.length) addReturnRow(countryKey, {name:'', amount:''});
+    });
+  }
+  function collectReturnRows(countryKey){
+    const prefix = budgetPrefix(countryKey);
+    const container = document.getElementById(prefix + 'TxReturnRows');
+    if(!container) return [];
+    return [...container.querySelectorAll('.returnsplit-row')].map(row => {
+      const name = row.querySelector('.returnsplit-name').value.trim();
+      const amountRaw = row.querySelector('.returnsplit-amount').value;
+      const amount = amountRaw === '' ? null : parseFloat(amountRaw);
+      return { name, amount: (amount === null || isNaN(amount)) ? null : amount };
+    }).filter(r => r.name);
+  }
+  document.getElementById('uaeTxReturnAdd').addEventListener('click', () => addReturnRow('UAE', {name:'', amount:''}));
+  document.getElementById('indiaTxReturnAdd').addEventListener('click', () => addReturnRow('India', {name:'', amount:''}));
+
   function startEditTxCountry(countryKey, id){
     const prefix = budgetPrefix(countryKey);
     const t = currentData().countries[countryKey].transactions.find(x => x.id === id);
@@ -3792,13 +3877,13 @@
     document.getElementById(prefix + 'TxDue').value = t.dueDate || '';
     document.getElementById(prefix + 'TxBorrowSource').value = t.borrowSource || 'person';
     const spendForElEdit = document.getElementById(prefix + 'TxSpendFor');
-    const returnNameElEdit = document.getElementById(prefix + 'TxReturnName');
     const returnWrapEdit = document.getElementById(prefix + 'TxReturnNameWrap');
     if(spendForElEdit){
       spendForElEdit.value = t.spendFor === 'returnable' ? 'returnable' : 'own';
       if(returnWrapEdit) returnWrapEdit.style.display = spendForElEdit.value === 'returnable' ? '' : 'none';
     }
-    if(returnNameElEdit) returnNameElEdit.value = t.returnName || '';
+    const returnEntries = (t.returnSplits && t.returnSplits.length) ? t.returnSplits : (t.returnName ? [{name: t.returnName, amount: null}] : []);
+    renderReturnRows(countryKey, returnEntries);
     const purposeEl = document.getElementById(prefix + 'TxPurpose');
     if(purposeEl) purposeEl.value = t.purpose || '';
     const cdEl = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdEl) cdEl.value = t.purposeCardDue || '';
@@ -3827,7 +3912,7 @@
     document.getElementById(prefix + 'TxDue').value = '';
     document.getElementById(prefix + 'TxBorrowSource').value = 'person';
     const spendForElReset = document.getElementById(prefix + 'TxSpendFor'); if(spendForElReset) spendForElReset.value = 'own';
-    const returnNameElReset = document.getElementById(prefix + 'TxReturnName'); if(returnNameElReset) returnNameElReset.value = '';
+    renderReturnRows(countryKey, []);
     const returnWrapReset = document.getElementById(prefix + 'TxReturnNameWrap'); if(returnWrapReset) returnWrapReset.style.display = 'none';
     const purposeElC = document.getElementById(prefix + 'TxPurpose'); if(purposeElC) purposeElC.value = '';
     const cdElC = document.getElementById(prefix + 'TxPurposeCardDue'); if(cdElC) cdElC.value = '';
@@ -3914,9 +3999,10 @@
     const existingRecurGroup = curEditId ? (data.transactions.find(x=>x.id===curEditId)||{}).recurringGroupId : null;
     const timeEl = document.getElementById(prefix + 'TxTime');
     const spendForEl = document.getElementById(prefix + 'TxSpendFor');
-    const returnNameEl = document.getElementById(prefix + 'TxReturnName');
     const spendForVal = spendForEl ? spendForEl.value : 'own';
-    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnName: spendForVal === 'returnable' ? ((returnNameEl && returnNameEl.value.trim()) || '') : '' };
+    const returnSplits = spendForVal === 'returnable' ? collectReturnRows(countryKey) : [];
+    const returnNameVal = returnSplits.map(r => r.name).join(', ');
+    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnSplits, returnName: returnNameVal };
     if(curEditId){
       const idx = data.transactions.findIndex(x => x.id === curEditId);
       if(idx > -1) data.transactions[idx] = Object.assign({id: curEditId}, record);
@@ -3928,7 +4014,7 @@
       label.value = ''; amount.value = ''; person.value = ''; due.value = '';
       if(timeEl) timeEl.value = '';
       if(spendForEl) spendForEl.value = 'own';
-      if(returnNameEl) returnNameEl.value = '';
+      renderReturnRows(countryKey, []);
       const rnWrap = document.getElementById(prefix + 'TxReturnNameWrap'); if(rnWrap) rnWrap.style.display = 'none';
       const labelSelEl = document.getElementById(prefix + 'TxLabelSelect'); if(labelSelEl) labelSelEl.value = 'Tea';
       if(recurringEl) recurringEl.checked = false;
@@ -6052,8 +6138,8 @@
     const splitWrap = document.getElementById('reportCountrySplitWrap');
     if(splitWrap) splitWrap.style.display = scope ? 'none' : '';
 
-    document.getElementById('repIncome').textContent = curFmt(r.income);
-    document.getElementById('repExpense').textContent = curFmt(r.totalOutflow);
+    document.getElementById('repIncome').innerHTML = maskedField('repIncome', rawValue(() => curFmt(r.income)));
+    document.getElementById('repExpense').innerHTML = maskedField('repExpense', rawValue(() => curFmt(r.totalOutflow)));
 
     renderOverspendCheck(r, scope, curFmt);
     renderCategoryBudgets(r, scope, curFmt);
@@ -8032,19 +8118,19 @@
     const periodLine = `<div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">${monthFilter ? escapeHtml(monthLabel(monthFilter)) : 'All time'}</div>`;
     box.innerHTML = periodLine + `
       <div style="font-family:'Fraunces', serif; font-weight:600; margin-bottom:4px;">${escapeHtml(uaeName)}</div>
-      <div class="breakdown-row"><span class="label">Balance</span><span><strong>${(uae.balance < 0 ? '−' : '') + budgetFmt(Math.abs(uae.balance), 'UAE')}</strong></span></div>
-      <div class="breakdown-row"><span class="label">Income</span><span>${budgetFmt(uae.incomeTotal, 'UAE')}</span></div>
-      <div class="breakdown-row"><span class="label">Expenses</span><span>${budgetFmt(uae.expenseTotal, 'UAE')}</span></div>
-      <div class="breakdown-row"><span class="label">Credit card spend</span><span>${budgetFmt(uae.cardSpend, 'UAE')}</span></div>
-      <div class="breakdown-row"><span class="label">Debt owed (unpaid borrowing)</span><span>${budgetFmt(uae.debtOwed, 'UAE')}</span></div>
-      <div class="breakdown-row"><span class="label">Remittance sent (kept separate)</span><span>${budgetFmt(uae.remitSent, 'UAE')}</span></div>
+      <div class="breakdown-row"><span class="label">Balance</span><span><strong>${maskedField('ovBal_UAE', rawValue(() => (uae.balance < 0 ? '−' : '') + budgetFmt(Math.abs(uae.balance), 'UAE')))}</strong></span></div>
+      <div class="breakdown-row"><span class="label">Income</span><span>${maskedField('ovInc_UAE', rawValue(() => budgetFmt(uae.incomeTotal, 'UAE')))}</span></div>
+      <div class="breakdown-row"><span class="label">Expenses</span><span>${maskedField('ovExp_UAE', rawValue(() => budgetFmt(uae.expenseTotal, 'UAE')))}</span></div>
+      <div class="breakdown-row"><span class="label">Credit card spend</span><span>${maskedField('ovCard_UAE', rawValue(() => budgetFmt(uae.cardSpend, 'UAE')))}</span></div>
+      <div class="breakdown-row"><span class="label">Debt owed (unpaid borrowing)</span><span>${maskedField('ovDebt_UAE', rawValue(() => budgetFmt(uae.debtOwed, 'UAE')))}</span></div>
+      <div class="breakdown-row"><span class="label">Remittance sent (kept separate)</span><span>${maskedField('ovRemit_UAE', rawValue(() => budgetFmt(uae.remitSent, 'UAE')))}</span></div>
       <div style="font-family:'Fraunces', serif; font-weight:600; margin:10px 0 4px 0;">${escapeHtml(indiaName)}</div>
-      <div class="breakdown-row"><span class="label">Balance</span><span><strong>${(india.balance < 0 ? '−' : '') + budgetFmt(Math.abs(india.balance), 'India')}</strong></span></div>
-      <div class="breakdown-row"><span class="label">Income</span><span>${budgetFmt(india.incomeTotal, 'India')}</span></div>
-      <div class="breakdown-row"><span class="label">Expenses</span><span>${budgetFmt(india.expenseTotal, 'India')}</span></div>
-      <div class="breakdown-row"><span class="label">Credit card spend</span><span>${budgetFmt(india.cardSpend, 'India')}</span></div>
-      <div class="breakdown-row"><span class="label">Debt owed (unpaid borrowing)</span><span>${budgetFmt(india.debtOwed, 'India')}</span></div>
-      <div class="breakdown-row"><span class="label">Remittance received from ${escapeHtml(uaeName)}</span><span>${budgetFmt(india.remitReceived, 'India')}</span></div>
+      <div class="breakdown-row"><span class="label">Balance</span><span><strong>${maskedField('ovBal_India', rawValue(() => (india.balance < 0 ? '−' : '') + budgetFmt(Math.abs(india.balance), 'India')))}</strong></span></div>
+      <div class="breakdown-row"><span class="label">Income</span><span>${maskedField('ovInc_India', rawValue(() => budgetFmt(india.incomeTotal, 'India')))}</span></div>
+      <div class="breakdown-row"><span class="label">Expenses</span><span>${maskedField('ovExp_India', rawValue(() => budgetFmt(india.expenseTotal, 'India')))}</span></div>
+      <div class="breakdown-row"><span class="label">Credit card spend</span><span>${maskedField('ovCard_India', rawValue(() => budgetFmt(india.cardSpend, 'India')))}</span></div>
+      <div class="breakdown-row"><span class="label">Debt owed (unpaid borrowing)</span><span>${maskedField('ovDebt_India', rawValue(() => budgetFmt(india.debtOwed, 'India')))}</span></div>
+      <div class="breakdown-row"><span class="label">Remittance received from ${escapeHtml(uaeName)}</span><span>${maskedField('ovRemitRecv_India', rawValue(() => budgetFmt(india.remitReceived, 'India')))}</span></div>
     `;
   }
 
