@@ -912,6 +912,82 @@
       <div id="categoryBudgetForm" class="form-grid" style="margin-bottom:8px;"></div>
       <div id="categoryBudgetBars"></div>
 
+      <div class="accordion" data-key="money-coach">
+        <button type="button" class="accordion-header"><span>💬 Money Coach — ask about your budget</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Free, no AI subscription needed — this works out answers directly from your own transactions, so it's instant and never leaves your device. Try tapping a question, or type your own.</div>
+          <div class="add-row" style="flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+            <button type="button" class="add-btn ghost mc-suggest" data-q="Can I afford AED 200 in UAE and ₹50000 in India this month?" style="font-size:11px;padding:6px 10px;">Can I afford AED 200 / ₹50,000 this month?</button>
+            <button type="button" class="add-btn ghost mc-suggest" data-q="Where am I spending too much?" style="font-size:11px;padding:6px 10px;">Where am I overspending?</button>
+            <button type="button" class="add-btn ghost mc-suggest" data-q="How much can I save next month?" style="font-size:11px;padding:6px 10px;">How much can I save next month?</button>
+          </div>
+          <div class="add-row">
+            <input type="text" id="mcQuestion" placeholder="Ask a question, e.g. 'Can I afford AED 300?'" style="flex:1;">
+            <button type="button" class="add-btn" id="mcAsk">Ask</button>
+          </div>
+          <div id="mcAnswer" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <div class="accordion" data-key="retirement-planning">
+        <button type="button" class="accordion-header"><span>🕌 Retirement corpus & halal investing</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">A quick calculator for how much to save monthly toward a retirement goal. I can't recommend specific stocks to buy — that's outside what I can responsibly do, and any pick I hardcoded here would go stale fast. What I can do is explain how growth/dividend and Shariah-compliant screening actually work, so you can evaluate options yourself or with an advisor.</div>
+
+          <div class="form-grid" style="margin-bottom:8px;">
+            <div>
+              <label class="field-label">Current age</label>
+              <input type="number" id="retCurrentAge" placeholder="e.g. 30" step="1">
+            </div>
+            <div>
+              <label class="field-label">Retirement age</label>
+              <input type="number" id="retTargetAge" placeholder="e.g. 60" step="1">
+            </div>
+            <div>
+              <label class="field-label">Target corpus</label>
+              <input type="number" id="retTargetCorpus" placeholder="e.g. 5000000" step="1000">
+            </div>
+            <div>
+              <label class="field-label">Currency</label>
+              <select id="retCurrency">
+                <option value="AED">AED</option>
+                <option value="INR">INR</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label">Already saved</label>
+              <input type="number" id="retExistingSavings" placeholder="0" step="100">
+            </div>
+            <div>
+              <label class="field-label">Expected annual return %</label>
+              <input type="number" id="retReturnRate" placeholder="e.g. 8" step="0.1">
+              <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">A conservative long-term assumption for diversified Shariah-compliant equity — you set this based on your own research/advisor, not a guarantee.</div>
+            </div>
+          </div>
+          <button type="button" class="add-btn full-width" id="retCalcBtn">Calculate monthly savings needed</button>
+          <div id="retResult" style="margin-top:10px;"></div>
+
+          <div class="section-title" style="margin-top:18px;">How growth & dividend investing differ</div>
+          <div style="font-size:12px;color:var(--ink-soft);line-height:1.6;">
+            <strong>Growth stocks</strong> reinvest profits to expand the business rather than paying dividends — the return comes mainly from the share price rising over time. They tend to be more volatile and are usually judged on revenue/earnings growth rate, not current yield.<br><br>
+            <strong>Dividend stocks</strong> pay out a share of profit regularly, giving you cash income along the way — usually mature, stable companies. Look at dividend yield alongside the payout ratio (a very high payout ratio can be a warning sign it's not sustainable).
+          </div>
+
+          <div class="section-title" style="margin-top:14px;">What makes a stock "halal"</div>
+          <div style="font-size:12px;color:var(--ink-soft);line-height:1.6;">
+            Common Shariah screening (used by methodologies like AAOIFI, S&P Shariah, and MSCI Islamic) generally checks for:
+            <ul style="margin:6px 0 0 18px;padding:0;">
+              <li>Core business isn't in a prohibited sector — conventional banking/insurance, alcohol, gambling, pork, adult content, conventional weapons.</li>
+              <li>Interest-bearing debt stays under a set ratio of market cap (commonly ~30%).</li>
+              <li>Interest income and other impermissible income stay under a set ratio of total revenue (commonly ~5%), with that portion "purified" by donating it.</li>
+            </ul>
+            Screening ratios vary by methodology and change as prices move, so a stock can drift in or out of compliance — dedicated screening tools (e.g. Zoya, Musaffa, Wahed's screens, or your broker's own Shariah filter) check this continuously; I can't verify current compliance for a specific stock here.
+          </div>
+          <div style="font-size:11px;color:var(--ink-soft);margin-top:10px;">This is general information, not financial or religious advice — for anything binding, a licensed financial advisor and a qualified scholar are the right calls.</div>
+        </div>
+      </div>
+
       <div id="reportCountrySplitWrap">
         <div class="section-title">Resident vs Home — this period</div>
         <div style="font-size:11.5px;color:var(--ink-soft);margin:-8px 0 8px 0;">Each country's own figures, in its own currency. Remittance received in Home isn't counted as income here either.</div>
@@ -6098,6 +6174,143 @@
       if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
     });
   }
+
+  // ---- Money Coach: rule-based Q&A over the household's own data. No AI API,
+  // no external calls — everything is computed locally from what's already
+  // tracked, so it's free and instant. Handles a few question patterns by
+  // keyword; anything it can't parse gets a clear "try one of these" nudge. ----
+  function moneyCoachCurrentMonthData(countryKey){
+    const data = currentData().countries[countryKey];
+    const monthKeyNow = todayStr().slice(0,7);
+    const period = { type: 'monthly', key: monthKeyNow };
+    const txs = (data.transactions || []).filter(t => inPeriod(t.date, period));
+    const balance = txs.reduce((sum, t) => {
+      if(t.type === 'income') return sum + Number(t.amount);
+      if(t.type === 'borrowing') return sum;
+      return sum - Number(t.amount);
+    }, 0);
+    const expenseTotal = txs.filter(t => t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
+    const incomeTotal = txs.filter(t => t.type === 'income').reduce((s,t) => s + Number(t.amount), 0);
+    const cardSpend = (currentData().cards || []).filter(c => (c.country === (countryKey === 'UAE' ? 'resident' : 'home')) && inPeriod(c.date, period)).reduce((s,c) => s + Number(c.amount), 0);
+    const target = (state.settings.overspendTargets || {})[overspendTargetKey(countryKey)] || 0;
+    return { balance, expenseTotal, incomeTotal, cardSpend, target, txs };
+  }
+  function moneyCoachAfford(amountsByCountry){
+    const lines = [];
+    let anyNo = false;
+    Object.entries(amountsByCountry).forEach(([countryKey, amount]) => {
+      const d = moneyCoachCurrentMonthData(countryKey);
+      const availableAfterSpend = d.balance;
+      const canAfford = availableAfterSpend >= amount;
+      if(!canAfford) anyNo = true;
+      lines.push(`<div class="breakdown-row"><span class="label">${countryKey}: spend ${budgetFmt(amount, countryKey)}?</span><span style="color:${canAfford ? 'var(--teal-dark)' : 'var(--coral)'};font-weight:600;">${canAfford ? 'Yes' : 'Tight'}</span></div>
+      <div style="font-size:11px;color:var(--ink-soft);margin:-2px 0 6px 0;">Your current ${countryKey} balance this month is ${budgetFmt(d.balance, countryKey)}${d.target > 0 ? `, and you've spent ${budgetFmt(d.expenseTotal, countryKey)} of a ${budgetFmt(d.target, countryKey)} target` : ''}. ${canAfford ? `Spending this would leave about ${budgetFmt(availableAfterSpend - amount, countryKey)}.` : `This would take you about ${budgetFmt(Math.abs(availableAfterSpend - amount), countryKey)} into the red for the month.`}</div>`);
+    });
+    return `<div>${lines.join('')}</div>`;
+  }
+  function moneyCoachOverspending(){
+    const rows = [];
+    ['UAE','India'].forEach(countryKey => {
+      const period = { type: 'monthly', key: todayStr().slice(0,7) };
+      const r = computeReportData(period, countryKey);
+      const buckets = {};
+      (r.cardsBySpend || []).forEach(c => {
+        const label = (c.desc || 'Others').trim() || 'Others';
+        buckets[label] = (buckets[label] || 0) + Number(c.amount);
+      });
+      Object.entries(buckets).forEach(([label, amount]) => rows.push({ countryKey, label, amount }));
+    });
+    if(!rows.length) return `<div class="empty">Not enough card spend logged this month to spot a pattern yet.</div>`;
+    rows.sort((a,b) => b.amount - a.amount);
+    const top = rows.slice(0, 3);
+    const list = top.map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.label)} (${r.countryKey})</span><span><strong>${budgetFmt(r.amount, r.countryKey)}</strong></span></div>`).join('');
+    return `<div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Your biggest categories this month:</div>${list}<div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">If anything here is bigger than expected, that's usually the easiest place to trim first.</div>`;
+  }
+  function moneyCoachSavings(){
+    const rows = [];
+    ['UAE','India'].forEach(countryKey => {
+      const d = moneyCoachCurrentMonthData(countryKey);
+      const avgExpense = d.expenseTotal; // this month's actual run rate
+      const projectedNextMonth = d.incomeTotal - avgExpense;
+      rows.push(`<div class="breakdown-row"><span class="label">${countryKey} — if next month looks like this one</span><span><strong>${budgetFmt(Math.max(0, projectedNextMonth), countryKey)}</strong></span></div>`);
+    });
+    return `<div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Rough estimate, based on this month's income minus expenses (not counting one-off costs):</div>${rows.join('')}<div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">This is a simple projection, not a guarantee — irregular income or one-time expenses will shift it.</div>`;
+  }
+  function moneyCoachAnswer(question){
+    const q = (question || '').toLowerCase();
+    // "afford" — look for AED/INR amounts in the text
+    if(/afford|can i spend/.test(q)){
+      const amounts = {};
+      const aedMatch = q.match(/aed\s*([\d,]+(?:\.\d+)?)/);
+      const inrMatch = q.match(/(?:inr|₹|rs\.?)\s*([\d,]+(?:\.\d+)?)/);
+      if(aedMatch) amounts.UAE = parseFloat(aedMatch[1].replace(/,/g,''));
+      if(inrMatch) amounts.India = parseFloat(inrMatch[1].replace(/,/g,''));
+      if(!Object.keys(amounts).length){
+        // fallback: grab any bare number and apply it to both, since no currency was specified
+        const bare = q.match(/([\d,]+(?:\.\d+)?)/);
+        if(bare){ amounts.UAE = parseFloat(bare[1].replace(/,/g,'')); amounts.India = parseFloat(bare[1].replace(/,/g,'')); }
+      }
+      if(!Object.keys(amounts).length) return `<div class="empty">Tell me an amount, e.g. "Can I afford AED 200?"</div>`;
+      return moneyCoachAfford(amounts);
+    }
+    if(/overspend|spending too much|where.*spend/.test(q)) return moneyCoachOverspending();
+    if(/save|savings/.test(q)) return moneyCoachSavings();
+    return `<div class="empty">I can currently answer questions about affording an amount, where you're overspending, or how much you might save next month — try one of the buttons above, or rephrase using those words.</div>`;
+  }
+  function runMoneyCoach(question){
+    const box = document.getElementById('mcAnswer');
+    if(!box) return;
+    box.innerHTML = moneyCoachAnswer(question);
+  }
+  document.getElementById('mcAsk').addEventListener('click', () => {
+    const q = document.getElementById('mcQuestion').value.trim();
+    if(q) runMoneyCoach(q);
+  });
+  document.getElementById('mcQuestion').addEventListener('keydown', e => {
+    if(e.key === 'Enter'){ const q = e.target.value.trim(); if(q) runMoneyCoach(q); }
+  });
+  document.querySelectorAll('.mc-suggest').forEach(btn => btn.addEventListener('click', () => {
+    document.getElementById('mcQuestion').value = btn.dataset.q;
+    runMoneyCoach(btn.dataset.q);
+  }));
+
+  // ---- Retirement corpus calculator: standard future-value-of-annuity math,
+  // no external data, fully local. ----
+  document.getElementById('retCalcBtn').addEventListener('click', () => {
+    const box = document.getElementById('retResult');
+    const curAge = parseFloat(document.getElementById('retCurrentAge').value);
+    const targetAge = parseFloat(document.getElementById('retTargetAge').value);
+    const targetCorpus = parseFloat(document.getElementById('retTargetCorpus').value);
+    const currency = document.getElementById('retCurrency').value;
+    const existing = parseFloat(document.getElementById('retExistingSavings').value) || 0;
+    const annualReturn = parseFloat(document.getElementById('retReturnRate').value);
+    if(!curAge || !targetAge || targetAge <= curAge || !targetCorpus || !annualReturn){
+      box.innerHTML = `<div class="empty">Fill in age, retirement age, target corpus, and expected return to calculate.</div>`;
+      return;
+    }
+    const years = targetAge - curAge;
+    const months = years * 12;
+    const monthlyRate = annualReturn / 100 / 12;
+    const sym = CURRENCIES[currency] || currency;
+    const fmtLocal = (n) => (sym.length > 1 ? sym + ' ' : sym) + Number(n).toLocaleString(undefined, {maximumFractionDigits:0});
+    // Future value of existing savings, growing at the same assumed rate:
+    const fvExisting = existing * Math.pow(1 + monthlyRate, months);
+    const remainingNeeded = Math.max(0, targetCorpus - fvExisting);
+    // Future value of an ordinary annuity: FV = P * [((1+r)^n - 1) / r]
+    let monthlyNeeded;
+    if(monthlyRate > 0){
+      monthlyNeeded = remainingNeeded / ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate);
+    } else {
+      monthlyNeeded = remainingNeeded / months;
+    }
+    box.innerHTML = `
+      <div class="breakdown-row"><span class="label">Years to retirement</span><span>${years}</span></div>
+      <div class="breakdown-row"><span class="label">Your ${fmtLocal(existing)} today grows to</span><span>${fmtLocal(fvExisting)}</span></div>
+      <div class="breakdown-row"><span class="label">Still need to build</span><span>${fmtLocal(remainingNeeded)}</span></div>
+      <div class="breakdown-row" style="margin-top:6px;"><span class="label"><strong>Monthly savings needed</strong></span><span><strong style="color:var(--teal-dark);">${fmtLocal(Math.max(0, monthlyNeeded))}</strong></span></div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">Assumes a steady ${annualReturn}% annual return compounded monthly — real returns vary year to year, so treat this as a planning estimate, not a promise, and revisit it periodically.</div>
+    `;
+  });
 
   function overspendTargetKey(scope){
     return 'overspend_' + (scope || 'all');
