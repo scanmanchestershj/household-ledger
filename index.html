@@ -505,12 +505,14 @@
             <button type="button" class="add-btn ghost" id="overviewMonthNext" style="padding:8px 12px;">›</button>
           </div>
           <div class="stat-grid" id="statsGrid">
-            <div class="stat teal" draggable="true" data-stat="chores"><div class="num" id="statChoresOpen">–</div><div class="label">chores open</div></div>
-            <div class="stat teal" draggable="true" data-stat="groceries"><div class="num" id="statGroceries">–</div><div class="label">groceries to buy</div></div>
+            <div class="stat teal" draggable="true" data-stat="chores" id="statChoresTile" style="cursor:pointer;"><div class="num" id="statChoresOpen">–</div><div class="label">chores open <span id="statChoresArrow" style="font-size:10px;">▸</span></div></div>
+            <div class="stat teal" draggable="true" data-stat="groceries" id="statGroceriesTile" style="cursor:pointer;"><div class="num" id="statGroceries">–</div><div class="label">groceries to buy <span id="statGroceriesArrow" style="font-size:10px;">▸</span></div></div>
             <div class="stat gold" draggable="true" data-stat="budget" id="statBudgetTile" style="cursor:pointer;"><div class="num" id="statBudget">–</div><div class="label"><span id="statBudgetPeriodLabel">balance overall</span> <span id="statBudgetArrow" style="font-size:10px;">▸</span></div></div>
             <div class="stat teal" draggable="true" data-stat="devices"><div class="num" id="statDevicesOn">–</div><div class="label">devices on</div></div>
           </div>
           <div id="statBudgetDetail" class="debt-summary-box" style="display:none;margin-top:2px;"></div>
+          <div id="statChoresDetail" class="debt-summary-box" style="display:none;margin-top:2px;"></div>
+          <div id="statGroceriesDetail" class="debt-summary-box" style="display:none;margin-top:2px;"></div>
         </div>
 
         <div class="ov-section" draggable="true" data-ov="upnext">
@@ -2726,6 +2728,58 @@
     arrow.textContent = open ? '▸' : '▾';
     if(!open) renderOverviewBalanceDetail();
   });
+  document.getElementById('statChoresTile').addEventListener('click', () => {
+    const box = document.getElementById('statChoresDetail');
+    const arrow = document.getElementById('statChoresArrow');
+    const open = box.style.display !== 'none';
+    box.style.display = open ? 'none' : '';
+    arrow.textContent = open ? '▸' : '▾';
+    if(!open) renderOverviewChoresDetail();
+  });
+  document.getElementById('statGroceriesTile').addEventListener('click', () => {
+    const box = document.getElementById('statGroceriesDetail');
+    const arrow = document.getElementById('statGroceriesArrow');
+    const open = box.style.display !== 'none';
+    box.style.display = open ? 'none' : '';
+    arrow.textContent = open ? '▸' : '▾';
+    if(!open) renderOverviewGroceriesDetail();
+  });
+  function renderOverviewChoresDetail(){
+    const box = document.getElementById('statChoresDetail');
+    if(!box) return;
+    const open = [];
+    ['UAE','India'].forEach(countryKey => {
+      (currentData().countries[countryKey].chores || []).filter(c => !c.done).forEach(c => open.push(Object.assign({countryKey}, c)));
+    });
+    if(!open.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">All chores done — nice work.</div>'; return; }
+    box.innerHTML = open.map(c => `
+      <div class="breakdown-row">
+        <span class="label">${escapeHtml(c.text)} <span style="color:var(--ink-soft);font-size:10.5px;">(${c.countryKey}${c.who ? ' · ' + escapeHtml(c.who) : ''})</span></span>
+        <button type="button" class="perm-chip ov-chore-done" data-id="${c.id}" data-country="${c.countryKey}">Mark done</button>
+      </div>
+    `).join('');
+    box.querySelectorAll('.ov-chore-done').forEach(el => el.addEventListener('click', () => {
+      const countryKey = el.dataset.country;
+      const c = currentData().countries[countryKey].chores.find(x => x.id === el.dataset.id);
+      if(c){ c.done = true; c.lastResetDate = todayStr(); save(); renderChoresCountry(countryKey); renderOverview(); renderOverviewChoresDetail(); }
+    }));
+  }
+  function renderOverviewGroceriesDetail(){
+    const box = document.getElementById('statGroceriesDetail');
+    if(!box) return;
+    const open = currentData().groceries.filter(g => !g.done);
+    if(!open.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Nothing left to buy.</div>'; return; }
+    box.innerHTML = open.map(g => `
+      <div class="breakdown-row">
+        <span class="label">${escapeHtml(g.text)} <span style="color:var(--ink-soft);font-size:10.5px;">(${escapeHtml(g.category)})</span></span>
+        <button type="button" class="perm-chip ov-grocery-done" data-id="${g.id}">Got it</button>
+      </div>
+    `).join('');
+    box.querySelectorAll('.ov-grocery-done').forEach(el => el.addEventListener('click', () => {
+      const g = currentData().groceries.find(x => x.id === el.dataset.id);
+      if(g){ g.done = true; save(); renderGroceries(); renderOverview(); renderOverviewGroceriesDetail(); }
+    }));
+  }
 
   function setupAccordions(){
     document.addEventListener('click', (e) => {
@@ -3073,14 +3127,51 @@
     chores.forEach(c => {
       const li = document.createElement('li');
       const repeatTag = c.repeat ? `<span class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">🔁 ${escapeHtml(c.repeat)}</span>` : '';
-      li.innerHTML = `
-        <div class="check ${c.done ? 'done' : ''}" data-id="${c.id}">${c.done ? '✓' : ''}</div>
-        <div class="item-text ${c.done ? 'done' : ''}">${escapeHtml(c.text)}${repeatTag}</div>
-        ${c.who ? `<div class="item-meta">${escapeHtml(c.who)}</div>` : ''}
-        <button class="del-btn" data-id="${c.id}" aria-label="Delete chore">×</button>
-      `;
+      if(c.editing){
+        li.innerHTML = `
+          <div class="add-row" style="flex:1;">
+            <input type="text" class="chore-edit-text" value="${escapeHtml(c.text)}" style="flex:1;">
+            <select class="who-select chore-edit-who">
+              <option value="" ${!c.who ? 'selected' : ''}>Anyone</option>
+              <option value="Me" ${c.who === 'Me' ? 'selected' : ''}>Me</option>
+              <option value="Partner" ${c.who === 'Partner' ? 'selected' : ''}>Partner</option>
+              <option value="Kids" ${c.who === 'Kids' ? 'selected' : ''}>Kids</option>
+            </select>
+            <button type="button" class="add-btn chore-edit-save" data-id="${c.id}">Save</button>
+            <button type="button" class="add-btn ghost chore-edit-cancel" data-id="${c.id}">Cancel</button>
+          </div>
+        `;
+      } else {
+        li.innerHTML = `
+          <div class="check ${c.done ? 'done' : ''}" data-id="${c.id}">${c.done ? '✓' : ''}</div>
+          <div class="item-text ${c.done ? 'done' : ''}">${escapeHtml(c.text)}${repeatTag}</div>
+          ${c.who ? `<div class="item-meta">${escapeHtml(c.who)}</div>` : ''}
+          <button class="edit-btn chore-edit-start" data-id="${c.id}" aria-label="Edit chore">✎</button>
+          <button class="del-btn" data-id="${c.id}" aria-label="Delete chore">×</button>
+        `;
+      }
       list.appendChild(li);
     });
+    list.querySelectorAll('.chore-edit-start').forEach(el => el.addEventListener('click', () => {
+      currentData().countries[countryKey].chores.forEach(x => { x.editing = (x.id === el.dataset.id); });
+      renderChoresCountry(countryKey);
+    }));
+    list.querySelectorAll('.chore-edit-cancel').forEach(el => el.addEventListener('click', () => {
+      const c = currentData().countries[countryKey].chores.find(x => x.id === el.dataset.id);
+      if(c) delete c.editing;
+      renderChoresCountry(countryKey);
+    }));
+    list.querySelectorAll('.chore-edit-save').forEach(el => el.addEventListener('click', () => {
+      const c = currentData().countries[countryKey].chores.find(x => x.id === el.dataset.id);
+      if(!c) return;
+      const row = el.closest('li');
+      const newText = row.querySelector('.chore-edit-text').value.trim();
+      const newWho = row.querySelector('.chore-edit-who').value;
+      if(newText) c.text = newText;
+      c.who = newWho;
+      delete c.editing;
+      save(); renderChoresCountry(countryKey); renderOverview();
+    }));
     list.querySelectorAll('.check').forEach(el => el.addEventListener('click', () => {
       const c = currentData().countries[countryKey].chores.find(x => x.id === el.dataset.id);
       c.done = !c.done;
@@ -3156,14 +3247,52 @@
     if(items.length === 0){ list.innerHTML = '<li class="empty">Your grocery list is empty.</li>'; }
     items.forEach(g => {
       const li = document.createElement('li');
-      li.innerHTML = `
-        <div class="check ${g.done ? 'done' : ''}" data-id="${g.id}">${g.done ? '✓' : ''}</div>
-        <div class="item-text ${g.done ? 'done' : ''}">${escapeHtml(g.text)}</div>
-        <div class="item-meta">${escapeHtml(g.category)}</div>
-        <button class="del-btn" data-id="${g.id}" aria-label="Delete item">×</button>
-      `;
+      if(g.editing){
+        li.innerHTML = `
+          <div class="add-row" style="flex:1;">
+            <input type="text" class="grocery-edit-text" value="${escapeHtml(g.text)}" style="flex:1;">
+            <select class="who-select grocery-edit-cat">
+              <option value="Produce" ${g.category === 'Produce' ? 'selected' : ''}>Produce</option>
+              <option value="Dairy" ${g.category === 'Dairy' ? 'selected' : ''}>Dairy</option>
+              <option value="Meat" ${g.category === 'Meat' ? 'selected' : ''}>Meat</option>
+              <option value="Pantry" ${g.category === 'Pantry' ? 'selected' : ''}>Pantry</option>
+              <option value="Household" ${g.category === 'Household' ? 'selected' : ''}>Household</option>
+            </select>
+            <button type="button" class="add-btn grocery-edit-save" data-id="${g.id}">Save</button>
+            <button type="button" class="add-btn ghost grocery-edit-cancel" data-id="${g.id}">Cancel</button>
+          </div>
+        `;
+      } else {
+        li.innerHTML = `
+          <div class="check ${g.done ? 'done' : ''}" data-id="${g.id}">${g.done ? '✓' : ''}</div>
+          <div class="item-text ${g.done ? 'done' : ''}">${escapeHtml(g.text)}</div>
+          <div class="item-meta">${escapeHtml(g.category)}</div>
+          <button class="edit-btn grocery-edit-start" data-id="${g.id}" aria-label="Edit item">✎</button>
+          <button class="del-btn" data-id="${g.id}" aria-label="Delete item">×</button>
+        `;
+      }
       list.appendChild(li);
     });
+    list.querySelectorAll('.grocery-edit-start').forEach(el => el.addEventListener('click', () => {
+      currentData().groceries.forEach(x => { x.editing = (x.id === el.dataset.id); });
+      renderGroceries();
+    }));
+    list.querySelectorAll('.grocery-edit-cancel').forEach(el => el.addEventListener('click', () => {
+      const g = currentData().groceries.find(x => x.id === el.dataset.id);
+      if(g) delete g.editing;
+      renderGroceries();
+    }));
+    list.querySelectorAll('.grocery-edit-save').forEach(el => el.addEventListener('click', () => {
+      const g = currentData().groceries.find(x => x.id === el.dataset.id);
+      if(!g) return;
+      const row = el.closest('li');
+      const newText = row.querySelector('.grocery-edit-text').value.trim();
+      const newCat = row.querySelector('.grocery-edit-cat').value;
+      if(newText) g.text = newText;
+      g.category = newCat;
+      delete g.editing;
+      save(); renderGroceries(); renderOverview();
+    }));
     list.querySelectorAll('.check').forEach(el => el.addEventListener('click', () => {
       const g = currentData().groceries.find(x => x.id === el.dataset.id);
       g.done = !g.done; save(); renderGroceries(); renderOverview();
