@@ -944,27 +944,36 @@
               <input type="number" id="retTargetAge" placeholder="e.g. 60" step="1">
             </div>
             <div>
-              <label class="field-label">Target corpus</label>
-              <input type="number" id="retTargetCorpus" placeholder="e.g. 5000000" step="1000">
-            </div>
-            <div>
-              <label class="field-label">Currency</label>
-              <select id="retCurrency">
-                <option value="AED">AED</option>
-                <option value="INR">INR</option>
-                <option value="USD">USD</option>
-              </select>
-            </div>
-            <div>
-              <label class="field-label">Already saved</label>
-              <input type="number" id="retExistingSavings" placeholder="0" step="100">
-            </div>
-            <div>
               <label class="field-label">Expected annual return %</label>
               <input type="number" id="retReturnRate" placeholder="e.g. 8" step="0.1">
               <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">A conservative long-term assumption for diversified Shariah-compliant equity — you set this based on your own research/advisor, not a guarantee.</div>
             </div>
           </div>
+
+          <div style="font-family:'Fraunces', serif; font-weight:600; margin:6px 0 6px 0;">UAE goal (AED)</div>
+          <div class="form-grid" style="margin-bottom:8px;">
+            <div>
+              <label class="field-label">Target corpus (AED)</label>
+              <input type="number" id="retTargetCorpusUAE" placeholder="e.g. 3000000" step="1000">
+            </div>
+            <div>
+              <label class="field-label">Already saved (AED)</label>
+              <input type="number" id="retExistingSavingsUAE" placeholder="0" step="100">
+            </div>
+          </div>
+
+          <div style="font-family:'Fraunces', serif; font-weight:600; margin:6px 0 6px 0;">India goal (INR)</div>
+          <div class="form-grid" style="margin-bottom:8px;">
+            <div>
+              <label class="field-label">Target corpus (INR)</label>
+              <input type="number" id="retTargetCorpusIndia" placeholder="e.g. 50000000" step="1000">
+            </div>
+            <div>
+              <label class="field-label">Already saved (INR)</label>
+              <input type="number" id="retExistingSavingsIndia" placeholder="0" step="100">
+            </div>
+          </div>
+
           <button type="button" class="add-btn full-width" id="retCalcBtn">Calculate monthly savings needed</button>
           <div id="retResult" style="margin-top:10px;"></div>
 
@@ -6276,40 +6285,56 @@
 
   // ---- Retirement corpus calculator: standard future-value-of-annuity math,
   // no external data, fully local. ----
-  document.getElementById('retCalcBtn').addEventListener('click', () => {
-    const box = document.getElementById('retResult');
-    const curAge = parseFloat(document.getElementById('retCurrentAge').value);
-    const targetAge = parseFloat(document.getElementById('retTargetAge').value);
-    const targetCorpus = parseFloat(document.getElementById('retTargetCorpus').value);
-    const currency = document.getElementById('retCurrency').value;
-    const existing = parseFloat(document.getElementById('retExistingSavings').value) || 0;
-    const annualReturn = parseFloat(document.getElementById('retReturnRate').value);
-    if(!curAge || !targetAge || targetAge <= curAge || !targetCorpus || !annualReturn){
-      box.innerHTML = `<div class="empty">Fill in age, retirement age, target corpus, and expected return to calculate.</div>`;
-      return;
-    }
-    const years = targetAge - curAge;
+  function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
     const monthlyRate = annualReturn / 100 / 12;
-    const sym = CURRENCIES[currency] || currency;
+    const sym = CURRENCIES[currencyCode] || currencyCode;
     const fmtLocal = (n) => (sym.length > 1 ? sym + ' ' : sym) + Number(n).toLocaleString(undefined, {maximumFractionDigits:0});
-    // Future value of existing savings, growing at the same assumed rate:
     const fvExisting = existing * Math.pow(1 + monthlyRate, months);
     const remainingNeeded = Math.max(0, targetCorpus - fvExisting);
-    // Future value of an ordinary annuity: FV = P * [((1+r)^n - 1) / r]
     let monthlyNeeded;
     if(monthlyRate > 0){
       monthlyNeeded = remainingNeeded / ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate);
     } else {
       monthlyNeeded = remainingNeeded / months;
     }
-    box.innerHTML = `
-      <div class="breakdown-row"><span class="label">Years to retirement</span><span>${years}</span></div>
-      <div class="breakdown-row"><span class="label">Your ${fmtLocal(existing)} today grows to</span><span>${fmtLocal(fvExisting)}</span></div>
-      <div class="breakdown-row"><span class="label">Still need to build</span><span>${fmtLocal(remainingNeeded)}</span></div>
-      <div class="breakdown-row" style="margin-top:6px;"><span class="label"><strong>Monthly savings needed</strong></span><span><strong style="color:var(--teal-dark);">${fmtLocal(Math.max(0, monthlyNeeded))}</strong></span></div>
-      <div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">Assumes a steady ${annualReturn}% annual return compounded monthly — real returns vary year to year, so treat this as a planning estimate, not a promise, and revisit it periodically.</div>
-    `;
+    return { fvExisting, remainingNeeded, monthlyNeeded: Math.max(0, monthlyNeeded), fmtLocal };
+  }
+  document.getElementById('retCalcBtn').addEventListener('click', () => {
+    const box = document.getElementById('retResult');
+    const curAge = parseFloat(document.getElementById('retCurrentAge').value);
+    const targetAge = parseFloat(document.getElementById('retTargetAge').value);
+    const annualReturn = parseFloat(document.getElementById('retReturnRate').value);
+    const targetUAE = parseFloat(document.getElementById('retTargetCorpusUAE').value) || 0;
+    const existingUAE = parseFloat(document.getElementById('retExistingSavingsUAE').value) || 0;
+    const targetIndia = parseFloat(document.getElementById('retTargetCorpusIndia').value) || 0;
+    const existingIndia = parseFloat(document.getElementById('retExistingSavingsIndia').value) || 0;
+    if(!curAge || !targetAge || targetAge <= curAge || !annualReturn || (!targetUAE && !targetIndia)){
+      box.innerHTML = `<div class="empty">Fill in age, retirement age, expected return, and at least one target corpus (UAE and/or India) to calculate.</div>`;
+      return;
+    }
+    const years = targetAge - curAge;
+    let html = `<div class="breakdown-row"><span class="label">Years to retirement</span><span>${years}</span></div>`;
+    if(targetUAE > 0){
+      const g = calcRetirementGoal(years, annualReturn, targetUAE, existingUAE, 'AED');
+      html += `
+        <div style="font-family:'Fraunces', serif; font-weight:600; margin:10px 0 4px 0;">UAE (AED)</div>
+        <div class="breakdown-row"><span class="label">Your ${g.fmtLocal(existingUAE)} today grows to</span><span>${g.fmtLocal(g.fvExisting)}</span></div>
+        <div class="breakdown-row"><span class="label">Still need to build</span><span>${g.fmtLocal(g.remainingNeeded)}</span></div>
+        <div class="breakdown-row"><span class="label"><strong>Monthly savings needed</strong></span><span><strong style="color:var(--teal-dark);">${g.fmtLocal(g.monthlyNeeded)}</strong></span></div>
+      `;
+    }
+    if(targetIndia > 0){
+      const g = calcRetirementGoal(years, annualReturn, targetIndia, existingIndia, 'INR');
+      html += `
+        <div style="font-family:'Fraunces', serif; font-weight:600; margin:10px 0 4px 0;">India (INR)</div>
+        <div class="breakdown-row"><span class="label">Your ${g.fmtLocal(existingIndia)} today grows to</span><span>${g.fmtLocal(g.fvExisting)}</span></div>
+        <div class="breakdown-row"><span class="label">Still need to build</span><span>${g.fmtLocal(g.remainingNeeded)}</span></div>
+        <div class="breakdown-row"><span class="label"><strong>Monthly savings needed</strong></span><span><strong style="color:var(--teal-dark);">${g.fmtLocal(g.monthlyNeeded)}</strong></span></div>
+      `;
+    }
+    html += `<div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">Assumes a steady ${annualReturn}% annual return compounded monthly in each currency — real returns vary year to year, so treat this as a planning estimate, not a promise, and revisit it periodically.</div>`;
+    box.innerHTML = html;
   });
 
   function overspendTargetKey(scope){
