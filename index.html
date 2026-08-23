@@ -387,7 +387,7 @@
     <div class="gate-card">
       <div class="gate-card-header">
         <div class="eyebrow" style="color:rgba(255,255,255,0.75);">Welcome</div>
-        <h1 id="gateTitle" contenteditable="true" spellcheck="false">The Household Ledger</h1>
+        <h1 id="gateTitle" contenteditable="true" spellcheck="false">Smart AI PA</h1>
         <div class="gate-quote" id="gateQuote">—</div>
       </div>
       <div class="gate-card-body">
@@ -470,7 +470,7 @@
         </select>
       </div>
     </div>
-    <h1 id="appTitle" contenteditable="true" spellcheck="false">The Household Ledger</h1>
+    <h1 id="appTitle" contenteditable="true" spellcheck="false">Smart AI PA</h1>
     <div class="subline">Chores, groceries, budget, cards & devices — all in one binder.</div>
     <div class="session-bar">
       <span id="sessionInfo">—</span>
@@ -480,9 +480,10 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab active" draggable="true" data-panel="overview">Overview</button>
-    <button class="tab" draggable="true" data-panel="report">Report</button>
     <button class="tab" draggable="true" data-panel="uae">Resident Country</button>
     <button class="tab" draggable="true" data-panel="india" id="homeCountryTabBtn">Home Country</button>
+    <button class="tab" draggable="true" data-panel="health">Health</button>
+    <button class="tab" draggable="true" data-panel="report">Report</button>
     <button class="tab" draggable="true" data-panel="admin" id="adminTabBtn" style="display:none;">Admin<span id="adminReqBadge" style="display:none;"></span></button>
   </nav>
 
@@ -2031,7 +2032,84 @@
       </div>
     </section>
 
-    <!-- ADMIN -->
+    <!-- HEALTH -->
+    <section class="panel" id="panel-health">
+      <div class="section-title" style="margin-top:0;">Health profile</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">General wellness planning, personalized to your age and the climate you're actually living in day to day. This is educational information, not medical advice — for anything specific to your health (conditions, medication, pregnancy, injuries), please check with a doctor or registered dietitian before changing diet or exercise habits.</div>
+
+      <div class="form-grid" style="margin-bottom:8px;">
+        <div>
+          <label class="field-label">Age</label>
+          <input type="number" id="healthAge" placeholder="e.g. 32" step="1">
+        </div>
+        <div>
+          <label class="field-label">Gender</label>
+          <select id="healthGender">
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other / prefer not to say</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Height (cm)</label>
+          <input type="number" id="healthHeight" placeholder="e.g. 170" step="0.5">
+        </div>
+        <div>
+          <label class="field-label">Weight (kg)</label>
+          <input type="number" id="healthWeight" placeholder="e.g. 70" step="0.1">
+        </div>
+        <div>
+          <label class="field-label">Activity level</label>
+          <select id="healthActivity">
+            <option value="1.2">Sedentary (desk job, little exercise)</option>
+            <option value="1.375">Light (exercise 1–3 days/week)</option>
+            <option value="1.55">Moderate (exercise 3–5 days/week)</option>
+            <option value="1.725">Active (exercise 6–7 days/week)</option>
+            <option value="1.9">Very active (physical job + training)</option>
+          </select>
+        </div>
+        <div class="full">
+          <label class="field-label">Plan around which environment?</label>
+          <select id="healthClimateCountry">
+            <option value="UAE" id="healthClimateCountryOptUAE">Resident Country</option>
+            <option value="India" id="healthClimateCountryOptIndia">Home Country</option>
+          </select>
+          <div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">Diet timing, hydration targets, and exercise suggestions below adjust to this climate.</div>
+        </div>
+      </div>
+      <button type="button" class="add-btn full-width" id="healthSaveProfile">Save profile & calculate</button>
+
+      <div id="healthMetrics" style="margin-top:14px;"></div>
+
+      <div class="accordion" data-key="health-diet-plan">
+        <button type="button" class="accordion-header"><span>🥗 Climate-based diet & lifestyle plan</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body" id="healthDietPlan"></div>
+      </div>
+
+      <div class="accordion" data-key="health-weight-tracker">
+        <button type="button" class="accordion-header"><span>⚖️ Weight tracker</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div class="add-row">
+            <input type="date" id="healthWeightDate">
+            <input type="number" id="healthWeightEntry" placeholder="Weight (kg)" step="0.1">
+            <button type="button" class="add-btn" id="healthWeightAdd">Log</button>
+          </div>
+          <ul class="item-list" id="healthWeightList" style="margin-top:8px;"></ul>
+        </div>
+      </div>
+
+      <div class="accordion" data-key="health-water-tracker">
+        <button type="button" class="accordion-header"><span>💧 Water intake tracker</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div id="healthWaterToday"></div>
+          <div class="add-row" style="margin-top:8px;">
+            <button type="button" class="add-btn" id="healthWaterAddGlass">+ 1 glass (250ml)</button>
+            <button type="button" class="add-btn ghost" id="healthWaterReset">Reset today</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="panel" id="panel-admin">
       <div class="section-title" style="margin-top:0;">My account</div>
       <div class="form-grid">
@@ -2284,7 +2362,7 @@
     permissions: {},
     exchangeRate: 22.5,
     tabOrder: [],
-    appTitle: 'The Household Ledger',
+    appTitle: 'Smart AI PA',
     countryConfig: {
       country1: { name: 'UAE', currency: 'AED' },
       country2: { name: 'India', currency: 'INR' },
@@ -2303,6 +2381,7 @@
       bankSettings: {},
       bankSummaries: [],
       activityLog: [],
+      health: { age: null, gender: 'male', height: null, weight: null, activity: '1.375', climateCountry: 'UAE', weightLog: [], waterLog: {} },
       devices: [
         {id:'d1', name:'Living Room Lights', room:'Living Room', on:false, country:'resident'},
         {id:'d2', name:'Kitchen Lights', room:'Kitchen', on:false, country:'resident'},
@@ -2322,7 +2401,7 @@
   let viewingUserId = null; // which user's data is currently shown — admin can switch this
   let activeCardSlot = 'resident'; // which country's Cards module is currently mounted/filtered
 
-  const ALL_TABS = ['overview','report','uae','india'];
+  const ALL_TABS = ['overview','report','uae','india','health'];
   function currentData(){
     const id = viewingUserId || (currentUser && currentUser.id);
     if(!id) return defaultUserData();
@@ -2507,7 +2586,7 @@
       }
     });
     if(typeof state.exchangeRate !== 'number') state.exchangeRate = 22.5;
-    if(!state.appTitle) state.appTitle = 'The Household Ledger';
+    if(!state.appTitle) state.appTitle = 'Smart AI PA';
     if(!state.countryConfig) state.countryConfig = { country1: { name: 'UAE', currency: 'AED' }, country2: { name: 'India', currency: 'INR' }, homeCountryEnabled: true };
     if(state.countryConfig.homeCountryEnabled === undefined) state.countryConfig.homeCountryEnabled = true;
     if(!state.requests) state.requests = [];
@@ -2656,6 +2735,8 @@
     document.getElementById('country2Currency').value = state.countryConfig.country2.currency;
     document.getElementById('country1HeadingLabel').textContent = state.countryConfig.country1.name;
     document.getElementById('country2HeadingLabel').textContent = state.countryConfig.country2.name;
+    const hOptUAE = document.getElementById('healthClimateCountryOptUAE'); if(hOptUAE) hOptUAE.textContent = state.countryConfig.country1.name + ' (Resident)';
+    const hOptIndia = document.getElementById('healthClimateCountryOptIndia'); if(hOptIndia) hOptIndia.textContent = state.countryConfig.country2.name + ' (Home)';
     document.getElementById('remitToCountryLabel').textContent = state.countryConfig.country2.name;
     document.getElementById('remitToCountryLabel2').textContent = state.countryConfig.country2.name;
     document.getElementById('homeCountryEnabledToggle').checked = state.countryConfig.homeCountryEnabled;
@@ -3322,6 +3403,189 @@
       });
     });
     if(changed){ save(); renderChores(); }
+  }
+
+  // ==== HEALTH ====================================================
+  // General wellness planning: BMI/BMR/TDEE, climate-adjusted hydration and
+  // diet/lifestyle guidance, a weight tracker, and a daily water tracker.
+  // Educational content only — not medical advice.
+  function ensureHealthData(){
+    if(!currentData().health){
+      currentData().health = { age: null, gender: 'male', height: null, weight: null, activity: '1.375', climateCountry: 'UAE', weightLog: [], waterLog: {} };
+    }
+    if(!currentData().health.weightLog) currentData().health.weightLog = [];
+    if(!currentData().health.waterLog) currentData().health.waterLog = {};
+    return currentData().health;
+  }
+  function renderHealthProfileForm(){
+    const h = ensureHealthData();
+    const ageEl = document.getElementById('healthAge'); if(ageEl && document.activeElement !== ageEl) ageEl.value = h.age || '';
+    const genderEl = document.getElementById('healthGender'); if(genderEl) genderEl.value = h.gender || 'male';
+    const heightEl = document.getElementById('healthHeight'); if(heightEl && document.activeElement !== heightEl) heightEl.value = h.height || '';
+    const weightEl = document.getElementById('healthWeight'); if(weightEl && document.activeElement !== weightEl) weightEl.value = h.weight || '';
+    const activityEl = document.getElementById('healthActivity'); if(activityEl) activityEl.value = h.activity || '1.375';
+    const climateEl = document.getElementById('healthClimateCountry'); if(climateEl) climateEl.value = h.climateCountry || 'UAE';
+  }
+  function healthMetrics(h){
+    const age = Number(h.age), heightCm = Number(h.height), weightKg = Number(h.weight);
+    if(!age || !heightCm || !weightKg) return null;
+    const heightM = heightCm / 100;
+    const bmi = weightKg / (heightM * heightM);
+    let bmiCategory, bmiColor;
+    if(bmi < 18.5){ bmiCategory = 'Underweight'; bmiColor = 'var(--amber)'; }
+    else if(bmi < 25){ bmiCategory = 'Normal range'; bmiColor = 'var(--teal-dark)'; }
+    else if(bmi < 30){ bmiCategory = 'Overweight'; bmiColor = 'var(--amber)'; }
+    else { bmiCategory = 'Obese range'; bmiColor = 'var(--coral)'; }
+    let bmr;
+    if(h.gender === 'male') bmr = 10*weightKg + 6.25*heightCm - 5*age + 5;
+    else if(h.gender === 'female') bmr = 10*weightKg + 6.25*heightCm - 5*age - 161;
+    else bmr = 10*weightKg + 6.25*heightCm - 5*age - 78;
+    const activityMult = parseFloat(h.activity) || 1.375;
+    const tdee = bmr * activityMult;
+    let waterMl = weightKg * 35;
+    if(h.climateCountry === 'UAE') waterMl += 750; // hot arid climate adjustment
+    if(activityMult >= 1.55) waterMl += 500; // active/exercise adjustment
+    return { bmi, bmiCategory, bmiColor, bmr, tdee, waterMl, activityMult };
+  }
+  function renderHealthMetrics(){
+    const box = document.getElementById('healthMetrics');
+    if(!box) return;
+    const h = ensureHealthData();
+    const m = healthMetrics(h);
+    if(!m){ box.innerHTML = `<div class="empty">Fill in age, height, and weight above, then save to see your numbers.</div>`; return; }
+    box.innerHTML = `
+      <div class="section-title" style="margin-top:0;">Your numbers</div>
+      <div class="breakdown-row"><span class="label">BMI</span><span><strong style="color:${m.bmiColor};">${m.bmi.toFixed(1)} — ${m.bmiCategory}</strong></span></div>
+      <div class="breakdown-row"><span class="label">Resting energy use (BMR)</span><span>${Math.round(m.bmr)} kcal/day</span></div>
+      <div class="breakdown-row"><span class="label">Estimated daily needs (TDEE)</span><span><strong>${Math.round(m.tdee)} kcal/day</strong></span></div>
+      <div class="breakdown-row"><span class="label">Suggested water intake</span><span><strong>${(m.waterMl/1000).toFixed(1)} L/day</strong></span></div>
+      <div style="font-size:10.5px;color:var(--ink-soft);margin-top:6px;">Estimates from standard formulas (Mifflin-St Jeor for BMR) — actual needs vary by body composition, health conditions, and pregnancy/breastfeeding status. Not a substitute for professional advice.</div>
+    `;
+    renderHealthDietPlan(h, m);
+  }
+  const HEALTH_CLIMATE_PROFILES = {
+    UAE: {
+      label: 'hot, arid desert climate',
+      tips: [
+        'Hydration matters more here than almost anywhere else — spread water intake through the day rather than drinking it all at once, and add a pinch of salt or an electrolyte drink after heavy sweating (outdoor walks, workouts, or Ramadan fasting hours).',
+        'Favor lighter, water-rich meals in the hottest part of the day — salads, fruit, yogurt-based dishes — and save heavier, protein-dense meals for evening when it\'s cooler and you\'ll digest more comfortably.',
+        'Time outdoor exercise for early morning (before ~8am) or after sunset — midday heat (11am–4pm) raises dehydration and heat-exhaustion risk significantly, especially May–September.',
+        'Limit caffeine and very sugary drinks on hot days — both increase fluid loss. Coconut water, buttermilk (chaas), or diluted fruit juice are good hydrating alternatives.',
+        'Get some sun-safe outdoor time (early morning) for natural vitamin D, since long hours in air-conditioned spaces can quietly lead to deficiency despite the sunny climate.'
+      ]
+    },
+    India: {
+      label: 'warm, humid/monsoon-influenced climate',
+      tips: [
+        'Humidity makes sweat evaporate less efficiently, so you can be dehydrated without feeling as thirsty as you should — keep water intake steady through the day rather than relying on thirst alone.',
+        'During monsoon season, prioritize freshly cooked, well-cooked food over raw salads/street food, since humidity increases bacterial growth risk — this protects digestion more than it restricts variety.',
+        'Exercise in the cooler parts of the day (early morning or evening) and prioritize breathable, moisture-wicking clothing given the humidity.',
+        'Traditional diet staples (dal, seasonal vegetables, curd/yogurt, whole grains like millets) are naturally well-suited to the climate — yogurt and buttermilk in particular help with digestion in humid heat.',
+        'Boost immune-supporting foods (citrus fruits, turmeric, ginger) especially around monsoon season when seasonal illnesses are more common.'
+      ]
+    }
+  };
+  function renderHealthDietPlan(h, m){
+    const box = document.getElementById('healthDietPlan');
+    if(!box) return;
+    const countryName = h.climateCountry === 'UAE' ? state.countryConfig.country1.name : state.countryConfig.country2.name;
+    const profile = HEALTH_CLIMATE_PROFILES[h.climateCountry] || HEALTH_CLIMATE_PROFILES.UAE;
+    const age = Number(h.age);
+    const ageTips = [];
+    if(age){
+      if(age < 18) ageTips.push('For under-18s, energy and nutrient needs are growth-driven and change fast — these general numbers are a poor fit; a pediatrician or pediatric dietitian is the right call.');
+      else if(age >= 50) ageTips.push('Past 50, protein and calcium/vitamin D intake become more important for maintaining muscle and bone density — lean protein at each meal and dairy or fortified alternatives are worth prioritizing.');
+      else if(age >= 30) ageTips.push('Metabolism gradually slows through your 30s and 40s — strength training (even 2x/week) helps preserve muscle mass, which keeps resting calorie burn higher.');
+    }
+    const macroNote = m ? `Around ${Math.round(m.tdee)} kcal/day would maintain your current weight at this activity level — reduce by roughly 300–500 kcal/day for gradual, sustainable weight loss, or add the same for gradual gain.` : '';
+    box.innerHTML = `
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Based on ${escapeHtml(countryName)}'s ${profile.label}${age ? ', and your age (' + age + ')' : ''}:</div>
+      <ul style="margin:0 0 10px 18px;padding:0;font-size:12.5px;line-height:1.7;">
+        ${profile.tips.map(t => `<li>${t}</li>`).join('')}
+        ${ageTips.map(t => `<li>${t}</li>`).join('')}
+      </ul>
+      ${macroNote ? `<div style="font-size:12px;background:var(--paper-deep);padding:8px 10px;border-radius:8px;">${macroNote}</div>` : ''}
+      <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">General wellness guidance, not a personalized medical or dietetic prescription.</div>
+    `;
+  }
+  function renderHealthWeightTracker(){
+    const list = document.getElementById('healthWeightList');
+    if(!list) return;
+    const h = ensureHealthData();
+    const dateEl = document.getElementById('healthWeightDate');
+    if(dateEl && !dateEl.value) dateEl.value = todayStr();
+    const entries = [...h.weightLog].sort((a,b) => b.date.localeCompare(a.date));
+    if(!entries.length){ list.innerHTML = '<li class="empty">No weight entries yet.</li>'; return; }
+    list.innerHTML = entries.map((e, idx) => {
+      const prev = entries[idx + 1];
+      const delta = prev ? (e.weight - prev.weight) : null;
+      const deltaStr = delta == null ? '' : ` <span style="color:${delta > 0 ? 'var(--coral)' : (delta < 0 ? 'var(--teal-dark)' : 'var(--ink-soft)')};font-size:11px;">(${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg)</span>`;
+      return `
+        <li>
+          <div class="item-text">${escapeHtml(e.date)}${deltaStr}</div>
+          <div class="tx-amount">${e.weight} kg</div>
+          <button class="del-btn" data-id="${e.id}" aria-label="Delete entry">×</button>
+        </li>
+      `;
+    }).join('');
+    list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
+      h.weightLog = h.weightLog.filter(x => x.id !== el.dataset.id);
+      save(); renderHealthWeightTracker();
+    }));
+  }
+  function renderHealthWaterTracker(){
+    const box = document.getElementById('healthWaterToday');
+    if(!box) return;
+    const h = ensureHealthData();
+    const today = todayStr();
+    const glasses = h.waterLog[today] || 0;
+    const m = healthMetrics(h);
+    const targetGlasses = m ? Math.round(m.waterMl / 250) : 8;
+    const pct = Math.min(100, (glasses / targetGlasses) * 100);
+    box.innerHTML = `
+      <div class="breakdown-row"><span class="label">Today</span><span><strong>${glasses} / ${targetGlasses} glasses</strong></span></div>
+      <div class="catbudget-track"><div class="catbudget-fill ${pct >= 100 ? '' : (pct >= 60 ? '' : 'warn')}" style="width:${pct}%;"></div></div>
+    `;
+  }
+  document.getElementById('healthSaveProfile').addEventListener('click', () => {
+    const h = ensureHealthData();
+    h.age = parseFloat(document.getElementById('healthAge').value) || null;
+    h.gender = document.getElementById('healthGender').value;
+    h.height = parseFloat(document.getElementById('healthHeight').value) || null;
+    h.weight = parseFloat(document.getElementById('healthWeight').value) || null;
+    h.activity = document.getElementById('healthActivity').value;
+    h.climateCountry = document.getElementById('healthClimateCountry').value;
+    save();
+    renderHealthMetrics();
+    renderHealthWaterTracker();
+  });
+  document.getElementById('healthWeightAdd').addEventListener('click', () => {
+    const h = ensureHealthData();
+    const dateEl = document.getElementById('healthWeightDate');
+    const weightEl = document.getElementById('healthWeightEntry');
+    const w = parseFloat(weightEl.value);
+    if(!w) return;
+    h.weightLog.push({ id: uid(), date: dateEl.value || todayStr(), weight: w });
+    weightEl.value = '';
+    save(); renderHealthWeightTracker();
+  });
+  document.getElementById('healthWaterAddGlass').addEventListener('click', () => {
+    const h = ensureHealthData();
+    const today = todayStr();
+    h.waterLog[today] = (h.waterLog[today] || 0) + 1;
+    save(); renderHealthWaterTracker();
+  });
+  document.getElementById('healthWaterReset').addEventListener('click', () => {
+    const h = ensureHealthData();
+    h.waterLog[todayStr()] = 0;
+    save(); renderHealthWaterTracker();
+  });
+  function renderHealth(){
+    ensureHealthData();
+    renderHealthProfileForm();
+    renderHealthMetrics();
+    renderHealthWeightTracker();
+    renderHealthWaterTracker();
   }
 
   // ---- Groceries ----
@@ -8613,6 +8877,7 @@
     renderReport();
     renderUAE();
     renderIndia();
+    renderHealth();
     renderRequestsForUser();
     renderAdminRequests();
     renderViewAdminToggle();
