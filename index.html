@@ -496,6 +496,9 @@
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview">
       <div id="dailyBriefing" class="daily-briefing"></div>
+      <div id="notifyPromptBox" style="display:none;margin-bottom:14px;">
+        <button type="button" class="add-btn full-width" id="notifyEnableBtn">🔔 Enable notifications for bills, budget alerts & documents</button>
+      </div>
       <div id="voiceQuickAddBox" style="margin-bottom:14px;">
         <button type="button" class="add-btn full-width" id="voiceQuickAddBtn">🎤 Voice quick-add</button>
         <div id="voiceQuickAddStatus" style="font-size:11px;color:var(--ink-soft);margin-top:4px;display:none;"></div>
@@ -7104,8 +7107,8 @@
     const maxVal = Math.max(r.income, r.totalOutflow, 1);
     document.getElementById('barIncome').style.width = Math.min(100, (r.income/maxVal)*100) + '%';
     document.getElementById('barExpense').style.width = Math.min(100, (r.totalOutflow/maxVal)*100) + '%';
-    document.getElementById('barIncomeLabel').textContent = curFmt(r.income);
-    document.getElementById('barExpenseLabel').textContent = curFmt(r.totalOutflow);
+    document.getElementById('barIncomeLabel').innerHTML = maskedField('repBarIncome', rawValue(() => curFmt(r.income)));
+    document.getElementById('barExpenseLabel').innerHTML = maskedField('repBarExpense', rawValue(() => curFmt(r.totalOutflow)));
 
     const incDetail = document.getElementById('repIncomeDetail');
     incDetail.style.display = reportIncomeOpen ? '' : 'none';
@@ -9093,6 +9096,44 @@
 
   // ---- Overview alerts: bills due soon + monthly budget threshold ----
   // ---- Daily Briefing: one-glance summary of what needs attention today ----
+  // ---- Notification popups: native OS-level notifications for the same
+  // alerts already shown as in-app banners, via the Notification API + service
+  // worker (works even when the installed PWA is backgrounded on mobile).
+  // Free, no external push server — de-duplicated so each alert only fires
+  // once per day per household member's device. ----
+  function notifyPermissionSupported(){
+    return 'Notification' in window && 'serviceWorker' in navigator;
+  }
+  function updateNotifyPromptVisibility(){
+    const box = document.getElementById('notifyPromptBox');
+    if(!box) return;
+    if(!notifyPermissionSupported() || Notification.permission !== 'default'){ box.style.display = 'none'; return; }
+    box.style.display = '';
+  }
+  const notifyBtn = document.getElementById('notifyEnableBtn');
+  if(notifyBtn){
+    notifyBtn.addEventListener('click', async () => {
+      if(!notifyPermissionSupported()){ alert('Notifications aren\'t supported in this browser.'); return; }
+      const perm = await Notification.requestPermission();
+      updateNotifyPromptVisibility();
+      if(perm === 'granted') renderOverviewAlerts(); // fire immediately for anything already due
+    });
+  }
+  async function notifyForBanners(banners){
+    if(!notifyPermissionSupported() || Notification.permission !== 'granted') return;
+    const today = todayStr();
+    let reg;
+    try{ reg = await navigator.serviceWorker.ready; }catch(e){ return; }
+    banners.forEach(b => {
+      const flagKey = 'shb_notified_' + b.key + '_' + today;
+      if(localStorage.getItem(flagKey)) return;
+      localStorage.setItem(flagKey, '1');
+      try{
+        reg.showNotification(b.title, { body: b.body, icon: './icons/icon-192.png', badge: './icons/icon-192.png', tag: b.key });
+      }catch(e){ /* notification failed silently — in-app banner still shows */ }
+    });
+  }
+
   function renderDailyBriefing(){
     const box = document.getElementById('dailyBriefing');
     if(!box) return;
@@ -9156,7 +9197,7 @@
       const totalDue = dueSoon.reduce((s,c) => s + Number(c.amount), 0);
       const names = [...new Set(dueSoon.map(c => c.bank))].slice(0,3).join(', ');
       banners.push({
-        type: 'warn', emoji: '📅',
+        key: 'bills-due', type: 'warn', emoji: '📅',
         title: `${dueSoon.length} bill${dueSoon.length === 1 ? '' : 's'} due in the next 3 days`,
         body: `${names}${dueSoon.length > 3 ? ' and others' : ''} — totalling ${fmt(totalDue)}. Check the Cards tab for exact dates.`
       });
@@ -9172,9 +9213,9 @@
         const spend = r.totalOutflow;
         const pct = (spend / target) * 100;
         if(pct >= 100){
-          banners.push({ type: 'danger', emoji: '🚨', title: `Over your monthly budget target`, body: `You've spent ${fmt(spend)} of your ${fmt(target)} target this month (${Math.round(pct)}%). See Report → "Am I overspending?" for where to cut back.` });
+          banners.push({ key: 'budget-over', type: 'danger', emoji: '🚨', title: `Over your monthly budget target`, body: `You've spent ${fmt(spend)} of your ${fmt(target)} target this month (${Math.round(pct)}%). See Report → "Am I overspending?" for where to cut back.` });
         } else if(pct >= 80){
-          banners.push({ type: 'warn', emoji: '⚠️', title: `Approaching your monthly budget target`, body: `You've spent ${fmt(spend)} of your ${fmt(target)} target this month (${Math.round(pct)}%).` });
+          banners.push({ key: 'budget-warn', type: 'warn', emoji: '⚠️', title: `Approaching your monthly budget target`, body: `You've spent ${fmt(spend)} of your ${fmt(target)} target this month (${Math.round(pct)}%).` });
         }
       }
     }catch(e){ /* report data not ready yet (e.g. before first render) — skip silently */ }
@@ -9186,7 +9227,7 @@
       const worstDays = docVaultDaysLeft(expiringDocs[0].expiry);
       const names = expiringDocs.slice(0,3).map(d => d.name).join(', ');
       banners.push({
-        type: worstDays < 0 ? 'danger' : 'warn', emoji: worstDays < 0 ? '🚨' : '📄',
+        key: 'docs-expiring', type: worstDays < 0 ? 'danger' : 'warn', emoji: worstDays < 0 ? '🚨' : '📄',
         title: `${expiringDocs.length} document${expiringDocs.length === 1 ? '' : 's'} ${worstDays < 0 ? 'expired' : 'expiring soon'}`,
         body: `${names}${expiringDocs.length > 3 ? ' and others' : ''} — check "Important dates & documents" below.`
       });
@@ -9200,12 +9241,14 @@
         <span><strong>${escapeHtml(b.title)}</strong>${escapeHtml(b.body)}</span>
       </div>
     `).join('');
+    notifyForBanners(banners);
   }
 
   function renderOverview(){
     updateRequestsSectionVisibility();
     populateOverviewMonthOptions();
     renderDailyBriefing();
+    updateNotifyPromptVisibility();
     renderOverviewAlerts();
     renderActivityLog();
     renderDocumentVault();
