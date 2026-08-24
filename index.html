@@ -137,6 +137,11 @@
   .mval-inline{ display:inline-flex; align-items:center; gap:6px; }
   .mval-eye{ background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px; line-height:1; opacity:0.75; }
   .mval-eye:hover{ opacity:1; }
+  .daily-briefing{ background:linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%); color:#fff; border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; }
+  .daily-briefing h3{ margin:0 0 8px 0; font-family:'Fraunces', serif; font-weight:600; font-size:16px; }
+  .daily-briefing .db-row{ display:flex; align-items:flex-start; gap:8px; font-size:12.5px; padding:5px 0; border-top:1px solid rgba(255,255,255,0.18); }
+  .daily-briefing .db-row:first-of-type{ border-top:none; }
+  .daily-briefing .db-empty{ font-size:12px; opacity:0.85; }
   .catbudget-row{ margin-bottom:12px; }
   .catbudget-head{ display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; }
   .catbudget-track{ height:8px; border-radius:5px; background:var(--paper-deep); overflow:hidden; }
@@ -490,6 +495,11 @@
   <main>
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview">
+      <div id="dailyBriefing" class="daily-briefing"></div>
+      <div id="voiceQuickAddBox" style="margin-bottom:14px;">
+        <button type="button" class="add-btn full-width" id="voiceQuickAddBtn">🎤 Voice quick-add</button>
+        <div id="voiceQuickAddStatus" style="font-size:11px;color:var(--ink-soft);margin-top:4px;display:none;"></div>
+      </div>
       <div id="overviewAlerts" style="display:none;margin-bottom:14px;"></div>
       <div id="viewingAsBox" style="display:none; margin-bottom:14px;">
         <label class="field-label">Viewing data for</label>
@@ -814,6 +824,71 @@
             <div class="accordion-body">
               <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">A log of recent additions, edits, and deletions to your transactions and card expenses.</div>
               <div id="activityLogList"></div>
+            </div>
+          </div>
+
+          <div class="accordion" data-key="document-vault">
+            <button type="button" class="accordion-header"><span>📄 Important dates & documents</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion-body">
+              <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Track expiry dates for passports, visas, insurance, warranties, and the like — with an advance reminder banner as they get close.</div>
+              <div class="form-grid" style="margin-bottom:8px;">
+                <div>
+                  <label class="field-label">Name</label>
+                  <input type="text" id="docVaultName" placeholder="e.g. Passport">
+                </div>
+                <div>
+                  <label class="field-label">Category</label>
+                  <select id="docVaultCategory">
+                    <option value="Identity">Identity (passport, ID, visa)</option>
+                    <option value="Insurance">Insurance</option>
+                    <option value="Vehicle">Vehicle</option>
+                    <option value="Warranty">Warranty</option>
+                    <option value="Subscription">Subscription/License</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label">Expiry date</label>
+                  <input type="date" id="docVaultExpiry">
+                </div>
+                <div class="full">
+                  <label class="field-label">Notes (optional)</label>
+                  <input type="text" id="docVaultNotes" placeholder="e.g. Renew at GDRFA">
+                </div>
+              </div>
+              <button type="button" class="add-btn full-width" id="docVaultAdd">Add</button>
+              <ul class="item-list" id="docVaultList" style="margin-top:10px;"></ul>
+            </div>
+          </div>
+
+          <div class="accordion" data-key="savings-goals">
+            <button type="button" class="accordion-header"><span>🎯 Savings goals</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion-body">
+              <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a target and log contributions toward it as you make them — progress is tracked from what you've actually put in, not guessed from your balance.</div>
+              <div class="form-grid" style="margin-bottom:8px;">
+                <div class="full">
+                  <label class="field-label">Goal name</label>
+                  <input type="text" id="goalName" placeholder="e.g. New car">
+                </div>
+                <div>
+                  <label class="field-label">Target amount</label>
+                  <input type="number" id="goalTarget" placeholder="e.g. 50000" step="1">
+                </div>
+                <div>
+                  <label class="field-label">Currency</label>
+                  <select id="goalCurrency">
+                    <option value="AED">AED</option>
+                    <option value="INR">INR</option>
+                    <option value="USD">USD</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label">Target date (optional)</label>
+                  <input type="date" id="goalTargetDate">
+                </div>
+              </div>
+              <button type="button" class="add-btn full-width" id="goalAdd">Add goal</button>
+              <div id="goalsList" style="margin-top:10px;"></div>
             </div>
           </div>
         </div>
@@ -2076,6 +2151,11 @@
           </select>
           <div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">Diet timing, hydration targets, and exercise suggestions below adjust to this climate.</div>
         </div>
+        <div class="full">
+          <label class="field-label">City (optional — for live weather)</label>
+          <input type="text" id="healthCity" placeholder="e.g. Dubai or Chennai">
+          <div style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;">If set, today's actual temperature adjusts the exercise-timing suggestion below instead of a general climate assumption.</div>
+        </div>
       </div>
       <button type="button" class="add-btn full-width" id="healthSaveProfile">Save profile & calculate</button>
 
@@ -2381,6 +2461,8 @@
       bankSettings: {},
       bankSummaries: [],
       activityLog: [],
+      documents: [],
+      goals: [],
       health: { age: null, gender: 'male', height: null, weight: null, activity: '1.375', climateCountry: 'UAE', weightLog: [], waterLog: {} },
       devices: [
         {id:'d1', name:'Living Room Lights', room:'Living Room', on:false, country:'resident'},
@@ -2427,6 +2509,211 @@
       return `<div class="activity-row"><span class="activity-dot"></span><div><div>${escapeHtml(e.action)}${e.detail ? ' — ' + escapeHtml(e.detail) : ''}</div><div style="font-size:10.5px;color:var(--ink-soft);">${escapeHtml(e.by)} · ${escapeHtml(when)}</div></div></div>`;
     }).join('');
   }
+
+  // ---- Document Vault: expiry-date tracking for passports, visas, insurance,
+  // warranties, etc., feeding into the Overview alert banners as they get close. ----
+  function docVaultDaysLeft(expiry){
+    const now = new Date(todayStr() + 'T00:00:00');
+    const exp = new Date(expiry + 'T00:00:00');
+    return Math.round((exp - now) / 86400000);
+  }
+  function renderDocumentVault(){
+    const list = document.getElementById('docVaultList');
+    if(!list) return;
+    if(!currentData().documents) currentData().documents = [];
+    const docs = [...currentData().documents].sort((a,b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'));
+    if(!docs.length){ list.innerHTML = '<li class="empty">No documents tracked yet.</li>'; return; }
+    list.innerHTML = docs.map(d => {
+      const days = d.expiry ? docVaultDaysLeft(d.expiry) : null;
+      let statusHtml = '';
+      if(days !== null){
+        if(days < 0) statusHtml = `<div class="item-meta tag-overdue">Expired ${Math.abs(days)}d ago</div>`;
+        else if(days <= 30) statusHtml = `<div class="item-meta tag-overdue">${days}d left</div>`;
+        else if(days <= 90) statusHtml = `<div class="item-meta tag-soon">${days}d left</div>`;
+        else statusHtml = `<div class="item-meta">${days}d left</div>`;
+      }
+      return `
+        <li>
+          <div class="item-text">${escapeHtml(d.name)} <div class="item-meta">${escapeHtml(d.category)}</div>${statusHtml}<div style="font-size:10.5px;color:var(--ink-soft);">${d.expiry ? 'Expires ' + escapeHtml(d.expiry) : 'No expiry set'}${d.notes ? ' · ' + escapeHtml(d.notes) : ''}</div></div>
+          <button class="del-btn" data-id="${d.id}" aria-label="Delete document">×</button>
+        </li>
+      `;
+    }).join('');
+    list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
+      currentData().documents = currentData().documents.filter(x => x.id !== el.dataset.id);
+      save(); renderDocumentVault(); renderOverviewAlerts();
+    }));
+  }
+  document.getElementById('docVaultAdd').addEventListener('click', () => {
+    const nameEl = document.getElementById('docVaultName');
+    const name = nameEl.value.trim();
+    if(!name) return;
+    if(!currentData().documents) currentData().documents = [];
+    currentData().documents.push({
+      id: uid(),
+      name,
+      category: document.getElementById('docVaultCategory').value,
+      expiry: document.getElementById('docVaultExpiry').value || '',
+      notes: document.getElementById('docVaultNotes').value.trim()
+    });
+    nameEl.value = '';
+    document.getElementById('docVaultExpiry').value = '';
+    document.getElementById('docVaultNotes').value = '';
+    save(); renderDocumentVault(); renderOverviewAlerts();
+  });
+
+  // ---- Savings goals: named targets with logged contributions. Progress comes
+  // only from contributions you've actually recorded, never guessed from balance. ----
+  function renderGoals(){
+    const box = document.getElementById('goalsList');
+    if(!box) return;
+    if(!currentData().goals) currentData().goals = [];
+    const goals = currentData().goals;
+    if(!goals.length){ box.innerHTML = '<div class="empty">No savings goals yet.</div>'; return; }
+    box.innerHTML = goals.map(g => {
+      const saved = (g.contributions || []).reduce((s,c) => s + Number(c.amount), 0);
+      const pct = g.target > 0 ? Math.min(100, (saved / g.target) * 100) : 0;
+      const sym = CURRENCIES[g.currency] || g.currency;
+      const fmtG = (n) => (sym.length > 1 ? sym + ' ' : sym) + Number(n).toLocaleString(undefined, {maximumFractionDigits:0});
+      const contribRows = (g.contributions || []).slice().reverse().slice(0,5).map(c => `
+        <div class="breakdown-row" style="font-size:11px;"><span class="label">${escapeHtml(c.date)}</span><span>${fmtG(c.amount)}<button type="button" class="del-btn goal-contrib-del" data-goal="${g.id}" data-contrib="${c.id}" style="margin-left:6px;">×</button></span></div>
+      `).join('');
+      return `
+        <div class="catbudget-row" style="border:1px solid var(--line);border-radius:var(--radius);padding:10px;margin-bottom:10px;">
+          <div class="catbudget-head"><span><strong>${escapeHtml(g.name)}</strong>${g.targetDate ? ` <span style="color:var(--ink-soft);font-size:10.5px;">by ${escapeHtml(g.targetDate)}</span>` : ''}</span><button type="button" class="del-btn goal-del" data-id="${g.id}">×</button></div>
+          <div class="catbudget-track" style="margin-top:6px;"><div class="catbudget-fill" style="width:${pct}%;"></div></div>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">${fmtG(saved)} of ${fmtG(g.target)} (${pct.toFixed(0)}%)</div>
+          <div class="add-row" style="margin-top:8px;">
+            <input type="number" class="goal-contrib-amount" placeholder="Add contribution" step="1" data-goal="${g.id}" style="flex:1;">
+            <button type="button" class="add-btn goal-contrib-add" data-goal="${g.id}">Add</button>
+          </div>
+          ${contribRows ? `<div style="margin-top:6px;">${contribRows}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+    box.querySelectorAll('.goal-del').forEach(el => el.addEventListener('click', () => {
+      currentData().goals = currentData().goals.filter(x => x.id !== el.dataset.id);
+      save(); renderGoals();
+    }));
+    box.querySelectorAll('.goal-contrib-add').forEach(el => el.addEventListener('click', () => {
+      const goalId = el.dataset.goal;
+      const input = box.querySelector(`.goal-contrib-amount[data-goal="${goalId}"]`);
+      const amount = parseFloat(input.value);
+      if(!amount) return;
+      const g = currentData().goals.find(x => x.id === goalId);
+      if(!g) return;
+      if(!g.contributions) g.contributions = [];
+      g.contributions.push({ id: uid(), amount, date: todayStr() });
+      save(); renderGoals();
+    }));
+    box.querySelectorAll('.goal-contrib-del').forEach(el => el.addEventListener('click', () => {
+      const g = currentData().goals.find(x => x.id === el.dataset.goal);
+      if(!g) return;
+      g.contributions = (g.contributions || []).filter(c => c.id !== el.dataset.contrib);
+      save(); renderGoals();
+    }));
+  }
+  document.getElementById('goalAdd').addEventListener('click', () => {
+    const nameEl = document.getElementById('goalName');
+    const name = nameEl.value.trim();
+    const target = parseFloat(document.getElementById('goalTarget').value);
+    if(!name || !target) return;
+    if(!currentData().goals) currentData().goals = [];
+    currentData().goals.push({
+      id: uid(), name, target,
+      currency: document.getElementById('goalCurrency').value,
+      targetDate: document.getElementById('goalTargetDate').value || '',
+      contributions: []
+    });
+    nameEl.value = '';
+    document.getElementById('goalTarget').value = '';
+    document.getElementById('goalTargetDate').value = '';
+    save(); renderGoals();
+  });
+
+  // ---- Voice quick-add: browser-native speech recognition (free, no API key).
+  // Parses a couple of common patterns and either adds a grocery item directly
+  // or pre-fills the Budget form for you to review before submitting. ----
+  function parseVoiceCommand(text){
+    const t = text.toLowerCase().trim();
+    let m = t.match(/add (.+?) to (?:the )?(?:grocery|groceries|shopping)(?:\s*list)?/);
+    if(m) return { type: 'grocery', item: m[1].trim() };
+    m = t.match(/^buy (.+)/);
+    if(m && !/\d/.test(m[1])) return { type: 'grocery', item: m[1].trim() };
+
+    let amount = null, label = null;
+    m = t.match(/(?:add|log|spent|paid)\s+([a-z\s]+?)\s+(?:for\s+)?(\d+(?:\.\d+)?)/);
+    if(m){ label = m[1].trim(); amount = parseFloat(m[2]); }
+    if(!amount){
+      m = t.match(/(?:spent|paid)\s+(\d+(?:\.\d+)?)\s+(?:on|for)\s+([a-z\s]+)/);
+      if(m){ amount = parseFloat(m[1]); label = m[2].trim(); }
+    }
+    if(amount && label){
+      const countryKey = /india|home country/.test(t) ? 'India' : 'UAE';
+      const cleanLabel = label.replace(/\b(rupees|dirhams|aed|inr|rs|dollars)\b/g, '').trim();
+      return { type: 'expense', label: cleanLabel || 'Expense', amount, countryKey };
+    }
+    return { type: 'unknown', text };
+  }
+  function handleVoiceCommand(cmd){
+    const statusEl = document.getElementById('voiceQuickAddStatus');
+    statusEl.style.display = '';
+    if(cmd.type === 'grocery'){
+      const label = cmd.item.charAt(0).toUpperCase() + cmd.item.slice(1);
+      currentData().groceries.push({ id: uid(), text: label, category: 'Pantry', done: false });
+      save(); renderGroceries(); renderOverview();
+      statusEl.textContent = `✓ Added "${label}" to groceries.`;
+    } else if(cmd.type === 'expense'){
+      const prefix = cmd.countryKey === 'UAE' ? 'uae' : 'india';
+      switchToPanel(prefix);
+      setTimeout(() => {
+        const labelEl = document.getElementById(prefix + 'TxLabel');
+        const amountEl = document.getElementById(prefix + 'TxAmount');
+        if(labelEl) labelEl.value = cmd.label.charAt(0).toUpperCase() + cmd.label.slice(1);
+        if(amountEl) amountEl.value = cmd.amount;
+        setTxLabelValue(prefix, labelEl ? labelEl.value : cmd.label);
+        if(labelEl) labelEl.scrollIntoView({behavior:'smooth', block:'center'});
+      }, 150);
+      statusEl.textContent = `✓ Filled in "${cmd.label}" — ${cmd.amount} in ${cmd.countryKey === 'UAE' ? 'Resident' : 'Home'} Country Budget. Review and tap "Add transaction".`;
+    } else {
+      statusEl.textContent = `Didn't catch a grocery item or expense in "${cmd.text}" — try "add milk to groceries" or "spent 20 on lunch".`;
+    }
+  }
+  (function setupVoiceQuickAdd(){
+    const btn = document.getElementById('voiceQuickAddBtn');
+    const statusEl = document.getElementById('voiceQuickAddStatus');
+    if(!btn) return;
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRec){
+      btn.style.display = 'none';
+      return;
+    }
+    const recognition = new SpeechRec();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    let listening = false;
+    btn.addEventListener('click', () => {
+      if(listening) return;
+      listening = true;
+      btn.textContent = '🎙️ Listening…';
+      statusEl.style.display = '';
+      statusEl.textContent = 'Say something like "add milk to groceries" or "spent 20 on lunch"…';
+      try{ recognition.start(); }catch(e){ listening = false; btn.textContent = '🎤 Voice quick-add'; }
+    });
+    recognition.addEventListener('result', (e) => {
+      const transcript = e.results[0][0].transcript;
+      handleVoiceCommand(parseVoiceCommand(transcript));
+    });
+    recognition.addEventListener('error', () => {
+      statusEl.style.display = '';
+      statusEl.textContent = 'Couldn\'t hear that — check microphone permission and try again.';
+    });
+    recognition.addEventListener('end', () => {
+      listening = false;
+      btn.textContent = '🎤 Voice quick-add';
+    });
+  })();
   const SAVINGS_QUOTES = [
     'A penny saved is a penny earned.',
     'Do not save what is left after spending; spend what is left after saving.',
@@ -3236,16 +3523,19 @@
     save(); renderAll();
   });
 
+  function switchToPanel(panelName){
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    const btn = document.querySelector(`.tab[data-panel="${panelName}"]`);
+    if(btn) btn.classList.add('active');
+    const panel = document.getElementById('panel-' + panelName);
+    if(panel) panel.classList.add('active');
+    if(panelName === 'report') renderReport();
+  }
   document.getElementById('tabs').addEventListener('click', (e) => {
     const btn = e.target.closest('.tab');
     if(!btn) return;
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.panel).classList.add('active');
-    if(btn.dataset.panel === 'report'){
-      renderReport();
-    }
+    switchToPanel(btn.dataset.panel);
   });
 
   // ---- Sub-tabs within Resident/Home Country panels ----
@@ -3425,6 +3715,7 @@
     const weightEl = document.getElementById('healthWeight'); if(weightEl && document.activeElement !== weightEl) weightEl.value = h.weight || '';
     const activityEl = document.getElementById('healthActivity'); if(activityEl) activityEl.value = h.activity || '1.375';
     const climateEl = document.getElementById('healthClimateCountry'); if(climateEl) climateEl.value = h.climateCountry || 'UAE';
+    const cityEl = document.getElementById('healthCity'); if(cityEl && document.activeElement !== cityEl) cityEl.value = h.city || '';
   }
   function healthMetrics(h){
     const age = Number(h.age), heightCm = Number(h.height), weightKg = Number(h.weight);
@@ -3499,6 +3790,7 @@
     }
     const macroNote = m ? `Around ${Math.round(m.tdee)} kcal/day would maintain your current weight at this activity level — reduce by roughly 300–500 kcal/day for gradual, sustainable weight loss, or add the same for gradual gain.` : '';
     box.innerHTML = `
+      <div id="healthLiveWeather" style="font-size:12px;margin-bottom:8px;"></div>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Based on ${escapeHtml(countryName)}'s ${profile.label}${age ? ', and your age (' + age + ')' : ''}:</div>
       <ul style="margin:0 0 10px 18px;padding:0;font-size:12.5px;line-height:1.7;">
         ${profile.tips.map(t => `<li>${t}</li>`).join('')}
@@ -3507,6 +3799,39 @@
       ${macroNote ? `<div style="font-size:12px;background:var(--paper-deep);padding:8px 10px;border-radius:8px;">${macroNote}</div>` : ''}
       <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">General wellness guidance, not a personalized medical or dietetic prescription.</div>
     `;
+    if(h.city) fetchHealthLiveWeather(h.city);
+  }
+  const healthWeatherCache = {};
+  async function fetchHealthLiveWeather(city){
+    const weatherBox = document.getElementById('healthLiveWeather');
+    if(!weatherBox) return;
+    weatherBox.innerHTML = `<div style="color:var(--ink-soft);">Checking today's weather in ${escapeHtml(city)}…</div>`;
+    try{
+      const cacheKey = city.toLowerCase();
+      let coords = healthWeatherCache[cacheKey];
+      if(!coords){
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
+        const geoData = await geoRes.json();
+        if(!geoData.results || !geoData.results.length){
+          weatherBox.innerHTML = `<div style="color:var(--ink-soft);">Couldn't find "${escapeHtml(city)}" — check the spelling, or leave it blank for general climate tips.</div>`;
+          return;
+        }
+        coords = { lat: geoData.results[0].latitude, lon: geoData.results[0].longitude, name: geoData.results[0].name };
+        healthWeatherCache[cacheKey] = coords;
+      }
+      const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current_weather=true`);
+      const wData = await wRes.json();
+      const cw = wData.current_weather;
+      if(!cw){ weatherBox.innerHTML = ''; return; }
+      const temp = Math.round(cw.temperature);
+      let exerciseNote;
+      if(temp >= 35) exerciseNote = 'Very hot right now — skip outdoor exercise entirely if you can, or keep it brief and early morning/after sunset with extra water.';
+      else if(temp >= 28) exerciseNote = 'Warm out — outdoor exercise is fine in early morning or evening, but midday is best avoided.';
+      else exerciseNote = 'Comfortable temperature — a good window for outdoor activity pretty much any time of day.';
+      weatherBox.innerHTML = `<div style="background:var(--paper-deep);padding:8px 10px;border-radius:8px;">🌡️ ${escapeHtml(coords.name)} right now: <strong>${temp}°C</strong>. ${exerciseNote}</div>`;
+    }catch(e){
+      weatherBox.innerHTML = `<div style="color:var(--ink-soft);">Couldn't fetch live weather right now — showing general climate guidance instead.</div>`;
+    }
   }
   function renderHealthWeightTracker(){
     const list = document.getElementById('healthWeightList');
@@ -3555,6 +3880,7 @@
     h.weight = parseFloat(document.getElementById('healthWeight').value) || null;
     h.activity = document.getElementById('healthActivity').value;
     h.climateCountry = document.getElementById('healthClimateCountry').value;
+    h.city = document.getElementById('healthCity').value.trim();
     save();
     renderHealthMetrics();
     renderHealthWaterTracker();
@@ -8766,6 +9092,57 @@
   }
 
   // ---- Overview alerts: bills due soon + monthly budget threshold ----
+  // ---- Daily Briefing: one-glance summary of what needs attention today ----
+  function renderDailyBriefing(){
+    const box = document.getElementById('dailyBriefing');
+    if(!box) return;
+    const rows = [];
+
+    let openChores = 0;
+    const choreNames = [];
+    ['UAE','India'].forEach(countryKey => {
+      (currentData().countries[countryKey].chores || []).filter(c => !c.done).forEach(c => { openChores++; if(choreNames.length < 3) choreNames.push(c.text); });
+    });
+    if(openChores > 0){
+      rows.push(`<div class="db-row">🧹 <span><strong>${openChores}</strong> chore${openChores === 1 ? '' : 's'} open — ${escapeHtml(choreNames.join(', '))}${openChores > choreNames.length ? '…' : ''}</span></div>`);
+    }
+
+    const soonCutoff = new Date(); soonCutoff.setHours(0,0,0,0); soonCutoff.setDate(soonCutoff.getDate() + 3);
+    const soonCutoffStr = soonCutoff.toISOString().slice(0,10);
+    const dueSoon = (currentData().cards || []).filter(c => c.dueDate && c.dueDate >= todayStr() && c.dueDate <= soonCutoffStr);
+    if(dueSoon.length){
+      const names = [...new Set(dueSoon.map(c => c.bank))].slice(0,3).join(', ');
+      rows.push(`<div class="db-row">📅 <span><strong>${dueSoon.length}</strong> bill${dueSoon.length === 1 ? '' : 's'} due soon — ${escapeHtml(names)}</span></div>`);
+    }
+
+    const todayStrVal = todayStr();
+    let recurringToday = 0;
+    ['UAE','India'].forEach(countryKey => {
+      (currentData().countries[countryKey].transactions || []).forEach(t => { if(t.recurring && t.date === todayStrVal) recurringToday++; });
+    });
+    if(recurringToday > 0){
+      rows.push(`<div class="db-row">🔁 <span><strong>${recurringToday}</strong> recurring transaction${recurringToday === 1 ? '' : 's'} logged today</span></div>`);
+    }
+
+    const groceriesOpen = (currentData().groceries || []).filter(g => !g.done).length;
+    if(groceriesOpen > 0){
+      rows.push(`<div class="db-row">🛒 <span><strong>${groceriesOpen}</strong> item${groceriesOpen === 1 ? '' : 's'} left on the grocery list</span></div>`);
+    }
+
+    const h = ensureHealthData();
+    const glasses = h.waterLog[todayStrVal] || 0;
+    const m = healthMetrics(h);
+    const targetGlasses = m ? Math.round(m.waterMl / 250) : null;
+    if(targetGlasses){
+      const shortBy = Math.max(0, targetGlasses - glasses);
+      if(shortBy > 0) rows.push(`<div class="db-row">💧 <span>${shortBy} more glass${shortBy === 1 ? '' : 'es'} of water to hit today's target</span></div>`);
+      else rows.push(`<div class="db-row">💧 <span>Water target met for today — nice.</span></div>`);
+    }
+
+    const dateLabel = new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+    box.innerHTML = `<h3>🌅 Today — ${escapeHtml(dateLabel)}</h3>` + (rows.length ? rows.join('') : `<div class="db-empty">Nothing pressing today — you're all caught up.</div>`);
+  }
+
   function renderOverviewAlerts(){
     const box = document.getElementById('overviewAlerts');
     if(!box) return;
@@ -8802,6 +9179,19 @@
       }
     }catch(e){ /* report data not ready yet (e.g. before first render) — skip silently */ }
 
+    // Important documents expiring within 30 days (or already expired).
+    const expiringDocs = (currentData().documents || []).filter(d => d.expiry && docVaultDaysLeft(d.expiry) <= 30);
+    if(expiringDocs.length){
+      expiringDocs.sort((a,b) => docVaultDaysLeft(a.expiry) - docVaultDaysLeft(b.expiry));
+      const worstDays = docVaultDaysLeft(expiringDocs[0].expiry);
+      const names = expiringDocs.slice(0,3).map(d => d.name).join(', ');
+      banners.push({
+        type: worstDays < 0 ? 'danger' : 'warn', emoji: worstDays < 0 ? '🚨' : '📄',
+        title: `${expiringDocs.length} document${expiringDocs.length === 1 ? '' : 's'} ${worstDays < 0 ? 'expired' : 'expiring soon'}`,
+        body: `${names}${expiringDocs.length > 3 ? ' and others' : ''} — check "Important dates & documents" below.`
+      });
+    }
+
     if(banners.length === 0){ box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = '';
     box.innerHTML = banners.map(b => `
@@ -8815,8 +9205,11 @@
   function renderOverview(){
     updateRequestsSectionVisibility();
     populateOverviewMonthOptions();
+    renderDailyBriefing();
     renderOverviewAlerts();
     renderActivityLog();
+    renderDocumentVault();
+    renderGoals();
     const monthFilter = overviewMonthFilter();
     const periodLabelEl = document.getElementById('statBudgetPeriodLabel');
     if(periodLabelEl) periodLabelEl.textContent = monthFilter ? `balance — ${monthLabel(monthFilter)}` : 'balance — all time';
