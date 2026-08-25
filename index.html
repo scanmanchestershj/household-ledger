@@ -1638,8 +1638,12 @@
             <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">I can't recommend which stocks to buy — no live feed here can verify that reliably, and it'd go stale immediately. What this does instead: enter the fundamentals for any Dubai (DFM) or Abu Dhabi (ADX) stock you're evaluating, and it applies Benjamin Graham's valuation formula plus a few sanity-check ratios, so <em>you</em> can screen it consistently.</div>
             <div class="form-grid" style="margin-bottom:8px;">
               <div class="full">
-                <label class="field-label">Stock name (optional)</label>
-                <input type="text" id="uaeValName" placeholder="e.g. Emaar Properties">
+                <label class="field-label">Stock name or ticker</label>
+                <div class="add-row">
+                  <input type="text" id="uaeValName" placeholder="e.g. Emaar Properties" style="flex:1;">
+                  <button type="button" class="add-btn" id="uaeValAutoFill">🔴 Live fetch</button>
+                </div>
+                <div id="uaeValAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
               </div>
               <div>
                 <label class="field-label">Current share price (AED)</label>
@@ -2167,8 +2171,12 @@
             <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">I can't recommend which stocks to buy — no live feed here can verify that reliably, and it'd go stale immediately. What this does instead: enter the fundamentals for any NSE/BSE stock you're evaluating, and it applies Benjamin Graham's valuation formula plus a few sanity-check ratios, so <em>you</em> can screen it consistently.</div>
             <div class="form-grid" style="margin-bottom:8px;">
               <div class="full">
-                <label class="field-label">Stock name (optional)</label>
-                <input type="text" id="indiaValName" placeholder="e.g. HDFC Bank">
+                <label class="field-label">Stock name or ticker</label>
+                <div class="add-row">
+                  <input type="text" id="indiaValName" placeholder="e.g. Wipro" style="flex:1;">
+                  <button type="button" class="add-btn" id="indiaValAutoFill">🔴 Live fetch</button>
+                </div>
+                <div id="indiaValAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
               </div>
               <div>
                 <label class="field-label">Current share price (₹)</label>
@@ -7378,6 +7386,46 @@
   if(uaeValCalcBtn) uaeValCalcBtn.addEventListener('click', () => renderValuationResult('uae', 'AED '));
   const indiaValCalcBtn = document.getElementById('indiaValCalc');
   if(indiaValCalcBtn) indiaValCalcBtn.addEventListener('click', () => renderValuationResult('india', '₹'));
+
+  // ---- Live auto-fill: fetches real price/EPS/book value via our own
+  // /api/stock-quote proxy (Yahoo Finance server-side, so no browser CORS
+  // issue), fills the form, then runs the calculation automatically. ----
+  async function autoFillValuation(prefix, market, sym){
+    const nameEl = document.getElementById(prefix + 'ValName');
+    const statusEl = document.getElementById(prefix + 'ValAutoFillStatus');
+    const query = nameEl.value.trim();
+    if(!query){ statusEl.textContent = 'Type a stock name or ticker first.'; return; }
+    statusEl.textContent = `Looking up "${query}"…`;
+    try{
+      const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=${market}`);
+      const data = await res.json();
+      if(!res.ok || data.error){
+        statusEl.textContent = data.error || "Couldn't fetch live data — try the exact ticker (e.g. WIPRO.NS) or enter values manually.";
+        return;
+      }
+      if(data.price != null) document.getElementById(prefix + 'ValPrice').value = data.price;
+      if(data.eps != null) document.getElementById(prefix + 'ValEps').value = data.eps;
+      if(data.bookValue != null) document.getElementById(prefix + 'ValBvps').value = data.bookValue;
+      if(data.debtToEquity != null) document.getElementById(prefix + 'ValDe').value = data.debtToEquity.toFixed(2);
+      if(data.dividendYield != null) document.getElementById(prefix + 'ValDivYield').value = data.dividendYield.toFixed(2);
+      nameEl.value = data.name || query;
+      const missing = [];
+      if(data.eps == null) missing.push('EPS');
+      if(data.bookValue == null) missing.push('book value');
+      statusEl.textContent = missing.length
+        ? `Got live price from ${data.symbol}, but ${missing.join(' and ')} weren't available — fill those in manually.`
+        : `✓ Live data from ${data.symbol} (${data.exchange || 'Yahoo Finance'}).`;
+      if(data.price != null && data.eps != null && data.bookValue != null){
+        renderValuationResult(prefix, sym);
+      }
+    }catch(e){
+      statusEl.textContent = "Couldn't reach the live data source — enter values manually instead.";
+    }
+  }
+  const uaeValAutoFillBtn = document.getElementById('uaeValAutoFill');
+  if(uaeValAutoFillBtn) uaeValAutoFillBtn.addEventListener('click', () => autoFillValuation('uae', 'AE', 'AED '));
+  const indiaValAutoFillBtn = document.getElementById('indiaValAutoFill');
+  if(indiaValAutoFillBtn) indiaValAutoFillBtn.addEventListener('click', () => autoFillValuation('india', 'IN', '₹'));
 
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
