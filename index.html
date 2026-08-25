@@ -499,6 +499,9 @@
       <div id="notifyPromptBox" style="display:none;margin-bottom:14px;">
         <button type="button" class="add-btn full-width" id="notifyEnableBtn">🔔 Enable notifications for bills, budget alerts & documents</button>
       </div>
+      <div style="margin-bottom:14px;">
+        <button type="button" class="add-btn ghost full-width" id="emgQuickViewBtn">🚑 View emergency info card</button>
+      </div>
       <div id="voiceQuickAddBox" style="margin-bottom:14px;">
         <button type="button" class="add-btn full-width" id="voiceQuickAddBtn">🎤 Voice quick-add</button>
         <div id="voiceQuickAddStatus" style="font-size:11px;color:var(--ink-soft);margin-top:4px;display:none;"></div>
@@ -758,6 +761,14 @@
             </div>
           </div>
 
+          <div class="accordion" data-key="recurring-bill-detection">
+            <button type="button" class="accordion-header"><span>🔁 Recurring bill suggestions</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion-body">
+              <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Same bank, similar amount, showing up in at least 2 of the last 3 months — these look like recurring bills. Worth tracking as a recurring transaction in Budget so you never have to re-enter them.</div>
+              <div id="recurringBillSuggestions"></div>
+            </div>
+          </div>
+
           <div class="accordion" data-key="iou-in">
             <button type="button" class="accordion-header"><span>Owed to you — others' spend split with you</span><span class="accordion-arrow">▸</span></button>
             <div class="accordion-body">
@@ -819,6 +830,14 @@
             <div class="accordion-body">
               <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set each bank's statement cycle start day (e.g. "4" if your cycle runs 4th–3rd) and, optionally, a credit limit — used to show how much you've used this cycle.</div>
               <div id="cardUsageList"></div>
+            </div>
+          </div>
+
+          <div class="accordion" data-key="device-insights">
+            <button type="button" class="accordion-header"><span>⚡ Device usage insights</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion-body">
+              <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Which devices are actually costing you the most to run, based on the wattage and electricity rate you set in Devices.</div>
+              <div id="deviceInsightsList"></div>
             </div>
           </div>
 
@@ -1446,6 +1465,17 @@
         </div>
         <div style="font-size:11px;color:var(--ink-soft);margin:-4px 0 8px 0;">Add the device's wattage to see estimated runtime cost below each card. <span style="white-space:nowrap;">Rate: <input type="number" id="energyRatePerKwh" step="0.01" style="width:70px;padding:3px 5px;font-size:11px;" placeholder="0.30"> / kWh</span></div>
         <div class="device-grid" id="resDeviceGrid"></div>
+        <div class="accordion" data-key="res-scenes">
+          <button type="button" class="accordion-header"><span>🎬 Scenes / routines</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Set your devices above to how you want a scene (e.g. all off for "Away"), then save it — one tap replays that exact combination later.</div>
+            <div class="add-row">
+              <input type="text" id="resSceneName" placeholder="Scene name, e.g. Away mode">
+              <button type="button" class="add-btn" id="resSceneSave">Save current as scene</button>
+            </div>
+            <div id="resSceneList" style="margin-top:8px;"></div>
+          </div>
+        </div>
       </div>
 
       <div class="subpanel" data-country="uae" data-sub="debt">
@@ -1920,6 +1950,17 @@
         </div>
         <div style="font-size:11px;color:var(--ink-soft);margin:-4px 0 8px 0;">Add the device's wattage to see estimated runtime cost below each card.</div>
         <div class="device-grid" id="homeDeviceGrid"></div>
+        <div class="accordion" data-key="home-scenes">
+          <button type="button" class="accordion-header"><span>🎬 Scenes / routines</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Set your devices above to how you want a scene (e.g. all off for "Away"), then save it — one tap replays that exact combination later.</div>
+            <div class="add-row">
+              <input type="text" id="homeSceneName" placeholder="Scene name, e.g. Night mode">
+              <button type="button" class="add-btn" id="homeSceneSave">Save current as scene</button>
+            </div>
+            <div id="homeSceneList" style="margin-top:8px;"></div>
+          </div>
+        </div>
       </div>
 
       <div class="subpanel" data-country="india" data-sub="debt">
@@ -2189,6 +2230,43 @@
             <button type="button" class="add-btn" id="healthWaterAddGlass">+ 1 glass (250ml)</button>
             <button type="button" class="add-btn ghost" id="healthWaterReset">Reset today</button>
           </div>
+        </div>
+      </div>
+
+      <div class="accordion" data-key="emergency-info">
+        <button type="button" class="accordion-header"><span>🚑 Emergency info card</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">The essentials someone would need in an emergency — instantly on screen, not buried in a search. Consider sharing this with a trusted family member too.</div>
+          <div class="form-grid" style="margin-bottom:8px;">
+            <div>
+              <label class="field-label">Blood type</label>
+              <select id="emgBloodType">
+                <option value="">Unknown</option>
+                <option>O+</option><option>O−</option><option>A+</option><option>A−</option>
+                <option>B+</option><option>B−</option><option>AB+</option><option>AB−</option>
+              </select>
+            </div>
+            <div class="full">
+              <label class="field-label">Allergies</label>
+              <input type="text" id="emgAllergies" placeholder="e.g. Penicillin, peanuts">
+            </div>
+            <div class="full">
+              <label class="field-label">Medical conditions / medications</label>
+              <input type="text" id="emgConditions" placeholder="e.g. Asthma, blood pressure medication">
+            </div>
+            <div>
+              <label class="field-label">Insurance provider</label>
+              <input type="text" id="emgInsuranceProvider" placeholder="e.g. Daman, Star Health">
+            </div>
+            <div>
+              <label class="field-label">Policy number</label>
+              <input type="text" id="emgPolicyNumber" placeholder="Policy #">
+            </div>
+          </div>
+          <div class="section-title" style="margin:6px 0 6px 0;font-size:13px;">Emergency contacts</div>
+          <div id="emgContactRows"></div>
+          <button type="button" class="add-btn ghost" id="emgContactAdd" style="margin-top:4px;">+ Add contact</button>
+          <button type="button" class="add-btn full-width" id="emgSaveBtn" style="margin-top:12px;">Save emergency info</button>
         </div>
       </div>
     </section>
@@ -2466,6 +2544,8 @@
       activityLog: [],
       documents: [],
       goals: [],
+      scenes: [],
+      emergencyInfo: { bloodType: '', allergies: '', conditions: '', insuranceProvider: '', policyNumber: '', contacts: [] },
       health: { age: null, gender: 'male', height: null, weight: null, activity: '1.375', climateCountry: 'UAE', weightLog: [], waterLog: {} },
       devices: [
         {id:'d1', name:'Living Room Lights', room:'Living Room', on:false, country:'resident'},
@@ -3047,13 +3127,48 @@
     }
   }
 
+  // ---- Offline queue: if a save can't reach Supabase (network down), keep
+  // working locally and retry automatically once back online. Since save()
+  // always pushes the full current state, "retry" just means calling it again
+  // — no separate action queue needed. ----
+  let offlinePendingSync = false;
+  function setOfflineBanner(show, pending){
+    let el = document.getElementById('offlineBanner');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'offlineBanner';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--coral);color:#fff;text-align:center;font-size:12px;padding:7px;z-index:1500;';
+      document.body.appendChild(el);
+    }
+    el.style.display = show ? '' : 'none';
+    el.textContent = pending ? '⚠️ Offline — your changes are saved on this device and will sync automatically once you\'re back online.' : '⚠️ You\'re offline.';
+  }
+  window.addEventListener('online', () => { if(offlinePendingSync) save(); else setOfflineBanner(false); });
+  window.addEventListener('offline', () => setOfflineBanner(true, offlinePendingSync));
+
   async function save(){
     if(!householdId) return; // not signed in yet — nothing to save to
     lastLocalSaveAt = Date.now();
+    if(!navigator.onLine){
+      offlinePendingSync = true;
+      setOfflineBanner(true, true);
+      return;
+    }
     try{
       const { error } = await sb.from('household_data').upsert({ household_id: householdId, data: state, updated_at: new Date().toISOString() });
-      if(error) console.error('Could not save to Supabase', error);
-    }catch(e){ console.error('Could not save to Supabase', e); }
+      if(error){
+        offlinePendingSync = true;
+        setOfflineBanner(true, true);
+        console.error('Could not save to Supabase', error);
+      } else if(offlinePendingSync){
+        offlinePendingSync = false;
+        setOfflineBanner(false, false);
+      }
+    }catch(e){
+      offlinePendingSync = true;
+      setOfflineBanner(true, true);
+      console.error('Could not save to Supabase', e);
+    }
   }
 
   sb.auth.onAuthStateChange((event) => {
@@ -3909,12 +4024,101 @@
     h.waterLog[todayStr()] = 0;
     save(); renderHealthWaterTracker();
   });
+  // ---- Emergency info card: the essentials someone would need in a crisis,
+  // in one place instead of buried across chat history or memory. ----
+  function ensureEmergencyInfo(){
+    if(!currentData().emergencyInfo){
+      currentData().emergencyInfo = { bloodType: '', allergies: '', conditions: '', insuranceProvider: '', policyNumber: '', contacts: [] };
+    }
+    if(!currentData().emergencyInfo.contacts) currentData().emergencyInfo.contacts = [];
+    return currentData().emergencyInfo;
+  }
+  function emgContactRowHtml(c){
+    return `
+      <div class="add-row emg-contact-row" style="margin-bottom:6px;">
+        <input type="text" class="emg-contact-name" placeholder="Name" value="${escapeHtml(c.name || '')}">
+        <input type="text" class="emg-contact-relation" placeholder="Relation" value="${escapeHtml(c.relation || '')}" style="max-width:110px;">
+        <input type="tel" class="emg-contact-phone" placeholder="Phone" value="${escapeHtml(c.phone || '')}">
+        <button type="button" class="del-btn emg-contact-remove" aria-label="Remove contact">×</button>
+      </div>
+    `.trim();
+  }
+  function addEmgContactRow(c){
+    const container = document.getElementById('emgContactRows');
+    if(!container) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = emgContactRowHtml(c || {name:'',relation:'',phone:''});
+    const rowEl = wrap.firstElementChild;
+    container.appendChild(rowEl);
+    rowEl.querySelector('.emg-contact-remove').addEventListener('click', () => rowEl.remove());
+  }
+  function renderEmergencyInfoForm(){
+    const e = ensureEmergencyInfo();
+    const bloodEl = document.getElementById('emgBloodType'); if(bloodEl) bloodEl.value = e.bloodType || '';
+    const allergiesEl = document.getElementById('emgAllergies'); if(allergiesEl && document.activeElement !== allergiesEl) allergiesEl.value = e.allergies || '';
+    const conditionsEl = document.getElementById('emgConditions'); if(conditionsEl && document.activeElement !== conditionsEl) conditionsEl.value = e.conditions || '';
+    const providerEl = document.getElementById('emgInsuranceProvider'); if(providerEl && document.activeElement !== providerEl) providerEl.value = e.insuranceProvider || '';
+    const policyEl = document.getElementById('emgPolicyNumber'); if(policyEl && document.activeElement !== policyEl) policyEl.value = e.policyNumber || '';
+    const container = document.getElementById('emgContactRows');
+    if(container){
+      container.innerHTML = '';
+      (e.contacts.length ? e.contacts : [{name:'',relation:'',phone:''}]).forEach(c => addEmgContactRow(c));
+    }
+  }
+  const emgContactAddBtn = document.getElementById('emgContactAdd');
+  if(emgContactAddBtn) emgContactAddBtn.addEventListener('click', () => addEmgContactRow({name:'',relation:'',phone:''}));
+  const emgSaveBtn = document.getElementById('emgSaveBtn');
+  if(emgSaveBtn) emgSaveBtn.addEventListener('click', () => {
+    const e = ensureEmergencyInfo();
+    e.bloodType = document.getElementById('emgBloodType').value;
+    e.allergies = document.getElementById('emgAllergies').value.trim();
+    e.conditions = document.getElementById('emgConditions').value.trim();
+    e.insuranceProvider = document.getElementById('emgInsuranceProvider').value.trim();
+    e.policyNumber = document.getElementById('emgPolicyNumber').value.trim();
+    e.contacts = [...document.querySelectorAll('.emg-contact-row')].map(row => ({
+      name: row.querySelector('.emg-contact-name').value.trim(),
+      relation: row.querySelector('.emg-contact-relation').value.trim(),
+      phone: row.querySelector('.emg-contact-phone').value.trim()
+    })).filter(c => c.name || c.phone);
+    save();
+    alert('Emergency info saved.');
+  });
+  function showEmergencyInfoModal(){
+    const e = ensureEmergencyInfo();
+    const contactsHtml = e.contacts.length
+      ? e.contacts.map(c => `<div class="breakdown-row"><span class="label">${escapeHtml(c.name)}${c.relation ? ' (' + escapeHtml(c.relation) + ')' : ''}</span><span>${escapeHtml(c.phone)}</span></div>`).join('')
+      : '<div class="empty" style="padding:8px 0;">No contacts saved yet — add them in the Health tab.</div>';
+    const html = `
+      <div class="breakdown-row"><span class="label">Blood type</span><span><strong>${escapeHtml(e.bloodType || 'Not set')}</strong></span></div>
+      <div class="breakdown-row"><span class="label">Allergies</span><span>${escapeHtml(e.allergies || 'None listed')}</span></div>
+      <div class="breakdown-row"><span class="label">Conditions/medications</span><span>${escapeHtml(e.conditions || 'None listed')}</span></div>
+      <div class="breakdown-row"><span class="label">Insurance</span><span>${escapeHtml(e.insuranceProvider || '—')} ${escapeHtml(e.policyNumber || '')}</span></div>
+      <div class="section-title" style="font-size:13px;margin:10px 0 4px 0;">Emergency contacts</div>
+      ${contactsHtml}
+    `;
+    let modal = document.getElementById('emgQuickModal');
+    if(!modal){
+      modal = document.createElement('div');
+      modal.id = 'emgQuickModal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:flex-end;justify-content:center;';
+      modal.innerHTML = `<div style="background:var(--card);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div class="section-title" style="margin:0;">🚑 Emergency info</div><button type="button" id="emgQuickModalClose" class="add-btn ghost" style="padding:4px 10px;">Close</button></div><div id="emgQuickModalBody"></div></div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (ev) => { if(ev.target === modal) modal.remove(); });
+      modal.querySelector('#emgQuickModalClose').addEventListener('click', () => modal.remove());
+    }
+    modal.querySelector('#emgQuickModalBody').innerHTML = html;
+    document.body.appendChild(modal);
+  }
+  const emgQuickViewBtn = document.getElementById('emgQuickViewBtn');
+  if(emgQuickViewBtn) emgQuickViewBtn.addEventListener('click', showEmergencyInfoModal);
+
   function renderHealth(){
     ensureHealthData();
     renderHealthProfileForm();
     renderHealthMetrics();
     renderHealthWeightTracker();
     renderHealthWaterTracker();
+    renderEmergencyInfoForm();
   }
 
   // ---- Groceries ----
@@ -5265,10 +5469,71 @@
     document.getElementById('cardListMonthPrev').addEventListener('click', () => shiftCardListMonth(-1));
     document.getElementById('cardListMonthNext').addEventListener('click', () => shiftCardListMonth(1));
   })();
+  // ---- Recurring bill auto-detection: same bank + similar amount showing up
+  // in at least 2 of the last 3 months looks recurring — surfaced as a
+  // dismissible suggestion rather than auto-created (still your call). ----
+  function detectRecurringBills(){
+    const cards = currentData().cards || [];
+    const now = new Date();
+    const months = [];
+    for(let i=0;i<3;i++){
+      const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+      months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+    }
+    const byBank = {};
+    cards.forEach(c => {
+      if(!c.date) return;
+      const mk = c.date.slice(0,7);
+      if(!months.includes(mk)) return;
+      if(!byBank[c.bank]) byBank[c.bank] = [];
+      byBank[c.bank].push({ month: mk, amount: Number(c.amount), date: c.date });
+    });
+    const suggestions = [];
+    Object.entries(byBank).forEach(([bank, entries]) => {
+      const used = new Set();
+      entries.forEach((e, i) => {
+        if(used.has(i)) return;
+        const cluster = [e];
+        used.add(i);
+        entries.forEach((e2, j) => {
+          if(j === i || used.has(j)) return;
+          if(e2.month !== e.month && Math.abs(e2.amount - e.amount) / Math.max(e.amount, 1) <= 0.1){
+            cluster.push(e2); used.add(j);
+          }
+        });
+        const distinctMonths = new Set(cluster.map(x => x.month));
+        if(distinctMonths.size >= 2){
+          const avgAmount = cluster.reduce((s,x) => s + x.amount, 0) / cluster.length;
+          suggestions.push({ key: bank + '_' + Math.round(avgAmount), bank, amount: avgAmount, months: distinctMonths.size });
+        }
+      });
+    });
+    return suggestions;
+  }
+  function renderRecurringBillSuggestions(){
+    const box = document.getElementById('recurringBillSuggestions');
+    if(!box) return;
+    const dismissed = state.settings.dismissedRecurringHints || [];
+    const suggestions = detectRecurringBills().filter(s => !dismissed.includes(s.key));
+    if(!suggestions.length){ box.innerHTML = '<div class="empty">No recurring patterns detected yet — this builds up as you log more months of card history.</div>'; return; }
+    box.innerHTML = suggestions.map(s => `
+      <div class="breakdown-row">
+        <span class="label">${escapeHtml(s.bank)} — ~${fmt(s.amount)} <span style="color:var(--ink-soft);font-size:10.5px;">(seen in ${s.months} of the last 3 months)</span></span>
+        <button type="button" class="del-btn recurring-dismiss" data-key="${escapeHtml(s.key)}">Dismiss</button>
+      </div>
+    `).join('');
+    box.querySelectorAll('.recurring-dismiss').forEach(el => el.addEventListener('click', () => {
+      if(!state.settings.dismissedRecurringHints) state.settings.dismissedRecurringHints = [];
+      state.settings.dismissedRecurringHints.push(el.dataset.key);
+      save(); renderRecurringBillSuggestions();
+    }));
+  }
+
   function renderCards(){
     renderCardUsage();
     renderBankSummaries();
     renderSpendAnalysis();
+    renderRecurringBillSuggestions();
     renderIouIn();
     populateKnownPeopleList();
     populateCardMapOptions('UAE');
@@ -6205,6 +6470,18 @@
     }
     return true;
   }
+  // Shared toggle logic (single toggle click or bulk scene run both use this,
+  // so runtime/cost tracking stays accurate either way).
+  async function setDeviceOnState(d, goingOn){
+    await driveDeviceConnection(d, goingOn);
+    if(goingOn){
+      d.lastOnAt = Date.now();
+    } else if(d.lastOnAt){
+      d.totalOnSeconds = (d.totalOnSeconds || 0) + (Date.now() - d.lastOnAt) / 1000;
+      d.lastOnAt = null;
+    }
+    d.on = goingOn;
+  }
   // ---- Device runtime & estimated energy cost ----
   function deviceRuntimeSeconds(d){
     let secs = d.totalOnSeconds || 0;
@@ -6251,18 +6528,10 @@
     grid.querySelectorAll('.toggle').forEach(el => el.addEventListener('click', async () => {
       const d = currentData().devices.find(x => x.id === el.dataset.id);
       if(!d) return;
-      const goingOn = !d.on;
       el.disabled = true;
       el.style.opacity = '0.6';
       try{
-        await driveDeviceConnection(d, goingOn);
-        if(goingOn){
-          d.lastOnAt = Date.now();
-        } else if(d.lastOnAt){
-          d.totalOnSeconds = (d.totalOnSeconds || 0) + (Date.now() - d.lastOnAt) / 1000;
-          d.lastOnAt = null;
-        }
-        d.on = goingOn;
+        await setDeviceOnState(d, !d.on);
         save(); renderDevices(); renderOverview();
       }catch(err){
         alert('Could not reach this device: ' + err.message);
@@ -6288,7 +6557,82 @@
     if(rateEl && document.activeElement !== rateEl) rateEl.value = state.settings.energyRatePerKwh || '';
     renderDevicesFor('resident', 'resDeviceGrid');
     renderDevicesFor('home', 'homeDeviceGrid');
+    renderDeviceInsights();
+    renderScenesFor('resident', 'resSceneList');
+    renderScenesFor('home', 'homeSceneList');
   }
+  // ---- Device usage insights: rank devices by estimated running cost so far
+  // this month, using the same wattage/runtime tracking already in place. ----
+  function renderDeviceInsights(){
+    const box = document.getElementById('deviceInsightsList');
+    if(!box) return;
+    const rate = state.settings.energyRatePerKwh || 0;
+    const devices = (currentData().devices || []).filter(d => d.wattage);
+    if(!devices.length){ box.innerHTML = '<div class="empty">Add a wattage to your devices to see cost insights here.</div>'; return; }
+    const ranked = devices.map(d => {
+      const hrs = deviceRuntimeSeconds(d) / 3600;
+      const kwh = (d.wattage * hrs) / 1000;
+      const cost = kwh * rate;
+      return { name: d.name, room: d.room, country: d.country === 'resident' ? 'Resident' : 'Home', kwh, cost, hrs };
+    }).sort((a,b) => b.cost - a.cost).slice(0, 8);
+    const maxCost = Math.max(...ranked.map(r => r.cost), 0.01);
+    box.innerHTML = ranked.map(r => `
+      <div class="catbudget-row">
+        <div class="catbudget-head"><span>${escapeHtml(r.name)} <span style="color:var(--ink-soft);font-size:10.5px;">(${escapeHtml(r.room)} · ${r.country})</span></span><span>${rate > 0 ? fmt(r.cost) : r.hrs.toFixed(1) + ' hrs total'}</span></div>
+        <div class="catbudget-track"><div class="catbudget-fill" style="width:${(r.cost / maxCost * 100).toFixed(1)}%;"></div></div>
+      </div>
+    `).join('');
+    if(!rate) box.innerHTML += `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:6px;">Set an electricity rate (per kWh) in the Devices tab to see actual cost instead of just runtime.</div>`;
+  }
+
+  // ---- Scenes / routines: save a snapshot of all devices in one country's
+  // current on/off state under a name, and replay it with one tap. ----
+  function renderScenesFor(country, listId){
+    const box = document.getElementById(listId);
+    if(!box) return;
+    if(!currentData().scenes) currentData().scenes = [];
+    const scenes = currentData().scenes.filter(s => s.country === country);
+    if(!scenes.length){ box.innerHTML = '<div class="empty">No scenes saved yet.</div>'; return; }
+    box.innerHTML = scenes.map(s => `
+      <div class="breakdown-row">
+        <span class="label">${escapeHtml(s.name)} <span style="color:var(--ink-soft);font-size:10.5px;">(${s.deviceStates.length} device${s.deviceStates.length === 1 ? '' : 's'})</span></span>
+        <span>
+          <button type="button" class="add-btn scene-run" data-id="${s.id}" style="padding:5px 10px;font-size:11px;">▶ Run</button>
+          <button type="button" class="del-btn scene-del" data-id="${s.id}">×</button>
+        </span>
+      </div>
+    `).join('');
+    box.querySelectorAll('.scene-run').forEach(el => el.addEventListener('click', async () => {
+      const s = currentData().scenes.find(x => x.id === el.dataset.id);
+      if(!s) return;
+      el.disabled = true; el.textContent = 'Running…';
+      let failCount = 0;
+      for(const ds of s.deviceStates){
+        const d = currentData().devices.find(x => x.id === ds.deviceId);
+        if(!d || d.on === ds.on) continue;
+        try{ await setDeviceOnState(d, ds.on); }catch(e){ failCount++; }
+      }
+      save(); renderDevices(); renderOverview();
+      el.disabled = false; el.textContent = '▶ Run';
+      if(failCount) alert(`Scene ran, but ${failCount} device(s) could not be reached.`);
+    }));
+    box.querySelectorAll('.scene-del').forEach(el => el.addEventListener('click', () => {
+      currentData().scenes = currentData().scenes.filter(x => x.id !== el.dataset.id);
+      save(); renderScenesFor(country, listId);
+    }));
+  }
+  function saveCurrentAsScene(country, nameId, listId){
+    const nameEl = document.getElementById(nameId);
+    const name = nameEl.value.trim();
+    if(!name) return;
+    if(!currentData().scenes) currentData().scenes = [];
+    const deviceStates = currentData().devices.filter(d => (d.country || 'resident') === country).map(d => ({ deviceId: d.id, on: !!d.on }));
+    currentData().scenes.push({ id: uid(), name, country, deviceStates });
+    nameEl.value = '';
+    save(); renderScenesFor(country, listId);
+  }
+  document.getElementById('resSceneSave').addEventListener('click', () => saveCurrentAsScene('resident', 'resSceneName', 'resSceneList'));
+  document.getElementById('homeSceneSave').addEventListener('click', () => saveCurrentAsScene('home', 'homeSceneName', 'homeSceneList'));
   function addDeviceFor(country, nameId, roomId, wattageId){
     const nameInput = document.getElementById(nameId);
     const roomInput = document.getElementById(roomId);
