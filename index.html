@@ -1132,17 +1132,24 @@
         </div>
       </div>
       <div id="returnableStatementList"></div>
-      <button class="add-btn full-width" id="returnableGeneratePdf" style="margin-top:8px;">Generate PDF</button>
+      <div class="add-row">
+        <button class="add-btn full-width" id="returnableGeneratePdf" style="margin-top:8px;">Generate PDF</button>
+        <button class="add-btn ghost full-width" id="returnableShareWhatsApp" style="margin-top:8px;">📲 Share via WhatsApp</button>
+      </div>
 
       <div class="section-title">Export & share</div>
       <div class="add-row">
         <button class="add-btn" id="exportExcelBtn">⬇ Download all-in-one Excel report</button>
         <button class="add-btn" id="exportAllInOnePdfBtn">⬇ Download all-in-one PDF report</button>
+        <button class="add-btn ghost" id="exportAllInOneWhatsApp">📲 Share via WhatsApp</button>
       </div>
       <div class="add-row">
         <button class="add-btn secondary" id="exportLendingPdfBtn">⬇ Lending PDF</button>
+        <button class="add-btn ghost" id="exportLendingWhatsApp">📲 Share</button>
         <button class="add-btn tertiary" id="exportBorrowingPdfBtn">⬇ Borrowing PDF</button>
+        <button class="add-btn ghost" id="exportBorrowingWhatsApp">📲 Share</button>
         <button class="add-btn" id="exportPersonPdfBtn">⬇ Spent-per-person PDF</button>
+        <button class="add-btn ghost" id="exportPersonWhatsApp">📲 Share</button>
       </div>
       <div style="font-size:11.5px;color:var(--ink-soft);margin:6px 0 4px 0;">Or pick any combination and get one combined PDF:</div>
       <div class="add-row" style="flex-wrap:wrap;gap:10px 16px;">
@@ -1152,6 +1159,7 @@
       </div>
       <div class="add-row">
         <button class="add-btn" id="exportCombinedPdfBtn">⬇ Download combined PDF (selected)</button>
+        <button class="add-btn ghost" id="exportCombinedWhatsApp">📲 Share via WhatsApp</button>
       </div>
     </section>
 
@@ -7941,6 +7949,89 @@
   // Each of these can either render into its own new PDF (doc omitted) or be appended as a
   // section into an already-open combined PDF (doc + startY passed in) — used by the
   // "combined PDF (selected)" export below so several reports can share one file.
+  // ---- WhatsApp share: builds a plain-text summary of a report and opens
+  // WhatsApp with it pre-filled, ready to send — works on both mobile
+  // (opens the app) and desktop (opens WhatsApp Web). ----
+  function openWhatsAppShare(text){
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+  function shareLendingBorrowingWhatsApp(type){
+    const period = currentPeriod();
+    const rows = allTransactions().filter(t => t.type === type && inPeriod(t.date, period));
+    if(!rows.length){ alert('Nothing to share for this period.'); return; }
+    const total = rows.reduce((s,t) => s + Number(t.amount), 0);
+    const label = type === 'lending' ? 'Lending' : 'Borrowing';
+    let text = `*${label} Report* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI PA'}\n\n`;
+    rows.slice(0, 20).forEach(t => { text += `• ${t.date} — ${t.label}${t.person ? ' (' + t.person + ')' : ''}: ${fmt(t.amount)}\n`; });
+    if(rows.length > 20) text += `…and ${rows.length - 20} more\n`;
+    text += `\n*Total ${type === 'lending' ? 'lent out' : 'borrowed'}: ${fmt(total)}*`;
+    openWhatsAppShare(text);
+  }
+  function sharePersonSpendWhatsApp(){
+    const period = currentPeriod();
+    const r = computeReportData(period);
+    const people = Object.keys(r.personMap);
+    if(!people.length){ alert('Nothing to share for this period.'); return; }
+    let text = `*Spent Per Person* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI PA'}\n\n`;
+    people.forEach(name => {
+      const p = r.personMap[name];
+      text += `• ${name}: ${fmt(p.returnable + p.nonReturnable)} (returnable ${fmt(p.returnable)}, non-returnable ${fmt(p.nonReturnable)})\n`;
+    });
+    openWhatsAppShare(text);
+  }
+  function shareCombinedReportWhatsApp(){
+    const wantLending = document.getElementById('exportPickLending').checked;
+    const wantBorrowing = document.getElementById('exportPickBorrowing').checked;
+    const wantPerson = document.getElementById('exportPickPerson').checked;
+    if(!wantLending && !wantBorrowing && !wantPerson){ alert('Tick at least one report to include.'); return; }
+    const period = currentPeriod();
+    let text = `*Combined Report* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI PA'}\n`;
+    if(wantLending){
+      const rows = allTransactions().filter(t => t.type === 'lending' && inPeriod(t.date, period));
+      const total = rows.reduce((s,t) => s + Number(t.amount), 0);
+      text += `\n*Lending* — ${rows.length} item(s), total ${fmt(total)}`;
+    }
+    if(wantBorrowing){
+      const rows = allTransactions().filter(t => t.type === 'borrowing' && inPeriod(t.date, period));
+      const total = rows.reduce((s,t) => s + Number(t.amount), 0);
+      text += `\n*Borrowing* — ${rows.length} item(s), total ${fmt(total)}`;
+    }
+    if(wantPerson){
+      const r = computeReportData(period);
+      const people = Object.keys(r.personMap);
+      text += `\n\n*Spent per person:*\n`;
+      people.forEach(name => {
+        const p = r.personMap[name];
+        text += `• ${name}: ${fmt(p.returnable + p.nonReturnable)}\n`;
+      });
+    }
+    openWhatsAppShare(text);
+  }
+  function shareAllInOneWhatsApp(){
+    const period = currentPeriod();
+    const r = computeReportData(period);
+    let text = `*${state.appTitle || 'Smart AI PA'} — All-In-One Report*\n${periodLabel(period)}\n\n`;
+    text += `Income: ${fmt(r.income)}\nTotal outflow: ${fmt(r.totalOutflow)}\n`;
+    openWhatsAppShare(text);
+  }
+  function shareReturnableStatementWhatsApp(){
+    const { items, total, paidTotal, balanceDue, person, from, to } = returnableStatementData();
+    if(!items.length){ alert('Nothing to share for this selection.'); return; }
+    const personLabel = person === '__overall__' ? 'Everyone' : person;
+    const rangeLabel = (from || to) ? `${from || 'start'} to ${to || 'today'}` : 'all time';
+    let text = `*Returnable Statement — ${personLabel}*\n${state.appTitle || 'Smart AI PA'} · ${rangeLabel}\n\n`;
+    items.slice(0, 20).forEach(it => { text += `• ${it.date} — ${it.desc}: ${fmt(it.amount)} (${it.paid ? 'Paid' : 'Pending'})\n`; });
+    if(items.length > 20) text += `…and ${items.length - 20} more\n`;
+    text += `\n*Total: ${fmt(total)}*\nPaid so far: ${fmt(paidTotal)}\n*Balance due: ${fmt(balanceDue)}*`;
+    openWhatsAppShare(text);
+  }
+  document.getElementById('returnableShareWhatsApp').addEventListener('click', shareReturnableStatementWhatsApp);
+  document.getElementById('exportLendingWhatsApp').addEventListener('click', () => shareLendingBorrowingWhatsApp('lending'));
+  document.getElementById('exportBorrowingWhatsApp').addEventListener('click', () => shareLendingBorrowingWhatsApp('borrowing'));
+  document.getElementById('exportPersonWhatsApp').addEventListener('click', sharePersonSpendWhatsApp);
+  document.getElementById('exportCombinedWhatsApp').addEventListener('click', shareCombinedReportWhatsApp);
+  document.getElementById('exportAllInOneWhatsApp').addEventListener('click', shareAllInOneWhatsApp);
+
   function addLendingBorrowingSection(doc, type, period, startY){
     const rows = allTransactions().filter(t => t.type === type && inPeriod(t.date, period));
     doc.setFontSize(13);
