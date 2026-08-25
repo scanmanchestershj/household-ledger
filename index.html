@@ -1632,6 +1632,46 @@
           </div>
         </div>
 
+        <div class="accordion" data-key="uae-inv-valuation">
+          <button type="button" class="accordion-header"><span>🧮 Undervalued stock check — DFM / ADX</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">I can't recommend which stocks to buy — no live feed here can verify that reliably, and it'd go stale immediately. What this does instead: enter the fundamentals for any Dubai (DFM) or Abu Dhabi (ADX) stock you're evaluating, and it applies Benjamin Graham's valuation formula plus a few sanity-check ratios, so <em>you</em> can screen it consistently.</div>
+            <div class="form-grid" style="margin-bottom:8px;">
+              <div class="full">
+                <label class="field-label">Stock name (optional)</label>
+                <input type="text" id="uaeValName" placeholder="e.g. Emaar Properties">
+              </div>
+              <div>
+                <label class="field-label">Current share price (AED)</label>
+                <input type="number" id="uaeValPrice" step="0.01" placeholder="e.g. 8.50">
+              </div>
+              <div>
+                <label class="field-label">EPS — earnings per share (AED)</label>
+                <input type="number" id="uaeValEps" step="0.01" placeholder="e.g. 1.20">
+              </div>
+              <div>
+                <label class="field-label">Book value per share (AED)</label>
+                <input type="number" id="uaeValBvps" step="0.01" placeholder="e.g. 6.00">
+              </div>
+              <div>
+                <label class="field-label">Sector avg P/E (optional)</label>
+                <input type="number" id="uaeValSectorPe" step="0.1" placeholder="e.g. 12">
+              </div>
+              <div>
+                <label class="field-label">Debt-to-equity ratio (optional)</label>
+                <input type="number" id="uaeValDe" step="0.01" placeholder="e.g. 0.6">
+              </div>
+              <div>
+                <label class="field-label">Dividend yield % (optional)</label>
+                <input type="number" id="uaeValDivYield" step="0.1" placeholder="e.g. 4.5">
+              </div>
+            </div>
+            <button type="button" class="add-btn full-width" id="uaeValCalc">Calculate</button>
+            <div id="uaeValResult" style="margin-top:10px;"></div>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Pull live EPS/book value/price from <a href="https://www.dfm.ae" target="_blank" rel="noopener">dfm.ae</a> or <a href="https://www.adx.ae" target="_blank" rel="noopener">adx.ae</a>'s company financials. This is a screening tool based on a well-known formula, not investment advice — a cheap-looking number doesn't rule out real business risk.</div>
+          </div>
+        </div>
+
         <div class="accordion" data-key="uae-inv-mf">
           <button type="button" class="accordion-header"><span>📊 Mutual Funds</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
@@ -2118,6 +2158,46 @@
             <div class="inv-ltp-panel" id="indiaInvStocksPrices"></div>
             <div id="indiaInvStocksSummary"></div>
             <div id="indiaInvStocksList"></div>
+          </div>
+        </div>
+
+        <div class="accordion" data-key="india-inv-valuation">
+          <button type="button" class="accordion-header"><span>🧮 Undervalued stock check — NSE / BSE</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">I can't recommend which stocks to buy — no live feed here can verify that reliably, and it'd go stale immediately. What this does instead: enter the fundamentals for any NSE/BSE stock you're evaluating, and it applies Benjamin Graham's valuation formula plus a few sanity-check ratios, so <em>you</em> can screen it consistently.</div>
+            <div class="form-grid" style="margin-bottom:8px;">
+              <div class="full">
+                <label class="field-label">Stock name (optional)</label>
+                <input type="text" id="indiaValName" placeholder="e.g. HDFC Bank">
+              </div>
+              <div>
+                <label class="field-label">Current share price (₹)</label>
+                <input type="number" id="indiaValPrice" step="0.01" placeholder="e.g. 1500">
+              </div>
+              <div>
+                <label class="field-label">EPS — earnings per share (₹)</label>
+                <input type="number" id="indiaValEps" step="0.01" placeholder="e.g. 65">
+              </div>
+              <div>
+                <label class="field-label">Book value per share (₹)</label>
+                <input type="number" id="indiaValBvps" step="0.01" placeholder="e.g. 550">
+              </div>
+              <div>
+                <label class="field-label">Sector avg P/E (optional)</label>
+                <input type="number" id="indiaValSectorPe" step="0.1" placeholder="e.g. 22">
+              </div>
+              <div>
+                <label class="field-label">Debt-to-equity ratio (optional)</label>
+                <input type="number" id="indiaValDe" step="0.01" placeholder="e.g. 0.4">
+              </div>
+              <div>
+                <label class="field-label">Dividend yield % (optional)</label>
+                <input type="number" id="indiaValDivYield" step="0.1" placeholder="e.g. 1.2">
+              </div>
+            </div>
+            <button type="button" class="add-btn full-width" id="indiaValCalc">Calculate</button>
+            <div id="indiaValResult" style="margin-top:10px;"></div>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Pull live EPS/book value/price from <a href="https://www.nseindia.com" target="_blank" rel="noopener">nseindia.com</a>, <a href="https://www.bseindia.com" target="_blank" rel="noopener">bseindia.com</a>, or Screener.in. This is a screening tool based on a well-known formula, not investment advice — a cheap-looking number doesn't rule out real business risk.</div>
           </div>
         </div>
 
@@ -7230,6 +7310,75 @@
 
   // ---- Retirement corpus calculator: standard future-value-of-annuity math,
   // no external data, fully local. ----
+  // ---- Undervalued stock check: Benjamin Graham's valuation formula plus a
+  // few sanity-check ratios. A screening tool the person runs on any stock
+  // they're evaluating — never a specific buy recommendation, since that
+  // would require live verified data this app doesn't have and would go
+  // stale immediately. ----
+  function computeGrahamValuation(inputs){
+    const { price, eps, bvps, sectorPe, de, divYield } = inputs;
+    const result = { flags: [] };
+    if(eps > 0 && bvps > 0){
+      result.grahamNumber = Math.sqrt(22.5 * eps * bvps);
+      result.marginOfSafety = ((result.grahamNumber - price) / result.grahamNumber) * 100;
+      if(price < result.grahamNumber * 0.85) result.flags.push({ type: 'good', text: 'Trading well below its Graham Number — a classic "cheap on paper" signal worth digging into.' });
+      else if(price < result.grahamNumber) result.flags.push({ type: 'ok', text: 'Trading modestly below its Graham Number.' });
+      else result.flags.push({ type: 'warn', text: "Trading above its Graham Number — doesn't screen as undervalued by this formula." });
+    }
+    if(eps > 0){
+      result.pe = price / eps;
+      if(sectorPe > 0){
+        if(result.pe < sectorPe * 0.8) result.flags.push({ type: 'good', text: `P/E of ${result.pe.toFixed(1)} is meaningfully below the sector average (${sectorPe}) — cheap relative to peers.` });
+        else if(result.pe > sectorPe * 1.2) result.flags.push({ type: 'warn', text: `P/E of ${result.pe.toFixed(1)} is above the sector average (${sectorPe}) — richer than peers.` });
+      }
+    }
+    if(de !== null && de !== undefined && de !== ''){
+      if(de > 1.5) result.flags.push({ type: 'warn', text: `Debt-to-equity of ${de} is on the higher side — worth checking why it looks cheap before assuming it's a bargain.` });
+      else if(de < 0.5) result.flags.push({ type: 'good', text: `Low debt-to-equity (${de}) — the balance sheet looks conservative.` });
+    }
+    if(divYield !== null && divYield !== undefined && divYield !== '' && divYield >= 3){
+      result.flags.push({ type: 'good', text: `Dividend yield of ${divYield}% pays you something while you wait for the price to re-rate.` });
+    }
+    return result;
+  }
+  function renderValuationResult(prefix, sym){
+    const box = document.getElementById(prefix + 'ValResult');
+    if(!box) return;
+    const price = parseFloat(document.getElementById(prefix + 'ValPrice').value);
+    const eps = parseFloat(document.getElementById(prefix + 'ValEps').value);
+    const bvps = parseFloat(document.getElementById(prefix + 'ValBvps').value);
+    const sectorPe = parseFloat(document.getElementById(prefix + 'ValSectorPe').value) || 0;
+    const deRaw = document.getElementById(prefix + 'ValDe').value;
+    const divRaw = document.getElementById(prefix + 'ValDivYield').value;
+    const name = document.getElementById(prefix + 'ValName').value.trim();
+    if(!price || !eps || !bvps){
+      box.innerHTML = `<div class="empty">Enter at least the current price, EPS, and book value per share to calculate.</div>`;
+      return;
+    }
+    const r = computeGrahamValuation({ price, eps, bvps, sectorPe, de: deRaw === '' ? null : parseFloat(deRaw), divYield: divRaw === '' ? null : parseFloat(divRaw) });
+    const goodCount = r.flags.filter(f => f.type === 'good').length;
+    const warnCount = r.flags.filter(f => f.type === 'warn').length;
+    let verdict, verdictColor;
+    if(goodCount > 0 && warnCount === 0){ verdict = 'Screens as undervalued'; verdictColor = 'var(--teal-dark)'; }
+    else if(warnCount > goodCount){ verdict = "Doesn't screen as undervalued"; verdictColor = 'var(--coral)'; }
+    else { verdict = 'Mixed signals — worth a closer look'; verdictColor = 'var(--amber)'; }
+    box.innerHTML = `
+      <div class="section-title" style="margin-top:0;font-size:14px;">${name ? escapeHtml(name) + ' — ' : ''}<span style="color:${verdictColor};">${verdict}</span></div>
+      ${r.grahamNumber != null ? `<div class="breakdown-row"><span class="label">Graham Number (fair value estimate)</span><span><strong>${sym}${r.grahamNumber.toFixed(2)}</strong></span></div>` : ''}
+      <div class="breakdown-row"><span class="label">Current price</span><span>${sym}${price.toFixed(2)}</span></div>
+      ${r.marginOfSafety != null ? `<div class="breakdown-row"><span class="label">Margin of safety</span><span>${r.marginOfSafety.toFixed(1)}%</span></div>` : ''}
+      ${r.pe != null ? `<div class="breakdown-row"><span class="label">P/E ratio</span><span>${r.pe.toFixed(1)}</span></div>` : ''}
+      <ul style="margin:8px 0 0 18px;padding:0;font-size:12px;line-height:1.7;">
+        ${r.flags.map(f => `<li style="color:${f.type === 'good' ? 'var(--teal-dark)' : (f.type === 'warn' ? 'var(--coral)' : 'inherit')};">${f.text}</li>`).join('')}
+      </ul>
+      <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">A formula-based screen, not a recommendation — it can't see business quality, management, or news. Use it as a starting filter, not the final word.</div>
+    `;
+  }
+  const uaeValCalcBtn = document.getElementById('uaeValCalc');
+  if(uaeValCalcBtn) uaeValCalcBtn.addEventListener('click', () => renderValuationResult('uae', 'AED '));
+  const indiaValCalcBtn = document.getElementById('indiaValCalc');
+  if(indiaValCalcBtn) indiaValCalcBtn.addEventListener('click', () => renderValuationResult('india', '₹'));
+
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
     const monthlyRate = annualReturn / 100 / 12;
