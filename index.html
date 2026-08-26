@@ -148,6 +148,11 @@
   .catbudget-fill{ height:100%; border-radius:5px; background:var(--teal); transition:width .3s; }
   .catbudget-fill.warn{ background:var(--amber); }
   .catbudget-fill.over{ background:var(--coral); }
+  .market-snapshot{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .market-snapshot-card{ flex:1; min-width:140px; background:var(--paper-deep); border-radius:var(--radius); padding:10px 12px; }
+  .market-snapshot-card .msc-name{ font-size:11px; color:var(--ink-soft); }
+  .market-snapshot-card .msc-price{ font-size:16px; font-weight:600; margin-top:2px; }
+  .market-snapshot-card .msc-change{ font-size:12px; margin-top:2px; }
   .alert-banner{ display:flex; align-items:flex-start; gap:10px; border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; font-size:12.5px; line-height:1.45; }
   .alert-banner.warn{ background:#FDF3E3; color:#8A5A00; border:1px solid #F3DEA0; }
   .alert-banner.danger{ background:#FDE3E5; color:#8A2E2E; border:1px solid #F3B8BC; }
@@ -991,24 +996,37 @@
         </div>
       </div>
 
-      <div class="section-title">Breakdown <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(tap a row to see its individual entries)</span></div>
-      <div id="reportBreakdown"></div>
-
-      <div class="section-title">Am I overspending?</div>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a monthly spending target and see exactly where you stand — plus a few concrete ways to bring it down, based on your actual biggest categories this month.</div>
-      <div class="form-grid" style="margin-bottom:8px;">
-        <div>
-          <label class="field-label">Monthly budget target</label>
-          <input type="number" id="overspendTarget" placeholder="e.g. 6000" step="1">
+      <div class="accordion" data-key="report-breakdown">
+        <button type="button" class="accordion-header"><span>Breakdown</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;">Tap a row to see its individual entries.</div>
+          <div id="reportBreakdown"></div>
         </div>
       </div>
-      <div id="overspendGauge"></div>
-      <div id="overspendSuggestions"></div>
 
-      <div class="section-title">Category budgets <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(this month, card spend)</span></div>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a cap per category — leave blank for categories you don't want to track.</div>
-      <div id="categoryBudgetForm" class="form-grid" style="margin-bottom:8px;"></div>
-      <div id="categoryBudgetBars"></div>
+      <div class="accordion" data-key="am-i-overspending">
+        <button type="button" class="accordion-header"><span>Am I overspending?</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a monthly spending target and see exactly where you stand — plus a few concrete ways to bring it down, based on your actual biggest categories this month.</div>
+          <div class="form-grid" style="margin-bottom:8px;">
+            <div>
+              <label class="field-label">Monthly budget target</label>
+              <input type="number" id="overspendTarget" placeholder="e.g. 6000" step="1">
+            </div>
+          </div>
+          <div id="overspendGauge"></div>
+          <div id="overspendSuggestions"></div>
+        </div>
+      </div>
+
+      <div class="accordion" data-key="category-budgets">
+        <button type="button" class="accordion-header"><span>Category budgets <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(this month, card spend)</span></span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a cap per category — leave blank for categories you don't want to track.</div>
+          <div id="categoryBudgetForm" class="form-grid" style="margin-bottom:8px;"></div>
+          <div id="categoryBudgetBars"></div>
+        </div>
+      </div>
 
       <div class="accordion" data-key="money-coach">
         <button type="button" class="accordion-header"><span>💬 Money Coach — ask about your budget</span><span class="accordion-arrow">▸</span></button>
@@ -1110,31 +1128,39 @@
       </div>
       <div id="reportDueBreakdown"></div>
 
-      <div class="section-title">Spent for each person (splits)</div>
-      <div id="reportPersonBreakdown"></div>
-
-      <div class="section-title">Returnable — statement for one person</div>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Pick a person (or "Overall" for everyone) and a date range to see exactly what's owed, date by date — then generate a PDF you can hand to them directly.</div>
-      <div class="form-grid">
-        <div>
-          <label class="field-label">Person</label>
-          <select id="returnablePerson">
-            <option value="__overall__">Overall (everyone)</option>
-          </select>
-        </div>
-        <div>
-          <label class="field-label">From date</label>
-          <input type="date" id="returnableFrom">
-        </div>
-        <div>
-          <label class="field-label">To date</label>
-          <input type="date" id="returnableTo">
+      <div class="accordion" data-key="spent-per-person">
+        <button type="button" class="accordion-header"><span>Spent for each person (splits)</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div id="reportPersonBreakdown"></div>
         </div>
       </div>
-      <div id="returnableStatementList"></div>
-      <div class="add-row">
-        <button class="add-btn full-width" id="returnableGeneratePdf" style="margin-top:8px;">Generate PDF</button>
-        <button class="add-btn ghost full-width" id="returnableShareWhatsApp" style="margin-top:8px;">📲 Share via WhatsApp</button>
+
+      <div class="accordion" data-key="returnable-statement">
+        <button type="button" class="accordion-header"><span>Returnable — statement for one person</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Pick a person (or "Overall" for everyone) and a date range to see exactly what's owed, date by date — then generate a PDF you can hand to them directly.</div>
+          <div class="form-grid">
+            <div>
+              <label class="field-label">Person</label>
+              <select id="returnablePerson">
+                <option value="__overall__">Overall (everyone)</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label">From date</label>
+              <input type="date" id="returnableFrom">
+            </div>
+            <div>
+              <label class="field-label">To date</label>
+              <input type="date" id="returnableTo">
+            </div>
+          </div>
+          <div id="returnableStatementList"></div>
+          <div class="add-row">
+            <button class="add-btn full-width" id="returnableGeneratePdf" style="margin-top:8px;">Generate PDF</button>
+            <button class="add-btn ghost full-width" id="returnableShareWhatsApp" style="margin-top:8px;">📲 Share via WhatsApp</button>
+          </div>
+        </div>
       </div>
 
       <div class="section-title">Export & share</div>
@@ -1558,6 +1584,7 @@
       <div class="subpanel" data-country="uae" data-sub="investment">
         <div class="section-title" style="margin-top:0;">Investment — <span id="uaeInvCountryLabel">UAE</span></div>
         <div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 12px 0;">Holdings-style tracker, like your Groww portfolio — enter what you bought at, then keep the current price/NAV updated to see live value and returns.</div>
+        <div id="uaeMarketSnapshot" class="market-snapshot"></div>
         <div class="stat-grid" id="uaeInvOverallGrid" style="grid-template-columns:1fr 1fr 1fr;"></div>
 
         <div class="accordion" data-key="uae-inv-gold">
@@ -2091,6 +2118,7 @@
       <div class="subpanel" data-country="india" data-sub="investment">
         <div class="section-title" style="margin-top:0;">Investment — <span id="indiaInvCountryLabel">India</span></div>
         <div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 12px 0;">Holdings-style tracker, like your Groww portfolio — enter what you bought at, then keep the current price/NAV updated to see live value and returns.</div>
+        <div id="indiaMarketSnapshot" class="market-snapshot"></div>
         <div class="stat-grid" id="indiaInvOverallGrid" style="grid-template-columns:1fr 1fr 1fr;"></div>
 
         <div class="accordion" data-key="india-inv-gold">
@@ -9582,7 +9610,50 @@
     save(); renderInvestmentCountry(countryKey);
   }
 
+  // ---- Market snapshot: auto-shows the relevant country's major stock
+  // indices (NIFTY/SENSEX for India, DFM/ADX for UAE) whenever you land on
+  // that country's Investment tab. Cached briefly per session to avoid
+  // re-fetching every re-render. ----
+  const marketSnapshotCache = {};
+  async function renderMarketSnapshot(countryKey){
+    const boxId = countryKey === 'UAE' ? 'uaeMarketSnapshot' : 'indiaMarketSnapshot';
+    const box = document.getElementById(boxId);
+    if(!box) return;
+    const marketCode = countryKey === 'UAE' ? 'AE' : 'IN';
+    const cached = marketSnapshotCache[marketCode];
+    if(cached && (Date.now() - cached.ts) < 120000){
+      renderMarketSnapshotHtml(box, cached.data);
+      return;
+    }
+    box.innerHTML = `<div class="empty" style="padding:8px 0;">Loading ${countryKey === 'UAE' ? 'DFM / ADX' : 'NSE / BSE'} snapshot…</div>`;
+    try{
+      const res = await fetch(`/api/market-index?market=${marketCode}`);
+      const data = await res.json();
+      marketSnapshotCache[marketCode] = { ts: Date.now(), data };
+      renderMarketSnapshotHtml(box, data);
+    }catch(e){
+      box.innerHTML = '';
+    }
+  }
+  function renderMarketSnapshotHtml(box, data){
+    const indices = (data && data.indices) || [];
+    const withPrice = indices.filter(i => i.price != null);
+    if(!withPrice.length){ box.innerHTML = ''; return; }
+    box.innerHTML = withPrice.map(i => {
+      const up = i.changePercent != null && i.changePercent >= 0;
+      const changeStr = i.changePercent != null ? `${up ? '▲' : '▼'} ${Math.abs(i.changePercent).toFixed(2)}%` : '';
+      return `
+        <div class="market-snapshot-card">
+          <div class="msc-name">${escapeHtml(i.name)} <span style="opacity:0.7;">(${escapeHtml(i.exchange)})</span></div>
+          <div class="msc-price">${i.price.toLocaleString(undefined, {maximumFractionDigits:2})}</div>
+          <div class="msc-change" style="color:${up ? 'var(--teal-dark)' : 'var(--coral)'};">${changeStr}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
   function renderInvestmentCountry(countryKey){
+    renderMarketSnapshot(countryKey);
     let totalInvested = 0, totalCurrent = 0;
     INVESTMENT_CATS.forEach(catCfg => {
       const res = renderInvestmentCategory(countryKey, catCfg);
