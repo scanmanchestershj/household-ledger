@@ -2237,6 +2237,58 @@
           </div>
         </div>
 
+        <div class="accordion" data-key="india-inv-screener">
+          <button type="button" class="accordion-header"><span>🔎 Screener — check one stock against 3 rule sets</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Enter one stock's fundamentals below (same field set feeds all three screens), then expand a screen to see exactly which conditions it passes or fails. This checks one stock at a time — it can't scan the whole NSE/BSE market, since that needs Screener.in's own bulk database, which isn't something available here for free.</div>
+            <div class="form-grid" style="margin-bottom:8px;">
+              <div class="full">
+                <label class="field-label">Stock name or ticker</label>
+                <div class="add-row">
+                  <input type="text" id="scrName" placeholder="e.g. Wipro" style="flex:1;">
+                  <button type="button" class="add-btn" id="scrAutoFill">🔴 Live fetch (partial)</button>
+                </div>
+                <div id="scrAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+              </div>
+              <div><label class="field-label">Market Cap (₹ Cr)</label><input type="number" id="scrMarketCap" step="1" placeholder="e.g. 45000"></div>
+              <div><label class="field-label">Current price (₹)</label><input type="number" id="scrPrice" step="0.01"></div>
+              <div><label class="field-label">P/E</label><input type="number" id="scrPe" step="0.01"></div>
+              <div><label class="field-label">Industry P/E</label><input type="number" id="scrIndustryPe" step="0.01"></div>
+              <div><label class="field-label">PEG Ratio</label><input type="number" id="scrPeg" step="0.01"></div>
+              <div><label class="field-label">Price to Book Value</label><input type="number" id="scrPb" step="0.01"></div>
+              <div><label class="field-label">Debt to Equity</label><input type="number" id="scrDe" step="0.01"></div>
+              <div><label class="field-label">Current Ratio</label><input type="number" id="scrCurrentRatio" step="0.01"></div>
+              <div><label class="field-label">Return on Equity %</label><input type="number" id="scrRoe" step="0.1"></div>
+              <div><label class="field-label">Avg ROCE — 3yr %</label><input type="number" id="scrRoce3yr" step="0.1"></div>
+              <div><label class="field-label">Sales growth — 3yr %</label><input type="number" id="scrSalesGrowth3yr" step="0.1"></div>
+              <div><label class="field-label">Profit growth — 3yr %</label><input type="number" id="scrProfitGrowth3yr" step="0.1"></div>
+              <div><label class="field-label">EPS growth — 5yr %</label><input type="number" id="scrEpsGrowth5yr" step="0.1"></div>
+              <div><label class="field-label">Free cash flow — 3yr total (₹ Cr)</label><input type="number" id="scrFcf3yr" step="0.01"></div>
+              <div><label class="field-label">Operating cash flow — 3yr total (₹ Cr)</label><input type="number" id="scrOcf3yr" step="0.01"></div>
+              <div><label class="field-label">Free cash flow — 5yr total (₹ Cr)</label><input type="number" id="scrFcf5yr" step="0.01"></div>
+              <div><label class="field-label">Free cash flow — preceding year (₹ Cr)</label><input type="number" id="scrFcfPrecYear" step="0.01"></div>
+              <div><label class="field-label">Number of equity shares (Cr)</label><input type="number" id="scrShares" step="0.01"></div>
+              <div><label class="field-label">Pledged %</label><input type="number" id="scrPledged" step="0.1" placeholder="0"></div>
+              <div><label class="field-label">RSI</label><input type="number" id="scrRsi" step="0.1"></div>
+            </div>
+            <button type="button" class="add-btn full-width" id="scrCheckAll">Check against all 3 screens</button>
+
+            <div class="accordion" data-key="screen-a" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>SCREEN A — Deeply Undervalued</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body" id="scrResultA"></div>
+            </div>
+            <div class="accordion" data-key="screen-b">
+              <button type="button" class="accordion-header"><span>SCREEN B — Quality at Reasonable Price</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body" id="scrResultB"></div>
+            </div>
+            <div class="accordion" data-key="screen-c">
+              <button type="button" class="accordion-header"><span>SCREEN C — Potential Deep Value</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body" id="scrResultC"></div>
+            </div>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Formula-based screening, not investment advice — passing all conditions doesn't guarantee a good investment, and failing one doesn't rule it out. Pull the underlying numbers from Screener.in, the company's annual report, or your broker's research tools.</div>
+          </div>
+        </div>
+
         <div class="accordion" data-key="india-inv-mf">
           <button type="button" class="accordion-header"><span>📊 Mutual Funds</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
@@ -7454,6 +7506,163 @@
   if(uaeValAutoFillBtn) uaeValAutoFillBtn.addEventListener('click', () => autoFillValuation('uae', 'AE', 'AED '));
   const indiaValAutoFillBtn = document.getElementById('indiaValAutoFill');
   if(indiaValAutoFillBtn) indiaValAutoFillBtn.addEventListener('click', () => autoFillValuation('india', 'IN', '₹'));
+
+  // ---- Screener: checks one stock's fundamentals against three
+  // Screener.in-style rule sets (Deeply Undervalued / Quality at Reasonable
+  // Price / Potential Deep Value). Every AND condition from each screen is
+  // evaluated individually — a field left blank is shown as "not checked"
+  // rather than silently counted as a pass or fail. ----
+  function scrNum(id){
+    const v = parseFloat(document.getElementById(id).value);
+    return isNaN(v) ? null : v;
+  }
+  function scrCollectValues(){
+    return {
+      marketCap: scrNum('scrMarketCap'),
+      price: scrNum('scrPrice'),
+      pe: scrNum('scrPe'),
+      industryPe: scrNum('scrIndustryPe'),
+      peg: scrNum('scrPeg'),
+      pb: scrNum('scrPb'),
+      de: scrNum('scrDe'),
+      currentRatio: scrNum('scrCurrentRatio'),
+      roe: scrNum('scrRoe'),
+      roce3yr: scrNum('scrRoce3yr'),
+      salesGrowth3yr: scrNum('scrSalesGrowth3yr'),
+      profitGrowth3yr: scrNum('scrProfitGrowth3yr'),
+      epsGrowth5yr: scrNum('scrEpsGrowth5yr'),
+      fcf3yr: scrNum('scrFcf3yr'),
+      ocf3yr: scrNum('scrOcf3yr'),
+      fcf5yr: scrNum('scrFcf5yr'),
+      fcfPrecYear: scrNum('scrFcfPrecYear'),
+      shares: scrNum('scrShares'),
+      pledged: scrNum('scrPledged'),
+      rsi: scrNum('scrRsi')
+    };
+  }
+  function chk(label, a, cmp, b){
+    if(a === null || b === null) return { label, state: 'na' };
+    let pass;
+    if(cmp === '<') pass = a < b;
+    else if(cmp === '>') pass = a > b;
+    else if(cmp === '=') pass = a === b;
+    return { label, state: pass ? 'pass' : 'fail' };
+  }
+  function screenAChecks(v){
+    return [
+      chk('Market Cap > 5000', v.marketCap, '>', 5000),
+      chk('P/E < 15', v.pe, '<', 15),
+      chk('P/E < Industry P/E', v.pe, '<', v.industryPe),
+      chk('PEG Ratio < 1', v.peg, '<', 1),
+      chk('Price to Book Value < 2', v.pb, '<', 2),
+      chk('Debt to Equity < 0.5', v.de, '<', 0.5),
+      chk('Return on Equity > 15%', v.roe, '>', 15),
+      chk('Avg ROCE (3yr) > 14%', v.roce3yr, '>', 14),
+      chk('Sales growth (3yr) > 10%', v.salesGrowth3yr, '>', 10),
+      chk('Profit growth (3yr) > 10%', v.profitGrowth3yr, '>', 10),
+      chk('EPS growth (5yr) > 10%', v.epsGrowth5yr, '>', 10),
+      chk('Free cash flow (3yr) > 0', v.fcf3yr, '>', 0),
+      chk('Operating cash flow (3yr) > 0', v.ocf3yr, '>', 0),
+      chk('Pledged % = 0', v.pledged, '=', 0),
+      chk('RSI < 70', v.rsi, '<', 70)
+    ];
+  }
+  function screenBChecks(v){
+    return [
+      chk('Market Cap > 5000', v.marketCap, '>', 5000),
+      chk('P/E < 20', v.pe, '<', 20),
+      chk('P/E < Industry P/E', v.pe, '<', v.industryPe),
+      chk('PEG Ratio < 1.25', v.peg, '<', 1.25),
+      chk('Price to Book Value < 3', v.pb, '<', 3),
+      chk('Debt to Equity < 0.5', v.de, '<', 0.5),
+      chk('Return on Equity > 15%', v.roe, '>', 15),
+      chk('Avg ROCE (3yr) > 15%', v.roce3yr, '>', 15),
+      chk('Sales growth (3yr) > 10%', v.salesGrowth3yr, '>', 10),
+      chk('Profit growth (3yr) > 10%', v.profitGrowth3yr, '>', 10),
+      chk('EPS growth (5yr) > 10%', v.epsGrowth5yr, '>', 10),
+      chk('Free cash flow (3yr) > 0', v.fcf3yr, '>', 0),
+      chk('Operating cash flow (3yr) > 0', v.ocf3yr, '>', 0),
+      chk('Pledged % = 0', v.pledged, '=', 0)
+    ];
+  }
+  function screenCChecks(v){
+    const checks = [
+      chk('Market Cap > 5000', v.marketCap, '>', 5000),
+      chk('P/E < 15', v.pe, '<', 15),
+      chk('P/E < Industry P/E', v.pe, '<', v.industryPe),
+      chk('PEG Ratio < 1', v.peg, '<', 1),
+      chk('Price to Book Value < 2', v.pb, '<', 2),
+      chk('Debt to Equity < 0.5', v.de, '<', 0.5),
+      chk('Current Ratio > 1.5', v.currentRatio, '>', 1.5),
+      chk('Return on Equity > 15%', v.roe, '>', 15),
+      chk('Avg ROCE (3yr) > 14%', v.roce3yr, '>', 14),
+      chk('Sales growth (3yr) > 10%', v.salesGrowth3yr, '>', 10),
+      chk('Profit growth (3yr) > 10%', v.profitGrowth3yr, '>', 10),
+      chk('Operating cash flow (3yr) > 0', v.ocf3yr, '>', 0),
+      chk('Free cash flow (5yr) > 0', v.fcf5yr, '>', 0),
+      chk('Pledged % = 0', v.pledged, '=', 0)
+    ];
+    // FCF yield — informational only, since the threshold wasn't specified.
+    let fcfYieldNote = null;
+    if(v.fcfPrecYear !== null && v.shares !== null && v.shares > 0 && v.price !== null && v.price > 0){
+      const fcfYield = ((v.fcfPrecYear / v.shares) / v.price) * 100;
+      fcfYieldNote = fcfYield;
+    }
+    return { checks, fcfYieldNote };
+  }
+  function renderScreenChecklist(elId, checks, extraNote){
+    const box = document.getElementById(elId);
+    if(!box) return;
+    const passCount = checks.filter(c => c.state === 'pass').length;
+    const failCount = checks.filter(c => c.state === 'fail').length;
+    const naCount = checks.filter(c => c.state === 'na').length;
+    let verdict, color;
+    if(naCount > 0) { verdict = `Incomplete — fill in ${naCount} more field${naCount === 1 ? '' : 's'} to check`; color = 'var(--ink-soft)'; }
+    else if(failCount === 0) { verdict = '✓ PASSES this screen'; color = 'var(--teal-dark)'; }
+    else { verdict = `✗ Fails ${failCount} of ${checks.length} conditions`; color = 'var(--coral)'; }
+    box.innerHTML = `
+      <div style="font-weight:600;color:${color};margin-bottom:6px;">${verdict}</div>
+      <ul style="margin:0 0 0 18px;padding:0;font-size:12px;line-height:1.8;">
+        ${checks.map(c => {
+          const icon = c.state === 'pass' ? '✓' : (c.state === 'fail' ? '✗' : '—');
+          const clr = c.state === 'pass' ? 'var(--teal-dark)' : (c.state === 'fail' ? 'var(--coral)' : 'var(--ink-soft)');
+          return `<li style="color:${clr};">${icon} ${escapeHtml(c.label)}</li>`;
+        }).join('')}
+      </ul>
+      ${extraNote != null ? `<div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">FCF yield (preceding year FCF ÷ shares ÷ price): <strong>${extraNote.toFixed(2)}%</strong> — informational only; the pass/fail threshold for this wasn't specified, so it's not counted in the verdict above.</div>` : ''}
+    `;
+  }
+  function renderAllScreens(){
+    const v = scrCollectValues();
+    renderScreenChecklist('scrResultA', screenAChecks(v));
+    renderScreenChecklist('scrResultB', screenBChecks(v));
+    const c = screenCChecks(v);
+    renderScreenChecklist('scrResultC', c.checks, c.fcfYieldNote);
+  }
+  const scrCheckAllBtn = document.getElementById('scrCheckAll');
+  if(scrCheckAllBtn) scrCheckAllBtn.addEventListener('click', renderAllScreens);
+  const scrAutoFillBtn = document.getElementById('scrAutoFill');
+  if(scrAutoFillBtn){
+    scrAutoFillBtn.addEventListener('click', async () => {
+      const nameEl = document.getElementById('scrName');
+      const statusEl = document.getElementById('scrAutoFillStatus');
+      const query = nameEl.value.trim();
+      if(!query){ statusEl.textContent = 'Type a stock name or ticker first.'; return; }
+      statusEl.textContent = `Looking up "${query}"…`;
+      try{
+        const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=IN`);
+        const data = await res.json();
+        if(!res.ok || data.error){ statusEl.textContent = data.error || "Couldn't fetch live data — enter values manually."; return; }
+        if(data.price != null) document.getElementById('scrPrice').value = data.price;
+        if(data.pe != null) document.getElementById('scrPe').value = data.pe.toFixed(2);
+        if(data.debtToEquity != null) document.getElementById('scrDe').value = data.debtToEquity.toFixed(2);
+        nameEl.value = data.name || query;
+        statusEl.textContent = `✓ Got price/P/E/debt-to-equity from ${data.symbol}. The rest (ROCE, growth rates, pledged %, RSI, etc.) aren't available live — pull those from Screener.in or the annual report.`;
+      }catch(e){
+        statusEl.textContent = "Couldn't reach the live data source — enter values manually instead.";
+      }
+    });
+  }
 
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
