@@ -146,7 +146,7 @@
   .mval-inline{ display:inline-flex; align-items:center; gap:6px; }
   .mval-eye{ background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px; line-height:1; opacity:0.75; }
   .mval-eye:hover{ opacity:1; }
-  .daily-briefing{ background:linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%); color:#fff; border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; }
+  .daily-briefing{ background:linear-gradient(135deg, var(--navbar-bg) 0%, color-mix(in srgb, var(--navbar-bg), black 18%) 100%); color:var(--navbar-ink); border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; }
   .daily-briefing h3{ margin:0 0 8px 0; font-family:'Fraunces', serif; font-weight:600; font-size:16px; }
   .daily-briefing .db-row{ display:flex; align-items:flex-start; gap:8px; font-size:12.5px; padding:5px 0; border-top:1px solid rgba(255,255,255,0.18); }
   .daily-briefing .db-row:first-of-type{ border-top:none; }
@@ -321,7 +321,9 @@
   .gate{ min-height:100vh; background: linear-gradient(135deg, var(--paper) 0%, var(--paper-deep) 100%); display:flex; align-items:center; justify-content:center; padding:24px; }
   .gate-inner{ max-width:440px; width:100%; }
   .gate-card{ background:var(--card); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
-  .gate-card-header{ background:linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%); padding:30px 26px 24px 26px; }
+  .gate-card-header{ background:linear-gradient(135deg, var(--navbar-bg) 0%, color-mix(in srgb, var(--navbar-bg), black 18%) 100%); padding:30px 26px 24px 26px; }
+  #loginGate button.add-btn:not(.ghost){ background:var(--navbar-bg); color:var(--navbar-ink); }
+  #loginGate a{ color:var(--navbar-bg); }
   .gate-card-header h1{ color:#fff; font-size:28px; margin:6px 0 10px 0; outline:none; border-bottom:2px dashed transparent; }
   .gate-card-header h1:hover, .gate-card-header h1:focus{ border-bottom-color:rgba(255,255,255,0.5); }
   .gate-card-body{ padding:24px 26px 28px 26px; }
@@ -511,13 +513,13 @@
     <section class="panel active" id="panel-overview">
       <div id="dailyBriefing" class="daily-briefing"></div>
       <div id="notifyPromptBox" style="display:none;margin-bottom:14px;">
-        <button type="button" class="add-btn full-width" id="notifyEnableBtn">🔔 Enable notifications for bills, budget alerts & documents</button>
+        <button type="button" class="add-btn full-width" id="notifyEnableBtn" style="background:var(--navbar-bg);color:var(--navbar-ink);">🔔 Enable notifications for bills, budget alerts & documents</button>
       </div>
       <div style="margin-bottom:14px;">
         <button type="button" class="add-btn ghost full-width" id="emgQuickViewBtn">🚑 View emergency info card</button>
       </div>
       <div id="voiceQuickAddBox" style="margin-bottom:14px;">
-        <button type="button" class="add-btn full-width" id="voiceQuickAddBtn">🎤 Voice quick-add</button>
+        <button type="button" class="add-btn full-width" id="voiceQuickAddBtn" style="background:var(--navbar-bg);color:var(--navbar-ink);">🎤 Voice quick-add</button>
         <div id="voiceQuickAddStatus" style="font-size:11px;color:var(--ink-soft);margin-top:4px;display:none;"></div>
       </div>
       <div id="overviewAlerts" style="display:none;margin-bottom:14px;"></div>
