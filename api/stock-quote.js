@@ -17,6 +17,7 @@
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const YAHOO_SEARCH = 'https://query1.finance.yahoo.com/v1/finance/search';
 const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
+const YAHOO_QUOTE_V7 = 'https://query1.finance.yahoo.com/v7/finance/quote';
 const YAHOO_QUOTE_SUMMARY = 'https://query2.finance.yahoo.com/v10/finance/quoteSummary';
 
 function withTimeout(promise, ms) {
@@ -32,9 +33,18 @@ async function fetchJson(url, options) {
   return res.json();
 }
 
+const STOCK_SUFFIXES = {
+  IN: ['.NS', '.BO'],
+  AE: ['.AE'],
+  GB: ['.L'],
+  SA: ['.SR'],
+  US: [] // US tickers have no suffix on Yahoo
+};
+
 async function resolveSymbol(query, market) {
-  if (/\.(NS|BO|AE)$/i.test(query.trim())) {
-    return query.trim().toUpperCase();
+  const suffixes = STOCK_SUFFIXES[market] || STOCK_SUFFIXES.IN;
+  if (suffixes.some(s => query.trim().toUpperCase().endsWith(s)) || (market === 'US' && /^[A-Z.]{1,6}$/.test(query.trim()) && query.trim() === query.trim().toUpperCase() && query.trim().length <= 5)) {
+    return { symbol: query.trim().toUpperCase(), name: query.trim().toUpperCase() };
   }
   const data = await fetchJson(`${YAHOO_SEARCH}?q=${encodeURIComponent(query)}&quotesCount=15&newsCount=0`, {
     headers: { 'User-Agent': UA, 'Accept': 'application/json' }
@@ -42,16 +52,48 @@ async function resolveSymbol(query, market) {
   const quotes = (data.quotes || []).filter(q => q.symbol);
   if (!quotes.length) return null;
 
-  const suffixPriority = market === 'AE' ? ['.AE'] : ['.NS', '.BO'];
-  for (const suffix of suffixPriority) {
-    const match = quotes.find(q => q.symbol.toUpperCase().endsWith(suffix));
+  if (market === 'US') {
+    // US tickers have no suffix — prefer results whose symbol has no dot at all.
+    const match = quotes.find(q => !q.symbol.includes('.'));
     if (match) return { symbol: match.symbol, name: match.longname || match.shortname || match.symbol };
+  } else {
+    for (const suffix of suffixes) {
+      const match = quotes.find(q => q.symbol.toUpperCase().endsWith(suffix));
+      if (match) return { symbol: match.symbol, name: match.longname || match.shortname || match.symbol };
+    }
   }
   return { symbol: quotes[0].symbol, name: quotes[0].longname || quotes[0].shortname || quotes[0].symbol };
 }
 
+// Lighter-weight batch quote endpoint — historically more permissive than
+// quoteSummary (no crumb needed in most reported cases as of writing),
+// so it's tried first for the widest field coverage in one call.
+async function getQuoteV7(symbol) {
+  const data = await fetchJson(`${YAHOO_QUOTE_V7}?symbols=${encodeURIComponent(symbol)}`, {
+    headers: { 'User-Agent': UA, 'Accept': 'application/json' }
+  });
+  const q = data?.quoteResponse?.result?.[0];
+  if (!q) return null;
+  const num = (v) => (typeof v === 'number' ? v : null);
+  const priceToBook = num(q.priceToBook);
+  const price = num(q.regularMarketPrice);
+  return {
+    price,
+    eps: num(q.epsTrailingTwelveMonths),
+    pe: num(q.trailingPE),
+    marketCap: num(q.marketCap),
+    priceToBook,
+    bookValue: (priceToBook && price && priceToBook > 0) ? price / priceToBook : null,
+    currency: q.currency || null,
+    exchange: q.fullExchangeName || q.exchange || null,
+    name: q.longName || q.shortName || null,
+    dividendYield: num(q.trailingAnnualDividendYield) != null ? num(q.trailingAnnualDividendYield) * 100 : null
+  };
+}
+
 // Price via the "chart" endpoint — this one has stayed crumb-free in
-// practice, unlike quoteSummary, so it's the reliable part of this proxy.
+// practice, unlike quoteSummary, so it's a reliable fallback for price alone
+// if the batch quote above fails entirely.
 async function getChartPrice(symbol) {
   const data = await fetchJson(`${YAHOO_CHART}/${encodeURIComponent(symbol)}?interval=1d&range=1d`, {
     headers: { 'User-Agent': UA, 'Accept': 'application/json' }
@@ -97,8 +139,14 @@ async function getFundamentals(symbol) {
     eps: pick(keyStats.trailingEps),
     bookValue: pick(keyStats.bookValue),
     pe: pick(summaryDetail.trailingPE) || pick(keyStats.trailingPE),
+    marketCap: pick(summaryDetail.marketCap) || pick(keyStats.marketCap),
+    priceToBook: pick(keyStats.priceToBook),
     dividendYield: pick(summaryDetail.dividendYield) != null ? pick(summaryDetail.dividendYield) * 100 : null,
-    debtToEquity: pick(financialData.debtToEquity) != null ? pick(financialData.debtToEquity) / 100 : null
+    debtToEquity: pick(financialData.debtToEquity) != null ? pick(financialData.debtToEquity) / 100 : null,
+    returnOnEquity: pick(financialData.returnOnEquity) != null ? pick(financialData.returnOnEquity) * 100 : null,
+    currentRatio: pick(financialData.currentRatio),
+    operatingCashflow: pick(financialData.operatingCashflow),
+    freeCashflow: pick(financialData.freeCashflow)
   };
 }
 
@@ -109,7 +157,7 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: 'Missing query parameter "q" (company name or ticker).' });
     return;
   }
-  const marketCode = market === 'AE' ? 'AE' : 'IN';
+  const marketCode = ['IN','AE','US','GB','SA'].includes(market) ? market : 'IN';
 
   let resolved;
   try {
@@ -123,27 +171,45 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // Try the batch quote first — widest field coverage, and historically the
+  // most likely to still work without a crumb.
+  let v7 = null;
+  try { v7 = await getQuoteV7(resolved.symbol); } catch (e) { /* fall through */ }
+
   let priceInfo = null;
-  try { priceInfo = await getChartPrice(resolved.symbol); } catch (e) { /* handled below */ }
+  if (!v7 || v7.price == null) {
+    try { priceInfo = await getChartPrice(resolved.symbol); } catch (e) { /* handled below */ }
+  }
 
   let fundamentals = null;
-  try { fundamentals = await getFundamentals(resolved.symbol); } catch (e) { /* fundamentals optional — degrade gracefully */ }
+  // Only worth the extra crumb round-trip if the batch quote didn't already
+  // give us EPS/book value.
+  if (!v7 || v7.eps == null || v7.bookValue == null) {
+    try { fundamentals = await getFundamentals(resolved.symbol); } catch (e) { /* fundamentals optional — degrade gracefully */ }
+  }
 
-  if (!priceInfo || priceInfo.price == null) {
+  const price = (v7 && v7.price != null) ? v7.price : (priceInfo ? priceInfo.price : null);
+  if (price == null) {
     res.status(404).json({ error: `Found "${resolved.symbol}" but couldn't retrieve a live price for it right now — try again shortly or enter values manually.` });
     return;
   }
 
   res.status(200).json({
     symbol: resolved.symbol,
-    name: resolved.name,
-    currency: priceInfo.currency,
-    exchange: priceInfo.exchange,
-    price: priceInfo.price,
-    eps: fundamentals ? fundamentals.eps : null,
-    bookValue: fundamentals ? fundamentals.bookValue : null,
-    pe: fundamentals ? fundamentals.pe : null,
-    dividendYield: fundamentals ? fundamentals.dividendYield : null,
-    debtToEquity: fundamentals ? fundamentals.debtToEquity : null
+    name: (v7 && v7.name) || resolved.name,
+    currency: (v7 && v7.currency) || (priceInfo && priceInfo.currency) || null,
+    exchange: (v7 && v7.exchange) || (priceInfo && priceInfo.exchange) || null,
+    price,
+    eps: (v7 && v7.eps != null) ? v7.eps : (fundamentals ? fundamentals.eps : null),
+    bookValue: (v7 && v7.bookValue != null) ? v7.bookValue : (fundamentals ? fundamentals.bookValue : null),
+    pe: (v7 && v7.pe != null) ? v7.pe : (fundamentals ? fundamentals.pe : null),
+    marketCap: (v7 && v7.marketCap != null) ? v7.marketCap : (fundamentals ? fundamentals.marketCap : null),
+    priceToBook: (v7 && v7.priceToBook != null) ? v7.priceToBook : (fundamentals ? fundamentals.priceToBook : null),
+    dividendYield: (v7 && v7.dividendYield != null) ? v7.dividendYield : (fundamentals ? fundamentals.dividendYield : null),
+    debtToEquity: fundamentals ? fundamentals.debtToEquity : null,
+    returnOnEquity: fundamentals ? fundamentals.returnOnEquity : null,
+    currentRatio: fundamentals ? fundamentals.currentRatio : null,
+    operatingCashflow: fundamentals ? fundamentals.operatingCashflow : null,
+    freeCashflow: fundamentals ? fundamentals.freeCashflow : null
   });
 };

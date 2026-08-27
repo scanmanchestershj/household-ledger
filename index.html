@@ -1113,20 +1113,26 @@
         </div>
       </div>
 
-      <div id="reportCountrySplitWrap">
-        <div class="section-title">Resident vs Home — this period</div>
-        <div style="font-size:11.5px;color:var(--ink-soft);margin:-8px 0 8px 0;">Each country's own figures, in its own currency. Remittance received in Home isn't counted as income here either.</div>
-        <div id="reportCountrySplit"></div>
+      <div class="accordion" data-key="resident-vs-home" id="reportCountrySplitWrap">
+        <button type="button" class="accordion-header"><span>Resident vs Home — this period</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:11.5px;color:var(--ink-soft);margin:-2px 0 8px 0;">Each country's own figures, in its own currency. Remittance received in Home isn't counted as income here either.</div>
+          <div id="reportCountrySplit"></div>
+        </div>
       </div>
 
-      <div class="section-title">Card bills due this period</div>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Based on due date, not spend date — so a card swipe today with a due date next month shows up in that month's due list.</div>
-      <div class="add-row">
-        <select class="who-select" id="reportDueBankFilter" style="width:auto;">
-          <option value="">All banks</option>
-        </select>
+      <div class="accordion" data-key="card-bills-due">
+        <button type="button" class="accordion-header"><span>Card bills due this period</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Based on due date, not spend date — so a card swipe today with a due date next month shows up in that month's due list.</div>
+          <div class="add-row">
+            <select class="who-select" id="reportDueBankFilter" style="width:auto;">
+              <option value="">All banks</option>
+            </select>
+          </div>
+          <div id="reportDueBreakdown"></div>
+        </div>
       </div>
-      <div id="reportDueBreakdown"></div>
 
       <div class="accordion" data-key="spent-per-person">
         <button type="button" class="accordion-header"><span>Spent for each person (splits)</span><span class="accordion-arrow">▸</span></button>
@@ -7463,24 +7469,29 @@
     `;
   }
   const uaeValCalcBtn = document.getElementById('uaeValCalc');
-  if(uaeValCalcBtn) uaeValCalcBtn.addEventListener('click', () => renderValuationResult('uae', 'AED '));
+  if(uaeValCalcBtn) uaeValCalcBtn.addEventListener('click', () => renderValuationResult('uae', currentCurrencySymbol('UAE')));
   const indiaValCalcBtn = document.getElementById('indiaValCalc');
-  if(indiaValCalcBtn) indiaValCalcBtn.addEventListener('click', () => renderValuationResult('india', '₹'));
+  if(indiaValCalcBtn) indiaValCalcBtn.addEventListener('click', () => renderValuationResult('india', currentCurrencySymbol('India')));
 
   // ---- Live auto-fill: fetches real price/EPS/book value via our own
   // /api/stock-quote proxy (Yahoo Finance server-side, so no browser CORS
   // issue), fills the form, then runs the calculation automatically. ----
-  async function autoFillValuation(prefix, market, sym){
+  async function autoFillValuation(prefix, countryKey){
     const nameEl = document.getElementById(prefix + 'ValName');
     const statusEl = document.getElementById(prefix + 'ValAutoFillStatus');
     const query = nameEl.value.trim();
     if(!query){ statusEl.textContent = 'Type a stock name or ticker first.'; return; }
+    const marketInfo = currentMarketInfo(countryKey);
+    const market = marketInfo.code || (countryKey === 'UAE' ? 'AE' : 'IN');
+    const cfg = countryKey === 'UAE' ? state.countryConfig.country1 : state.countryConfig.country2;
+    const symRaw = CURRENCIES[cfg.currency] || cfg.currency;
+    const sym = symRaw.length > 1 ? symRaw + ' ' : symRaw;
     statusEl.textContent = `Looking up "${query}"…`;
     try{
       const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=${market}`);
       const data = await res.json();
       if(!res.ok || data.error){
-        statusEl.textContent = data.error || "Couldn't fetch live data — try the exact ticker (e.g. WIPRO.NS) or enter values manually.";
+        statusEl.textContent = data.error || "Couldn't fetch live data — try the exact ticker or enter values manually.";
         return;
       }
       if(data.price != null) document.getElementById(prefix + 'ValPrice').value = data.price;
@@ -7503,9 +7514,9 @@
     }
   }
   const uaeValAutoFillBtn = document.getElementById('uaeValAutoFill');
-  if(uaeValAutoFillBtn) uaeValAutoFillBtn.addEventListener('click', () => autoFillValuation('uae', 'AE', 'AED '));
+  if(uaeValAutoFillBtn) uaeValAutoFillBtn.addEventListener('click', () => autoFillValuation('uae', 'UAE'));
   const indiaValAutoFillBtn = document.getElementById('indiaValAutoFill');
-  if(indiaValAutoFillBtn) indiaValAutoFillBtn.addEventListener('click', () => autoFillValuation('india', 'IN', '₹'));
+  if(indiaValAutoFillBtn) indiaValAutoFillBtn.addEventListener('click', () => autoFillValuation('india', 'India'));
 
   // ---- Screener: checks one stock's fundamentals against three
   // Screener.in-style rule sets (Deeply Undervalued / Quality at Reasonable
@@ -7653,11 +7664,24 @@
         const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=IN`);
         const data = await res.json();
         if(!res.ok || data.error){ statusEl.textContent = data.error || "Couldn't fetch live data — enter values manually."; return; }
-        if(data.price != null) document.getElementById('scrPrice').value = data.price;
-        if(data.pe != null) document.getElementById('scrPe').value = data.pe.toFixed(2);
-        if(data.debtToEquity != null) document.getElementById('scrDe').value = data.debtToEquity.toFixed(2);
+        const filled = [];
+        const setIf = (id, val, decimals, label) => {
+          if(val != null){ document.getElementById(id).value = decimals != null ? val.toFixed(decimals) : val; filled.push(label); }
+        };
+        setIf('scrPrice', data.price, 2, 'price');
+        setIf('scrPe', data.pe, 2, 'P/E');
+        setIf('scrDe', data.debtToEquity, 2, 'debt-to-equity');
+        setIf('scrPb', data.priceToBook, 2, 'P/B');
+        setIf('scrRoe', data.returnOnEquity, 1, 'ROE');
+        setIf('scrCurrentRatio', data.currentRatio, 2, 'current ratio');
+        if(data.marketCap != null) { document.getElementById('scrMarketCap').value = (data.marketCap / 1e7).toFixed(0); filled.push('market cap'); } // absolute currency -> ₹ Cr
+        if(data.operatingCashflow != null) { document.getElementById('scrOcf3yr').value = (data.operatingCashflow / 1e7).toFixed(1); filled.push('operating cash flow (TTM, not a true 3yr sum)'); }
+        if(data.freeCashflow != null) { document.getElementById('scrFcf3yr').value = (data.freeCashflow / 1e7).toFixed(1); filled.push('free cash flow (TTM, not a true 3yr sum)'); }
         nameEl.value = data.name || query;
-        statusEl.textContent = `✓ Got price/P/E/debt-to-equity from ${data.symbol}. The rest (ROCE, growth rates, pledged %, RSI, etc.) aren't available live — pull those from Screener.in or the annual report.`;
+        const missing = ['Industry P/E', 'PEG', 'ROCE (3yr avg)', 'sales/profit growth (3yr)', 'EPS growth (5yr)', 'pledged %', 'RSI'];
+        statusEl.textContent = filled.length
+          ? `✓ Filled ${filled.join(', ')} from ${data.symbol}. Still need: ${missing.join(', ')} — those need Screener.in or the annual report, not available from this live source. Cash flow figures are trailing-12-month, not a true 3-year sum — adjust if you have the real 3yr totals.`
+          : `Found ${data.symbol} but couldn't extract usable fields — enter values manually.`;
       }catch(e){
         statusEl.textContent = "Couldn't reach the live data source — enter values manually instead.";
       }
@@ -9710,11 +9734,12 @@
         summaryEl.innerHTML = '';
       } else {
         const pnlClass = totalPnl >= 0 ? 'positive-pnl' : 'negative-pnl';
+        const fieldBase = 'inv_' + countryKey + '_' + catCfg.key;
         summaryEl.innerHTML = `
           <div class="inv-summary-row">
-            <div><div class="eyebrow">Invested</div><div class="inv-summary-val">${fmtCountry(totalInvested, countryKey)}</div></div>
-            <div><div class="eyebrow">Current value</div><div class="inv-summary-val">${fmtCountry(totalCurrent, countryKey)}</div></div>
-            <div><div class="eyebrow">Returns</div><div class="inv-summary-val ${pnlClass}">${totalPnl >= 0 ? '+' : '−'}${fmtCountry(Math.abs(totalPnl), countryKey)} (${totalPnl >= 0 ? '+' : '−'}${Math.abs(totalPnlPct).toFixed(2)}%)</div></div>
+            <div><div class="eyebrow">Invested</div><div class="inv-summary-val">${maskedField(fieldBase + '_invested', rawValue(() => fmtCountry(totalInvested, countryKey)))}</div></div>
+            <div><div class="eyebrow">Current value</div><div class="inv-summary-val">${maskedField(fieldBase + '_current', rawValue(() => fmtCountry(totalCurrent, countryKey)))}</div></div>
+            <div><div class="eyebrow">Returns</div><div class="inv-summary-val ${pnlClass}">${maskedField(fieldBase + '_returns', rawValue(() => (totalPnl >= 0 ? '+' : '−') + fmtCountry(Math.abs(totalPnl), countryKey) + ' (' + (totalPnl >= 0 ? '+' : '−') + Math.abs(totalPnlPct).toFixed(2) + '%)'))}</div></div>
           </div>`;
       }
     }
@@ -9820,21 +9845,50 @@
   }
 
   // ---- Market snapshot: auto-shows the relevant country's major stock
-  // indices (NIFTY/SENSEX for India, DFM/ADX for UAE) whenever you land on
-  // that country's Investment tab. Cached briefly per session to avoid
-  // re-fetching every re-render. ----
+  // indices (NIFTY/SENSEX for India, DFM/ADX for UAE, S&P500/Dow/Nasdaq for
+  // USA, etc.) whenever you land on that country's Investment tab. Follows
+  // whatever country name is set in Admin — not hardcoded to UAE/India — so
+  // changing "Resident Country" to e.g. "USA" switches the market data too.
+  // Cached briefly per session to avoid re-fetching every re-render. ----
+  const COUNTRY_MARKET_LOOKUP = [
+    { test: /india|bharat/i, code: 'IN', label: 'NSE / BSE' },
+    { test: /u\.?a\.?e\.?|united arab emirates|dubai|abu dhabi/i, code: 'AE', label: 'DFM / ADX' },
+    { test: /u\.?s\.?a?\.?$|united states|america/i, code: 'US', label: 'NYSE / Nasdaq' },
+    { test: /u\.?k\.?$|united kingdom|britain|england/i, code: 'GB', label: 'LSE' },
+    { test: /saudi/i, code: 'SA', label: 'Tadawul' }
+  ];
+  function marketCodeForCountryName(name){
+    if(!name) return null;
+    const match = COUNTRY_MARKET_LOOKUP.find(m => m.test.test(name.trim()));
+    return match || null;
+  }
+  function currentMarketInfo(countryKey){
+    const name = countryKey === 'UAE' ? state.countryConfig.country1.name : state.countryConfig.country2.name;
+    const match = marketCodeForCountryName(name);
+    return match ? { code: match.code, label: match.label, countryName: name } : { code: null, label: null, countryName: name };
+  }
+  function currentCurrencySymbol(countryKey){
+    const cfg = countryKey === 'UAE' ? state.countryConfig.country1 : state.countryConfig.country2;
+    const sym = CURRENCIES[cfg.currency] || cfg.currency;
+    return sym.length > 1 ? sym + ' ' : sym;
+  }
   const marketSnapshotCache = {};
   async function renderMarketSnapshot(countryKey){
     const boxId = countryKey === 'UAE' ? 'uaeMarketSnapshot' : 'indiaMarketSnapshot';
     const box = document.getElementById(boxId);
     if(!box) return;
-    const marketCode = countryKey === 'UAE' ? 'AE' : 'IN';
+    const market = currentMarketInfo(countryKey);
+    if(!market.code){
+      box.innerHTML = `<div class="empty" style="padding:8px 0;">No live market data mapped for "${escapeHtml(market.countryName || 'this country')}" yet — the calculator and screener below still work with manual entry.</div>`;
+      return;
+    }
+    const marketCode = market.code;
     const cached = marketSnapshotCache[marketCode];
     if(cached && (Date.now() - cached.ts) < 120000){
       renderMarketSnapshotHtml(box, cached.data);
       return;
     }
-    box.innerHTML = `<div class="empty" style="padding:8px 0;">Loading ${countryKey === 'UAE' ? 'DFM / ADX' : 'NSE / BSE'} snapshot…</div>`;
+    box.innerHTML = `<div class="empty" style="padding:8px 0;">Loading ${escapeHtml(market.label)} snapshot…</div>`;
     try{
       const res = await fetch(`/api/market-index?market=${marketCode}`);
       const data = await res.json();
@@ -9874,9 +9928,9 @@
     if(grid){
       const pnlClass = totalPnl >= 0 ? 'teal' : 'gold';
       grid.innerHTML = `
-        <div class="stat teal"><div class="num">${fmtCountry(totalCurrent, countryKey)}</div><div class="label">current value</div></div>
-        <div class="stat gold"><div class="num">${fmtCountry(totalInvested, countryKey)}</div><div class="label">invested</div></div>
-        <div class="stat ${pnlClass}"><div class="num">${totalPnl >= 0 ? '+' : '−'}${fmtCountry(Math.abs(totalPnl), countryKey)}</div><div class="label">returns (${totalPnl >= 0 ? '+' : '−'}${Math.abs(totalPnlPct).toFixed(2)}%)</div></div>
+        <div class="stat teal"><div class="num">${maskedField('inv_current_' + countryKey, rawValue(() => fmtCountry(totalCurrent, countryKey)))}</div><div class="label">current value</div></div>
+        <div class="stat gold"><div class="num">${maskedField('inv_invested_' + countryKey, rawValue(() => fmtCountry(totalInvested, countryKey)))}</div><div class="label">invested</div></div>
+        <div class="stat ${pnlClass}"><div class="num">${maskedField('inv_returns_' + countryKey, rawValue(() => (totalPnl >= 0 ? '+' : '−') + fmtCountry(Math.abs(totalPnl), countryKey)))}</div><div class="label">returns (${totalPnl >= 0 ? '+' : '−'}${Math.abs(totalPnlPct).toFixed(2)}%)</div></div>
       `;
     }
   }

@@ -13,6 +13,17 @@ const INDICES = {
   AE: [
     { symbol: 'DFMGI.AE', name: 'DFM General Index', exchange: 'Dubai (DFM)' },
     { symbol: 'FADGI.FGI', name: 'FTSE ADX General Index', exchange: 'Abu Dhabi (ADX)' }
+  ],
+  US: [
+    { symbol: '^GSPC', name: 'S&P 500', exchange: 'NYSE/Nasdaq' },
+    { symbol: '^DJI', name: 'Dow Jones', exchange: 'NYSE' },
+    { symbol: '^IXIC', name: 'Nasdaq Composite', exchange: 'Nasdaq' }
+  ],
+  GB: [
+    { symbol: '^FTSE', name: 'FTSE 100', exchange: 'LSE' }
+  ],
+  SA: [
+    { symbol: '^TASI.SR', name: 'Tadawul All Share', exchange: 'Saudi Exchange' }
   ]
 };
 
@@ -42,8 +53,12 @@ async function fetchIndex(def) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
-  const market = req.query && req.query.market === 'AE' ? 'AE' : 'IN';
+  const market = (req.query && req.query.market) || 'IN';
   const defs = INDICES[market];
+  if (!defs) {
+    res.status(200).json({ market, indices: [] });
+    return;
+  }
   const results = await Promise.all(defs.map(fetchIndex));
   res.status(200).json({ market, indices: results });
 };
