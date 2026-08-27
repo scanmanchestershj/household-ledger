@@ -37,6 +37,7 @@
     --line: #DDE1E8;
     --navbar-bg: #1B2A4A;
     --navbar-ink: #E8ECF5;
+    --heading-ink: #1B2A4A;
     --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 18px rgba(0,200,150,0.08);
     --radius: 14px;
   }
@@ -44,6 +45,7 @@
     --card: #242726;
     --ink: #EDEFEE;
     --ink-soft: #9AA39E;
+    --heading-ink: #EDEFEE;
     --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 6px 18px rgba(0,0,0,0.3);
   }
   *{box-sizing:border-box;}
@@ -199,9 +201,9 @@
   .msb-label.current{ color:var(--teal-dark); font-weight:600; }
   .monthly-spend-avg{ font-size:12.5px; color:var(--ink-soft); margin-top:6px; }
 
-  .section-title{ font-family:'Fraunces', serif; font-size:18px; font-weight:600; margin:22px 0 10px 0; }
+  .section-title{ font-family:'Fraunces', serif; font-size:18px; font-weight:600; margin:22px 0 10px 0; color:var(--heading-ink); }
   .accordion{ border:1px solid var(--line); border-radius:6px; margin:14px 0; background:var(--card); overflow:hidden; }
-  .accordion-header{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--paper-deep); border:none; cursor:pointer; padding:12px 14px; font-family:'Fraunces', serif; font-size:16px; font-weight:600; color:var(--ink); text-align:left; }
+  .accordion-header{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--paper-deep); border:none; cursor:pointer; padding:12px 14px; font-family:'Fraunces', serif; font-size:16px; font-weight:600; color:var(--heading-ink); text-align:left; }
   .accordion-header:hover{ background:var(--card-hover, var(--paper-deep)); }
   .accordion-header .accordion-arrow{ font-size:13px; color:var(--ink-soft); transition:transform .15s ease; flex-shrink:0; }
   .accordion.open .accordion-header .accordion-arrow{ transform:rotate(90deg); }
@@ -390,7 +392,7 @@
 
   .subtabs{ display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 16px 0; border-bottom:1px solid var(--line); padding-bottom:10px; }
   .subtab{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; padding:7px 12px; background:var(--paper-deep); color:var(--ink-soft); border:none; border-radius:14px; cursor:pointer; }
-  .subtab.active{ background:var(--teal-dark); color:#fff; }
+  .subtab.active{ background:var(--heading-ink); color:#fff; }
   .subpanel{ display:none; }
   .subpanel.active{ display:block; animation: fadeIn 0.2s ease; }
 </style>
@@ -2541,7 +2543,7 @@
 
   // ---- Theme (choosable colors, avoiding the default green/blue) ----
   const THEMES = {
-    navyamber: { name: 'Navy & Amber', swatch: '#1B2A4A', paper:'#F5F6FA', paperDeep:'#E9EBF1', teal:'#D97B3F', tealDark:'#B85F26', line:'#DDE1E8', navbarBg:'#1B2A4A', navbarInk:'#E8ECF5' },
+    navyamber: { name: 'Navy & Amber', swatch: '#1B2A4A', paper:'#F5F6FA', paperDeep:'#E9EBF1', teal:'#D97B3F', tealDark:'#B85F26', line:'#DDE1E8', navbarBg:'#1B2A4A', navbarInk:'#E8ECF5', headingInk:'#1B2A4A' },
     royal:  { name: 'Royal Purple',swatch: '#5B2A86', paper:'#F7F4FB', paperDeep:'#EBE2F5', teal:'#5B2A86', tealDark:'#3E1C5E', line:'#D9C7EC', gold:'#C9A227' },
     sand:   { name: 'Warm Sand',   swatch: '#C97B4A', paper:'#FBF7F2', paperDeep:'#F3EAE0', teal:'#C97B4A', tealDark:'#A85E33', line:'#EADFD2' },
     rose:   { name: 'Soft Rose',   swatch: '#D9758F', paper:'#FDF5F6', paperDeep:'#F8E8EA', teal:'#D9758F', tealDark:'#B85670', line:'#F0DCE0' },
@@ -2571,6 +2573,7 @@
     root.style.setProperty('--line', vars.line);
     root.style.setProperty('--navbar-bg', vars.navbarBg || vars.paper);
     root.style.setProperty('--navbar-ink', vars.navbarInk || vars.teal);
+    root.style.setProperty('--heading-ink', vars.headingInk || '#2A2E2D');
   }
   function applyTheme(themeKey){
     const t = THEMES[themeKey];
@@ -2588,6 +2591,16 @@
     });
     renderThemeSwatches(null, hex);
   }
+  // Debounced save specifically for color changes: a color picker fires many
+  // rapid 'input' events while dragging. Saving on every one of them risks a
+  // race where an earlier request completes AFTER a later one and silently
+  // overwrites the final color with an older value. Waiting for the user to
+  // pause avoids that entirely.
+  let themeSaveTimer = null;
+  function debouncedThemeSave(){
+    clearTimeout(themeSaveTimer);
+    themeSaveTimer = setTimeout(() => { save(); }, 400);
+  }
   function renderThemeSwatches(activeKey, activeCustom){
     const el = document.getElementById('themeSwatches');
     if(!el) return;
@@ -2599,7 +2612,7 @@
       applyTheme(key);
       if(!state.settings) state.settings = {};
       state.settings.theme = { preset: key, custom: null };
-      save();
+      debouncedThemeSave();
     }));
   }
   function initThemeFromSettings(){
@@ -2620,7 +2633,7 @@
     applyCustomThemeColor(hex);
     if(!state.settings) state.settings = {};
     state.settings.theme = { preset: null, custom: hex };
-    save();
+    debouncedThemeSave();
   });
 
   // ---- Dark mode: a personal, per-device preference (not shared with the household) ----
@@ -2633,8 +2646,9 @@
       document.documentElement.style.setProperty('--paper', '#1B1D1C');
       document.documentElement.style.setProperty('--paper-deep', '#242726');
       document.documentElement.style.setProperty('--line', '#3A3D3C');
+      document.documentElement.style.setProperty('--heading-ink', '#EDEFEE'); // keep headings readable over a dark background regardless of the active theme's (possibly dark) heading color
     } else {
-      initThemeFromSettings(); // restores the household's chosen paper/paper-deep/line
+      initThemeFromSettings(); // restores the household's chosen paper/paper-deep/line/heading-ink
     }
     const btn = document.getElementById('darkModeToggleBtn');
     if(btn){ btn.textContent = on ? '☀️' : '🌙'; btn.title = on ? 'Switch to light mode' : 'Switch to dark mode'; btn.setAttribute('aria-label', btn.title); }
