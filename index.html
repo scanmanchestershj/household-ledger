@@ -23,18 +23,20 @@
 </style>
 <style>
   :root{
-    --paper: #F5F7F6;
-    --paper-deep: #EAF6F1;
+    --paper: #F5F6FA;
+    --paper-deep: #E9EBF1;
     --card: #FFFFFF;
     --ink: #2A2E2D;
     --ink-soft: #7C8681;
-    --teal: #00C896;
-    --teal-dark: #00A87D;
-    --gold: #F5A623;
+    --teal: #D97B3F;
+    --teal-dark: #B85F26;
+    --gold: #D97B3F;
     --coral: #F4515F;
     --amber: #F5A623;
     --blue: #4A90E2;
-    --line: #E6ECE9;
+    --line: #DDE1E8;
+    --navbar-bg: #1B2A4A;
+    --navbar-ink: #E8ECF5;
     --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 6px 18px rgba(0,200,150,0.08);
     --radius: 14px;
   }
@@ -86,17 +88,22 @@
     .cards-main{ flex:1.3; min-width:0; }
     .cards-side{ flex:1; min-width:0; background:var(--paper-deep); border-radius:4px; padding:16px; position:sticky; top:14px; }
   }
-  header.top{ padding:28px 22px 0 22px; background:linear-gradient(180deg, var(--paper-deep) 0%, var(--paper) 100%); }
+  header.top{ padding:22px 20px 14px 20px; background:var(--navbar-bg); color:var(--navbar-ink); }
+  header.top .eyebrow{ color:var(--navbar-ink); opacity:0.75; }
+  header.top h1{ color:var(--navbar-ink); }
+  header.top .subline{ color:var(--navbar-ink); opacity:0.65; }
+  header.top .add-btn.ghost{ border-color:rgba(255,255,255,0.28); color:var(--navbar-ink); background:rgba(255,255,255,0.08); }
+  header.top .currency-picker{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.28); color:var(--navbar-ink); }
   .top-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   .eyebrow{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--teal-dark); font-weight:600; }
   h1{ font-family:'Fraunces', serif; font-optical-sizing:auto; font-weight:600; font-size:32px; margin:4px 0 2px 0; letter-spacing:-0.01em; }
   .subline{ color:var(--ink-soft); font-size:14px; margin-bottom:18px; }
   .currency-picker{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:6px 8px; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); flex:0 0 auto; }
 
-  .tabs{ display:flex; flex-wrap:wrap; gap:6px; padding:0 14px; }
-  .tab{ flex:0 0 auto; font-family:'IBM Plex Mono', monospace; font-size:12.5px; letter-spacing:0.03em; padding:10px 16px 12px 16px; background:var(--paper-deep); color:var(--ink-soft); border:none; cursor:pointer; position:relative; clip-path: polygon(0% 0%, 100% 0%, 96% 100%, 4% 100%); transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease; }
-  .tab:hover{ transform: translateY(-1px); }
-  .tab.active{ background:var(--card); color:var(--ink); font-weight:500; box-shadow: 0 -2px 0 var(--teal) inset; }
+  .tabs{ display:flex; flex-wrap:wrap; gap:4px; padding:0 20px 12px 20px; background:var(--navbar-bg); border-radius:0 0 18px 18px; margin-bottom:14px; }
+  .tab{ flex:0 0 auto; font-family:'IBM Plex Mono', monospace; font-size:12.5px; letter-spacing:0.03em; padding:9px 14px 10px 14px; background:transparent; color:var(--navbar-ink); opacity:0.62; border:none; border-bottom:2px solid transparent; cursor:pointer; position:relative; transition: opacity 0.15s ease, border-color 0.15s ease, transform 0.15s ease; }
+  .tab:hover{ opacity:0.85; }
+  .tab.active{ background:transparent; color:var(--navbar-ink); opacity:1; font-weight:500; border-bottom-color:var(--teal); }
   .tab:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
 
   main{ background:var(--card); margin:0 14px; border-radius:2px; padding:22px 20px 28px 20px; box-shadow:var(--shadow); min-height:360px; }
@@ -2534,6 +2541,7 @@
 
   // ---- Theme (choosable colors, avoiding the default green/blue) ----
   const THEMES = {
+    navyamber: { name: 'Navy & Amber', swatch: '#1B2A4A', paper:'#F5F6FA', paperDeep:'#E9EBF1', teal:'#D97B3F', tealDark:'#B85F26', line:'#DDE1E8', navbarBg:'#1B2A4A', navbarInk:'#E8ECF5' },
     royal:  { name: 'Royal Purple',swatch: '#5B2A86', paper:'#F7F4FB', paperDeep:'#EBE2F5', teal:'#5B2A86', tealDark:'#3E1C5E', line:'#D9C7EC', gold:'#C9A227' },
     sand:   { name: 'Warm Sand',   swatch: '#C97B4A', paper:'#FBF7F2', paperDeep:'#F3EAE0', teal:'#C97B4A', tealDark:'#A85E33', line:'#EADFD2' },
     rose:   { name: 'Soft Rose',   swatch: '#D9758F', paper:'#FDF5F6', paperDeep:'#F8E8EA', teal:'#D9758F', tealDark:'#B85670', line:'#F0DCE0' },
@@ -2561,6 +2569,8 @@
     root.style.setProperty('--teal', vars.teal);
     root.style.setProperty('--teal-dark', vars.tealDark);
     root.style.setProperty('--line', vars.line);
+    root.style.setProperty('--navbar-bg', vars.navbarBg || vars.paper);
+    root.style.setProperty('--navbar-ink', vars.navbarInk || vars.teal);
   }
   function applyTheme(themeKey){
     const t = THEMES[themeKey];
