@@ -2265,28 +2265,37 @@
                 <button type="button" class="add-btn full-width" id="scrAutoFill" style="margin-top:6px;">🔴 Live fetch (partial)</button>
                 <div id="scrAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
               </div>
-              <div><label class="field-label">Market Cap (₹ Cr)</label><input type="number" id="scrMarketCap" step="1" placeholder="e.g. 45000"></div>
-              <div><label class="field-label">Current price (₹)</label><input type="number" id="scrPrice" step="0.01"></div>
-              <div><label class="field-label">P/E</label><input type="number" id="scrPe" step="0.01"></div>
-              <div><label class="field-label">Industry P/E</label><input type="number" id="scrIndustryPe" step="0.01"></div>
-              <div><label class="field-label">PEG Ratio</label><input type="number" id="scrPeg" step="0.01"></div>
-              <div><label class="field-label">Price to Book Value</label><input type="number" id="scrPb" step="0.01"></div>
-              <div><label class="field-label">Debt to Equity</label><input type="number" id="scrDe" step="0.01"></div>
-              <div><label class="field-label">Current Ratio</label><input type="number" id="scrCurrentRatio" step="0.01"></div>
-              <div><label class="field-label">Return on Equity %</label><input type="number" id="scrRoe" step="0.1"></div>
-              <div><label class="field-label">Avg ROCE — 3yr %</label><input type="number" id="scrRoce3yr" step="0.1"></div>
-              <div><label class="field-label">Sales growth — 3yr %</label><input type="number" id="scrSalesGrowth3yr" step="0.1"></div>
-              <div><label class="field-label">Profit growth — 3yr %</label><input type="number" id="scrProfitGrowth3yr" step="0.1"></div>
-              <div><label class="field-label">EPS growth — 5yr %</label><input type="number" id="scrEpsGrowth5yr" step="0.1"></div>
-              <div><label class="field-label">Free cash flow — 3yr total (₹ Cr)</label><input type="number" id="scrFcf3yr" step="0.01"></div>
-              <div><label class="field-label">Operating cash flow — 3yr total (₹ Cr)</label><input type="number" id="scrOcf3yr" step="0.01"></div>
-              <div><label class="field-label">Free cash flow — 5yr total (₹ Cr)</label><input type="number" id="scrFcf5yr" step="0.01"></div>
-              <div><label class="field-label">Free cash flow — preceding year (₹ Cr)</label><input type="number" id="scrFcfPrecYear" step="0.01"></div>
-              <div><label class="field-label">Number of equity shares (Cr)</label><input type="number" id="scrShares" step="0.01"></div>
-              <div><label class="field-label">Pledged %</label><input type="number" id="scrPledged" step="0.1" placeholder="0"></div>
-              <div><label class="field-label">RSI</label><input type="number" id="scrRsi" step="0.1"></div>
             </div>
-            <button type="button" class="add-btn full-width" id="scrCheckAll">Check against all 3 screens</button>
+
+            <div class="accordion" data-key="screen-fundamentals">
+              <button type="button" class="accordion-header"><span>📋 Fundamentals — Market Cap to RSI</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div class="form-grid">
+                  <div><label class="field-label">Market Cap (₹ Cr)</label><input type="number" id="scrMarketCap" step="1" placeholder="e.g. 45000"></div>
+                  <div><label class="field-label">Current price (₹)</label><input type="number" id="scrPrice" step="0.01"></div>
+                  <div><label class="field-label">P/E</label><input type="number" id="scrPe" step="0.01"></div>
+                  <div><label class="field-label">Industry P/E</label><input type="number" id="scrIndustryPe" step="0.01"></div>
+                  <div><label class="field-label">PEG Ratio</label><input type="number" id="scrPeg" step="0.01"></div>
+                  <div><label class="field-label">Price to Book Value</label><input type="number" id="scrPb" step="0.01"></div>
+                  <div><label class="field-label">Debt to Equity</label><input type="number" id="scrDe" step="0.01"></div>
+                  <div><label class="field-label">Current Ratio</label><input type="number" id="scrCurrentRatio" step="0.01"></div>
+                  <div><label class="field-label">Return on Equity %</label><input type="number" id="scrRoe" step="0.1"></div>
+                  <div><label class="field-label">Avg ROCE — 3yr %</label><input type="number" id="scrRoce3yr" step="0.1"></div>
+                  <div><label class="field-label">Sales growth — 3yr %</label><input type="number" id="scrSalesGrowth3yr" step="0.1"></div>
+                  <div><label class="field-label">Profit growth — 3yr %</label><input type="number" id="scrProfitGrowth3yr" step="0.1"></div>
+                  <div><label class="field-label">EPS growth — 5yr %</label><input type="number" id="scrEpsGrowth5yr" step="0.1"></div>
+                  <div><label class="field-label">Free cash flow — 3yr total (₹ Cr)</label><input type="number" id="scrFcf3yr" step="0.01"></div>
+                  <div><label class="field-label">Operating cash flow — 3yr total (₹ Cr)</label><input type="number" id="scrOcf3yr" step="0.01"></div>
+                  <div><label class="field-label">Free cash flow — 5yr total (₹ Cr)</label><input type="number" id="scrFcf5yr" step="0.01"></div>
+                  <div><label class="field-label">Free cash flow — preceding year (₹ Cr)</label><input type="number" id="scrFcfPrecYear" step="0.01"></div>
+                  <div><label class="field-label">Number of equity shares (Cr)</label><input type="number" id="scrShares" step="0.01"></div>
+                  <div><label class="field-label">Pledged %</label><input type="number" id="scrPledged" step="0.1" placeholder="0"></div>
+                  <div><label class="field-label">RSI</label><input type="number" id="scrRsi" step="0.1"></div>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="add-btn full-width" id="scrCheckAll" style="margin-top:10px;">Check against all 3 screens</button>
 
             <div class="accordion" data-key="screen-a" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>SCREEN A — Deeply Undervalued</span><span class="accordion-arrow">▸</span></button>
