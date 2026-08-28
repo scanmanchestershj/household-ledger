@@ -2302,6 +2302,15 @@
               <button type="button" class="accordion-header"><span>SCREEN C — Potential Deep Value</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body" id="scrResultC"></div>
             </div>
+            <div class="accordion" data-key="screen-tech" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>📈 Technical Analysis Summary</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">A Buy/Sell/Neutral gauge computed from real historical prices — same style as Groww's Technical Overview tab (moving averages + RSI + MACD), using the standard public formulas every broker uses. Uses the stock name entered above.</div>
+                <button type="button" class="add-btn full-width" id="scrTechFetch">📈 Run technical summary</button>
+                <div id="scrTechStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrTechResult" style="margin-top:10px;"></div>
+              </div>
+            </div>
             <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Formula-based screening, not investment advice — passing all conditions doesn't guarantee a good investment, and failing one doesn't rule it out. Pull the underlying numbers from Screener.in, the company's annual report, or your broker's research tools.</div>
           </div>
         </div>
@@ -7759,6 +7768,64 @@
           : `Found ${data.symbol} but couldn't extract usable fields — enter values manually.`;
       }catch(e){
         statusEl.textContent = "Couldn't reach the live data source — enter values manually instead.";
+      }
+    });
+  }
+
+  // ---- Technical Analysis Summary: mirrors Groww's "Technical Overview"
+  // tab (moving averages + RSI + MACD -> overall Buy/Sell/Neutral gauge),
+  // computed server-side from real historical prices using the standard
+  // public formulas — not scraped from Groww, since their live data
+  // requires a paid trading-account API key we've chosen not to embed. ----
+  function verdictColor(v){
+    if(v === 'Strong Buy' || v === 'Buy') return 'var(--teal-dark)';
+    if(v === 'Strong Sell' || v === 'Sell') return 'var(--coral)';
+    return 'var(--ink-soft)';
+  }
+  function renderTechSummary(data){
+    const box = document.getElementById('scrTechResult');
+    if(!box) return;
+    const maRows = data.movingAverages.map(m =>
+      `<tr><td>SMA ${m.period}</td><td>${m.value.toFixed(2)}</td><td style="color:${verdictColor(m.signal)};font-weight:600;">${m.signal}</td></tr>`
+    ).join('');
+    const oscRows = data.oscillators.map(o =>
+      `<tr><td>${escapeHtml(o.name)}</td><td>${o.value.toFixed(2)}</td><td style="color:${verdictColor(o.signal)};font-weight:600;">${o.signal}</td></tr>`
+    ).join('');
+    box.innerHTML = `
+      <div style="text-align:center;padding:10px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(data.name || data.symbol)} (${escapeHtml(data.symbol)}) &middot; ${data.price.toFixed(2)}</div>
+        <div style="font-size:20px;font-weight:700;color:${verdictColor(data.overallVerdict)};margin-top:4px;">${data.overallVerdict}</div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">${data.buySignals} buy · ${data.totalSignals - data.buySignals - data.sellSignals} neutral · ${data.sellSignals} sell (of ${data.totalSignals} signals)</div>
+      </div>
+      <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;color:${verdictColor(data.movingAverageVerdict)};">Moving Averages — ${data.movingAverageVerdict}</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:10px;">${maRows}</table>
+      <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;color:${verdictColor(data.oscillatorVerdict)};">Oscillators — ${data.oscillatorVerdict}</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">${oscRows}</table>
+      <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">${escapeHtml(data.disclaimer)}</div>
+    `;
+  }
+  const scrTechFetchBtn = document.getElementById('scrTechFetch');
+  if(scrTechFetchBtn){
+    scrTechFetchBtn.addEventListener('click', async () => {
+      const nameEl = document.getElementById('scrName');
+      const statusEl = document.getElementById('scrTechStatus');
+      const query = nameEl.value.trim();
+      if(!query){ statusEl.textContent = 'Type a stock name or ticker first (top of this section).'; return; }
+      statusEl.textContent = `Computing technical summary for "${query}"…`;
+      document.getElementById('scrTechResult').innerHTML = '';
+      try{
+        const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(query)}&market=IN`);
+        const data = await res.json();
+        if(!res.ok || data.error){ statusEl.textContent = data.error || "Couldn't compute a technical summary — try again shortly."; return; }
+        statusEl.textContent = `✓ ${data.symbol} — based on ${data.totalSignals} indicators over ~2 years of daily prices.`;
+        renderTechSummary(data);
+        // Also feed the RSI value into the fundamentals checklist above,
+        // since Screen A already has an RSI < 70 condition.
+        const rsiInput = document.getElementById('scrRsi');
+        const rsiSignal = data.oscillators.find(o => o.name.startsWith('RSI'));
+        if(rsiInput && rsiSignal) rsiInput.value = rsiSignal.value.toFixed(1);
+      }catch(e){
+        statusEl.textContent = "Couldn't reach the technical data source — try again shortly.";
       }
     });
   }
