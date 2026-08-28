@@ -3325,6 +3325,19 @@
 
     const { data: { session } } = await sb.auth.getSession();
     if(session && session.user){
+      // Time-based session check — NOT just relying on the in-page idle
+      // timer, since mobile browsers suspend setTimeout/JS timers once the
+      // app is backgrounded or the screen locks. Without this check, a
+      // still-valid Supabase session in sessionStorage would silently
+      // auto-log the user back in no matter how long the app was closed.
+      const lastActive = parseInt(sessionStorage.getItem('lastActivityAt') || '0', 10);
+      const elapsed = Date.now() - lastActive;
+      if(!lastActive || elapsed > SESSION_TIMEOUT_MS){
+        console.warn('Session expired due to time limit — signing out.');
+        await sb.auth.signOut();
+        sessionStorage.removeItem('lastActivityAt');
+        return;
+      }
       try{
         const match = await fetchAndEnterHousehold(session.user);
         if(match){ enterApp(match); return; }
@@ -3734,14 +3747,25 @@
     }
   }
 
-  // ---- Auto sign-out after 60 seconds of inactivity ----
+  // ---- Auto sign-out after 5 minutes ----
+  // Two layers: (1) an in-page idle timer for while the app is open and
+  // active, and (2) a timestamp written to sessionStorage on every activity,
+  // checked against real elapsed time on next launch (see initApp). Layer 2
+  // is the one that actually matters on mobile: backgrounding the app or
+  // locking the screen suspends setTimeout, so layer 1 alone would never
+  // fire and the old session would silently auto-log back in.
+  const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
   let idleTimer = null;
+  function touchActivity(){
+    sessionStorage.setItem('lastActivityAt', String(Date.now()));
+  }
   function resetIdleTimer(){
     if(!currentUser) return;
+    touchActivity();
     if(idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      if(currentUser){ logout(); alert('You were signed out automatically after 60 seconds of inactivity.'); }
-    }, 60000);
+      if(currentUser){ logout(); alert('You were signed out automatically after 5 minutes of inactivity.'); }
+    }, SESSION_TIMEOUT_MS);
   }
   function startIdleWatch(){
     ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(evt =>
@@ -3783,6 +3807,7 @@
 
   async function logout(){
     stopIdleWatch();
+    sessionStorage.removeItem('lastActivityAt');
     await sb.auth.signOut();
     currentUser = null;
     viewingUserId = null;
