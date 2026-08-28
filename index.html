@@ -2261,10 +2261,8 @@
             <div class="form-grid" style="margin-bottom:8px;">
               <div class="full">
                 <label class="field-label">Stock name or ticker</label>
-                <div class="add-row">
-                  <input type="text" id="scrName" placeholder="e.g. Wipro" style="flex:1;">
-                  <button type="button" class="add-btn" id="scrAutoFill">🔴 Live fetch (partial)</button>
-                </div>
+                <input type="text" id="scrName" placeholder="e.g. Wipro" style="width:100%;font-size:15px;padding:10px;">
+                <button type="button" class="add-btn full-width" id="scrAutoFill" style="margin-top:6px;">🔴 Live fetch (partial)</button>
                 <div id="scrAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
               </div>
               <div><label class="field-label">Market Cap (₹ Cr)</label><input type="number" id="scrMarketCap" step="1" placeholder="e.g. 45000"></div>
@@ -2311,6 +2309,40 @@
                 <div id="scrTechResult" style="margin-top:10px;"></div>
               </div>
             </div>
+
+            <div class="accordion" data-key="screen-nifty100" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🏆 Nifty 100 — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Scans all Nifty 100 stocks for a Strong Buy / Buy / Hold / Sell / Strong Sell verdict using the same technical engine above. Runs once automatically per day (first time you open this section that day) and caches the result — opening it again the same day just shows what was already scanned. Takes roughly 1–2 minutes the first time. The constituent list is fetched live from NSE Indices; if that's unreachable, a fallback list of well-known large caps is used instead.</div>
+                <button type="button" class="add-btn full-width" id="scrNifty100Rescan">🔄 Rescan now</button>
+                <div id="scrNifty100Status" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrNifty100Result" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-customwatch" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>⭐ My Watchlist — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Add your own stocks below — same daily auto-scan and caching as the Nifty 100 list above.</div>
+                <div class="add-row" style="margin-bottom:8px;">
+                  <input type="text" id="scrWatchlistAddInput" placeholder="e.g. Wipro" style="flex:1;">
+                  <button type="button" class="add-btn" id="scrWatchlistAddBtn">+ Add</button>
+                </div>
+                <div id="scrWatchlistItems" style="margin-bottom:8px;"></div>
+                <button type="button" class="add-btn full-width" id="scrCustomRescan">🔄 Rescan now</button>
+                <div id="scrCustomStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrCustomResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-strongbuy" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🚀 Strong Buy List — Today</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Every stock rated "Strong Buy" in today's Nifty 100 and Watchlist scans above, combined. Run those scans first if this is empty.</div>
+                <div id="scrStrongBuyResult"></div>
+              </div>
+            </div>
+
             <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Formula-based screening, not investment advice — passing all conditions doesn't guarantee a good investment, and failing one doesn't rule it out. Pull the underlying numbers from Screener.in, the company's annual report, or your broker's research tools.</div>
           </div>
         </div>
@@ -7830,6 +7862,170 @@
     });
   }
 
+  // ---- Batch technical scanners: Nifty 100 + custom watchlist. Each stock
+  // needs its own separate Yahoo lookup, so scanning 100 of them can't
+  // happen in one server request without hitting Vercel's function timeout
+  // or Yahoo's rate limits (which would break price lookups app-wide, not
+  // just this feature). Instead the browser drives the scan itself, a
+  // handful of requests at a time, and the result is cached in state for
+  // the rest of the day so it only actually runs once daily. ----
+  function verdictBadge(v){
+    const label = v === 'Neutral' ? 'Hold' : v;
+    return `<span style="color:${verdictColor(v)};font-weight:700;">${label}</span>`;
+  }
+  async function fetchOneVerdict(symbol){
+    try{
+      const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(symbol)}&market=IN`);
+      const data = await res.json();
+      if(!res.ok || data.error) return { symbol, name: symbol, error: data.error || 'unavailable' };
+      return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict };
+    }catch(e){
+      return { symbol, name: symbol, error: 'network error' };
+    }
+  }
+  async function runBatchScan(list, cacheKey, statusElId, resultElId){
+    const statusEl = document.getElementById(statusElId);
+    if(!list.length){ if(statusEl) statusEl.textContent = 'Nothing to scan yet.'; return; }
+    const results = new Array(list.length);
+    let idx = 0;
+    const concurrency = 4;
+    async function worker(){
+      while(idx < list.length){
+        const i = idx++;
+        const item = list[i];
+        if(statusEl) statusEl.textContent = `Scanning ${i + 1} of ${list.length}: ${item.name || item.symbol}…`;
+        results[i] = await fetchOneVerdict(item.symbol || item.name);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
+    if(!state.screenerScans) state.screenerScans = {};
+    state.screenerScans[cacheKey] = { date: todayStr(), results };
+    save();
+    if(statusEl) statusEl.textContent = `✓ Scanned ${results.length} stocks — last updated ${todayStr()}.`;
+    renderBatchResults(cacheKey, resultElId);
+    renderStrongBuyList();
+  }
+  function renderBatchResults(cacheKey, resultElId){
+    const box = document.getElementById(resultElId);
+    if(!box) return;
+    const scan = state.screenerScans && state.screenerScans[cacheKey];
+    if(!scan || !scan.results || !scan.results.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No scan yet — tap "Rescan now" above.</div>'; return; }
+    const sorted = [...scan.results].sort((a, b) => {
+      const order = { 'Strong Buy': 0, 'Buy': 1, 'Neutral': 2, 'Sell': 3, 'Strong Sell': 4 };
+      const av = a.error ? 5 : (order[a.verdict] ?? 5);
+      const bv = b.error ? 5 : (order[b.verdict] ?? 5);
+      return av - bv;
+    });
+    const rows = sorted.map(r => {
+      if(r.error) return `<tr><td>${escapeHtml(r.name)}</td><td colspan="2" style="color:var(--ink-soft);font-size:11px;">${escapeHtml(r.error)}</td></tr>`;
+      return `<tr><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td>${verdictBadge(r.verdict)}</td></tr>`;
+    }).join('');
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date}</div><table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
+  }
+  function renderStrongBuyList(){
+    const box = document.getElementById('scrStrongBuyResult');
+    if(!box) return;
+    const scans = state.screenerScans || {};
+    const all = [];
+    [['nifty100', 'Nifty 100'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+      const scan = scans[key];
+      if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
+    });
+    if(!all.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No Strong Buy signals yet today — run the scans above first.</div>'; return; }
+    const rows = all.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td></tr>`).join('');
+    box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
+  }
+
+  let nifty100ListCache = null;
+  async function getNifty100List(){
+    if(nifty100ListCache) return nifty100ListCache;
+    try{
+      const res = await fetch('/api/nifty100');
+      const data = await res.json();
+      nifty100ListCache = data.list || [];
+      return { list: nifty100ListCache, note: data.note };
+    }catch(e){
+      return { list: [], note: "Couldn't load the Nifty 100 list." };
+    }
+  }
+  async function ensureNifty100Scan(force){
+    const scan = state.screenerScans && state.screenerScans.nifty100;
+    const statusEl = document.getElementById('scrNifty100Status');
+    if(scan && scan.date === todayStr() && !force){
+      renderBatchResults('nifty100', 'scrNifty100Result');
+      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Loading Nifty 100 constituent list…';
+    const { list, note } = await getNifty100List();
+    if(note && statusEl) statusEl.textContent = note;
+    if(!list.length) return;
+    await runBatchScan(list, 'nifty100', 'scrNifty100Status', 'scrNifty100Result');
+  }
+  const scrNifty100RescanBtn = document.getElementById('scrNifty100Rescan');
+  if(scrNifty100RescanBtn) scrNifty100RescanBtn.addEventListener('click', () => ensureNifty100Scan(true));
+
+  function renderWatchlistItems(){
+    const box = document.getElementById('scrWatchlistItems');
+    if(!box) return;
+    const list = state.customWatchlist || [];
+    if(!list.length){ box.innerHTML = '<div class="empty" style="padding:6px 0;font-size:12px;">No stocks added yet.</div>'; return; }
+    box.innerHTML = list.map((name, i) => `
+      <span style="display:inline-flex;align-items:center;gap:4px;background:var(--paper-deep);border-radius:14px;padding:4px 10px;margin:0 6px 6px 0;font-size:12px;">
+        ${escapeHtml(name)}
+        <button type="button" class="scr-watch-remove" data-idx="${i}" style="border:none;background:none;color:var(--coral);cursor:pointer;font-weight:700;padding:0;">×</button>
+      </span>
+    `).join('');
+    box.querySelectorAll('.scr-watch-remove').forEach(btn => btn.addEventListener('click', () => {
+      state.customWatchlist.splice(parseInt(btn.dataset.idx, 10), 1);
+      save();
+      renderWatchlistItems();
+    }));
+  }
+  const scrWatchlistAddBtn = document.getElementById('scrWatchlistAddBtn');
+  if(scrWatchlistAddBtn){
+    scrWatchlistAddBtn.addEventListener('click', () => {
+      const input = document.getElementById('scrWatchlistAddInput');
+      const name = input.value.trim();
+      if(!name) return;
+      if(!state.customWatchlist) state.customWatchlist = [];
+      state.customWatchlist.push(name);
+      input.value = '';
+      save();
+      renderWatchlistItems();
+    });
+  }
+  async function ensureCustomScan(force){
+    const scan = state.screenerScans && state.screenerScans.custom;
+    const statusEl = document.getElementById('scrCustomStatus');
+    const list = (state.customWatchlist || []).map(name => ({ name, symbol: name }));
+    if(!list.length){ if(statusEl) statusEl.textContent = 'Add at least one stock to your watchlist first.'; return; }
+    if(scan && scan.date === todayStr() && !force){
+      renderBatchResults('custom', 'scrCustomResult');
+      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+      return;
+    }
+    await runBatchScan(list, 'custom', 'scrCustomStatus', 'scrCustomResult');
+  }
+  const scrCustomRescanBtn = document.getElementById('scrCustomRescan');
+  if(scrCustomRescanBtn) scrCustomRescanBtn.addEventListener('click', () => ensureCustomScan(true));
+
+  // Auto-run once per day, the first time each section is actually opened —
+  // not on every page load, so it doesn't hammer Yahoo for household
+  // members who never look at this section.
+  document.addEventListener('click', (e) => {
+    const header = e.target.closest('.accordion-header');
+    if(!header) return;
+    const acc = header.closest('.accordion');
+    if(!acc || !acc.classList.contains('open')) return; // only fires right after it was opened
+    if(acc.dataset.key === 'screen-nifty100') ensureNifty100Scan(false);
+    if(acc.dataset.key === 'screen-customwatch'){ renderWatchlistItems(); ensureCustomScan(false); }
+  });
+  renderWatchlistItems();
+  renderBatchResults('nifty100', 'scrNifty100Result');
+  renderBatchResults('custom', 'scrCustomResult');
+  renderStrongBuyList();
+
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
     const monthlyRate = annualReturn / 100 / 12;
@@ -9405,6 +9601,10 @@
       (id) => recordDebtPayment('India', id));
     renderDebtSummary('India');
     renderInvestmentCountry('India');
+    renderWatchlistItems();
+    renderBatchResults('nifty100', 'scrNifty100Result');
+    renderBatchResults('custom', 'scrCustomResult');
+    renderStrongBuyList();
   }
   const indiaIncludeRemitToggle = document.getElementById('indiaIncludeRemitInDebt');
   if(indiaIncludeRemitToggle) indiaIncludeRemitToggle.addEventListener('change', () => {
