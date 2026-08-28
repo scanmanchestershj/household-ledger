@@ -3754,23 +3754,47 @@
   // is the one that actually matters on mobile: backgrounding the app or
   // locking the screen suspends setTimeout, so layer 1 alone would never
   // fire and the old session would silently auto-log back in.
-  const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+  const SESSION_TIMEOUT_MS = 1 * 60 * 1000;
   let idleTimer = null;
   function touchActivity(){
     sessionStorage.setItem('lastActivityAt', String(Date.now()));
+  }
+  function msSinceLastActivity(){
+    const last = parseInt(sessionStorage.getItem('lastActivityAt') || '0', 10);
+    return last ? Date.now() - last : Infinity;
+  }
+  function forceIdleLogout(){
+    stopIdleWatch();
+    logout();
+    alert('You were signed out automatically after 1 minute of inactivity.');
   }
   function resetIdleTimer(){
     if(!currentUser) return;
     touchActivity();
     if(idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      if(currentUser){ logout(); alert('You were signed out automatically after 5 minutes of inactivity.'); }
+      if(currentUser) forceIdleLogout();
     }, SESSION_TIMEOUT_MS);
   }
   function startIdleWatch(){
     ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(evt =>
       document.addEventListener(evt, resetIdleTimer, { passive: true })
     );
+    // Switching to another browser tab or app doesn't fire any of the events
+    // above, and browsers throttle/suspend setTimeout in a hidden tab — so
+    // the timer above can't be trusted to fire on time while you're away.
+    // Instead, the moment you switch back (tab becomes visible again), check
+    // real elapsed time since the last recorded activity and log out
+    // immediately if it's over the limit, same as a fresh app launch.
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState !== 'visible') return;
+      if(!currentUser) return;
+      if(msSinceLastActivity() > SESSION_TIMEOUT_MS){
+        forceIdleLogout();
+      } else {
+        resetIdleTimer();
+      }
+    });
     resetIdleTimer();
   }
   function stopIdleWatch(){
