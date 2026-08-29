@@ -206,9 +206,9 @@
   .accordion-header{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--paper-deep); border:none; cursor:pointer; padding:12px 14px; font-family:'Fraunces', serif; font-size:16px; font-weight:600; color:var(--heading-ink); text-align:left; }
   .accordion-header:hover{ background:var(--card-hover, var(--paper-deep)); }
   .accordion-header .accordion-arrow{ font-size:13px; color:var(--ink-soft); transition:transform .15s ease; flex-shrink:0; }
-  .accordion.open .accordion-header .accordion-arrow{ transform:rotate(90deg); }
+  .accordion.open > .accordion-header .accordion-arrow{ transform:rotate(90deg); }
   .accordion-body{ display:none; padding:14px; border-top:1px solid var(--line); }
-  .accordion.open .accordion-body{ display:block; }
+  .accordion.open > .accordion-body{ display:block; }
   .accordion-drag-handle{ cursor:grab; color:var(--ink-soft); font-size:13px; padding:0 4px; }
   .ov-section{ cursor:grab; padding:6px 4px; border-radius:6px; }
   .ov-section:hover{ background:var(--paper-deep); }
@@ -408,7 +408,7 @@
     <div class="gate-card">
       <div class="gate-card-header">
         <div class="eyebrow" style="color:rgba(255,255,255,0.75);">Welcome</div>
-        <h1 id="gateTitle" contenteditable="true" spellcheck="false">Smart AI PA</h1>
+        <h1 id="gateTitle" contenteditable="true" spellcheck="false">Smart AI Assistant</h1>
         <div class="gate-quote" id="gateQuote">—</div>
       </div>
       <div class="gate-card-body">
@@ -491,7 +491,7 @@
         </select>
       </div>
     </div>
-    <h1 id="appTitle" contenteditable="true" spellcheck="false">Smart AI PA</h1>
+    <h1 id="appTitle" contenteditable="true" spellcheck="false">Smart AI Assistant</h1>
     <div class="subline">Chores, groceries, budget, cards & devices — all in one binder.</div>
     <div class="session-bar">
       <span id="sessionInfo">—</span>
@@ -2781,7 +2781,7 @@
     permissions: {},
     exchangeRate: 22.5,
     tabOrder: [],
-    appTitle: 'Smart AI PA',
+    appTitle: 'Smart AI Assistant',
     countryConfig: {
       country1: { name: 'UAE', currency: 'AED' },
       country2: { name: 'India', currency: 'INR' },
@@ -3214,7 +3214,7 @@
       }
     });
     if(typeof state.exchangeRate !== 'number') state.exchangeRate = 22.5;
-    if(!state.appTitle) state.appTitle = 'Smart AI PA';
+    if(!state.appTitle) state.appTitle = 'Smart AI Assistant';
     if(!state.countryConfig) state.countryConfig = { country1: { name: 'UAE', currency: 'AED' }, country2: { name: 'India', currency: 'INR' }, homeCountryEnabled: true };
     if(state.countryConfig.homeCountryEnabled === undefined) state.countryConfig.homeCountryEnabled = true;
     if(!state.requests) state.requests = [];
@@ -8766,7 +8766,7 @@
     if(!rows.length){ alert('Nothing to share for this period.'); return; }
     const total = rows.reduce((s,t) => s + Number(t.amount), 0);
     const label = type === 'lending' ? 'Lending' : 'Borrowing';
-    let text = `*${label} Report* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI PA'}\n\n`;
+    let text = `*${label} Report* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI Assistant'}\n\n`;
     rows.slice(0, 20).forEach(t => { text += `• ${t.date} — ${t.label}${t.person ? ' (' + t.person + ')' : ''}: ${fmt(t.amount)}\n`; });
     if(rows.length > 20) text += `…and ${rows.length - 20} more\n`;
     text += `\n*Total ${type === 'lending' ? 'lent out' : 'borrowed'}: ${fmt(total)}*`;
@@ -8777,7 +8777,7 @@
     const r = computeReportData(period);
     const people = Object.keys(r.personMap);
     if(!people.length){ alert('Nothing to share for this period.'); return; }
-    let text = `*Spent Per Person* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI PA'}\n\n`;
+    let text = `*Spent Per Person* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI Assistant'}\n\n`;
     people.forEach(name => {
       const p = r.personMap[name];
       text += `• ${name}: ${fmt(p.returnable + p.nonReturnable)} (returnable ${fmt(p.returnable)}, non-returnable ${fmt(p.nonReturnable)})\n`;
@@ -8790,7 +8790,7 @@
     const wantPerson = document.getElementById('exportPickPerson').checked;
     if(!wantLending && !wantBorrowing && !wantPerson){ alert('Tick at least one report to include.'); return; }
     const period = currentPeriod();
-    let text = `*Combined Report* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI PA'}\n`;
+    let text = `*Combined Report* — ${periodLabel(period)}\n${state.appTitle || 'Smart AI Assistant'}\n`;
     if(wantLending){
       const rows = allTransactions().filter(t => t.type === 'lending' && inPeriod(t.date, period));
       const total = rows.reduce((s,t) => s + Number(t.amount), 0);
@@ -8815,7 +8815,7 @@
   function shareAllInOneWhatsApp(){
     const period = currentPeriod();
     const r = computeReportData(period);
-    let text = `*${state.appTitle || 'Smart AI PA'} — All-In-One Report*\n${periodLabel(period)}\n\n`;
+    let text = `*${state.appTitle || 'Smart AI Assistant'} — All-In-One Report*\n${periodLabel(period)}\n\n`;
     text += `Income: ${fmt(r.income)}\nTotal outflow: ${fmt(r.totalOutflow)}\n`;
     openWhatsAppShare(text);
   }
@@ -8824,7 +8824,7 @@
     if(!items.length){ alert('Nothing to share for this selection.'); return; }
     const personLabel = person === '__overall__' ? 'Everyone' : person;
     const rangeLabel = (from || to) ? `${from || 'start'} to ${to || 'today'}` : 'all time';
-    let text = `*Returnable Statement — ${personLabel}*\n${state.appTitle || 'Smart AI PA'} · ${rangeLabel}\n\n`;
+    let text = `*Returnable Statement — ${personLabel}*\n${state.appTitle || 'Smart AI Assistant'} · ${rangeLabel}\n\n`;
     items.slice(0, 20).forEach(it => { text += `• ${it.date} — ${it.desc}: ${fmt(it.amount)} (${it.paid ? 'Paid' : 'Pending'})\n`; });
     if(items.length > 20) text += `…and ${items.length - 20} more\n`;
     text += `\n*Total: ${fmt(total)}*\nPaid so far: ${fmt(paidTotal)}\n*Balance due: ${fmt(balanceDue)}*`;
