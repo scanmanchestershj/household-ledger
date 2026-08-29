@@ -2366,33 +2366,33 @@
               </div>
             </div>
 
-            <div class="accordion" data-key="screen-multibagger" style="margin-top:12px;">
-              <button type="button" class="accordion-header"><span>💎 Multibagger Candidates</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">There's no reliable way to predict which stock will multiply — this isn't that. It's a tighter shortlist than the Strong Buy list above (every single moving average and oscillator bullish, not just 80% of them), plus a personal tracker so you can note candidates and watch how they actually perform over time. Formula + your own notes, not a prediction.</div>
-
-                <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;">🔬 Peak technical strength — today's scans</div>
-                <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Stocks from your Nifty 100 and Watchlist scans above where every indicator agrees (100% bullish alignment). Re-run those scans first if this looks empty or stale.</div>
-                <div id="scrMultibaggerAutoResult"></div>
-
-                <div style="font-weight:600;font-size:12.5px;margin:14px 0 4px;">⭐ My tracked candidates</div>
-                <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Add a stock you're personally convicted on (from the auto list, or type any name below) and track its price from the day you flagged it.</div>
-                <div class="add-row" style="margin-bottom:6px;">
-                  <input type="text" id="scrMultibaggerAddInput" placeholder="e.g. Wipro" style="flex:1;">
-                  <button type="button" class="add-btn" id="scrMultibaggerAddBtn">+ Track</button>
-                </div>
-                <input type="text" id="scrMultibaggerAddNotes" placeholder="Why? (optional note)" style="width:100%;margin-bottom:8px;">
-                <div id="scrMultibaggerAddStatus" style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;"></div>
-                <div style="display:flex;gap:6px;margin-bottom:8px;">
-                  <button type="button" class="add-btn ghost" id="scrMultibaggerRefreshBtn" style="flex:1;">🔄 Refresh prices</button>
-                  <button type="button" class="add-btn ghost" id="scrMultibaggerExportCsv" style="flex:1;">⬇️ CSV</button>
-                  <button type="button" class="add-btn ghost" id="scrMultibaggerShareWa" style="flex:1;">📲 Share</button>
-                </div>
-                <div id="scrMultibaggerWatchResult"></div>
-              </div>
-            </div>
-
             <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Formula-based screening, not investment advice — passing all conditions doesn't guarantee a good investment, and failing one doesn't rule it out. Pull the underlying numbers from Screener.in, the company's annual report, or your broker's research tools.</div>
+          </div>
+        </div>
+
+        <div class="accordion" data-key="india-inv-multibagger">
+          <button type="button" class="accordion-header"><span>💎 Multibagger Candidates</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">There's no reliable way to predict which stock will multiply — this isn't that. It's a tighter shortlist than the Strong Buy list in the Screener above (every single moving average and oscillator bullish, not just 80% of them), plus a personal tracker so you can note candidates and watch how they actually perform over time. Formula + your own notes, not a prediction. Kept as its own section, separate from the Screener, so it's easy to find.</div>
+
+            <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;">🔬 Peak technical strength — today's scans</div>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Stocks from the Nifty 100 and Watchlist scans (in the Screener section) where every indicator agrees (100% bullish alignment). Run those scans first if this looks empty or stale.</div>
+            <div id="scrMultibaggerAutoResult"></div>
+
+            <div style="font-weight:600;font-size:12.5px;margin:14px 0 4px;">⭐ My tracked candidates</div>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Add a stock you're personally convicted on (from the auto list, or type any name below) and track its price from the day you flagged it.</div>
+            <div class="add-row" style="margin-bottom:6px;">
+              <input type="text" id="scrMultibaggerAddInput" placeholder="e.g. Wipro" style="flex:1;">
+              <button type="button" class="add-btn" id="scrMultibaggerAddBtn">+ Track</button>
+            </div>
+            <input type="text" id="scrMultibaggerAddNotes" placeholder="Why? (optional note)" style="width:100%;margin-bottom:8px;">
+            <div id="scrMultibaggerAddStatus" style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;"></div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <button type="button" class="add-btn ghost" id="scrMultibaggerRefreshBtn" style="flex:1;">🔄 Refresh prices</button>
+              <button type="button" class="add-btn ghost" id="scrMultibaggerExportCsv" style="flex:1;">⬇️ CSV</button>
+              <button type="button" class="add-btn ghost" id="scrMultibaggerShareWa" style="flex:1;">📲 Share</button>
+            </div>
+            <div id="scrMultibaggerWatchResult"></div>
           </div>
         </div>
 
