@@ -2366,6 +2366,32 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-multibagger" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>💎 Multibagger Candidates</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">There's no reliable way to predict which stock will multiply — this isn't that. It's a tighter shortlist than the Strong Buy list above (every single moving average and oscillator bullish, not just 80% of them), plus a personal tracker so you can note candidates and watch how they actually perform over time. Formula + your own notes, not a prediction.</div>
+
+                <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;">🔬 Peak technical strength — today's scans</div>
+                <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Stocks from your Nifty 100 and Watchlist scans above where every indicator agrees (100% bullish alignment). Re-run those scans first if this looks empty or stale.</div>
+                <div id="scrMultibaggerAutoResult"></div>
+
+                <div style="font-weight:600;font-size:12.5px;margin:14px 0 4px;">⭐ My tracked candidates</div>
+                <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Add a stock you're personally convicted on (from the auto list, or type any name below) and track its price from the day you flagged it.</div>
+                <div class="add-row" style="margin-bottom:6px;">
+                  <input type="text" id="scrMultibaggerAddInput" placeholder="e.g. Wipro" style="flex:1;">
+                  <button type="button" class="add-btn" id="scrMultibaggerAddBtn">+ Track</button>
+                </div>
+                <input type="text" id="scrMultibaggerAddNotes" placeholder="Why? (optional note)" style="width:100%;margin-bottom:8px;">
+                <div id="scrMultibaggerAddStatus" style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;"></div>
+                <div style="display:flex;gap:6px;margin-bottom:8px;">
+                  <button type="button" class="add-btn ghost" id="scrMultibaggerRefreshBtn" style="flex:1;">🔄 Refresh prices</button>
+                  <button type="button" class="add-btn ghost" id="scrMultibaggerExportCsv" style="flex:1;">⬇️ CSV</button>
+                  <button type="button" class="add-btn ghost" id="scrMultibaggerShareWa" style="flex:1;">📲 Share</button>
+                </div>
+                <div id="scrMultibaggerWatchResult"></div>
+              </div>
+            </div>
+
             <div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Formula-based screening, not investment advice — passing all conditions doesn't guarantee a good investment, and failing one doesn't rule it out. Pull the underlying numbers from Screener.in, the company's annual report, or your broker's research tools.</div>
           </div>
         </div>
@@ -7901,7 +7927,7 @@
       const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(symbol)}&market=IN`);
       const data = await res.json();
       if(!res.ok || data.error) return { symbol, name: symbol, error: data.error || 'unavailable' };
-      return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict };
+      return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict, buySignals: data.buySignals, sellSignals: data.sellSignals, totalSignals: data.totalSignals };
     }catch(e){
       return { symbol, name: symbol, error: 'network error' };
     }
@@ -7928,6 +7954,7 @@
     if(statusEl) statusEl.textContent = `✓ Scanned ${results.length} stocks — last updated ${todayStr()}.`;
     renderBatchResults(cacheKey, resultElId);
     renderStrongBuyList();
+    renderMultibaggerCandidates();
     const listLabel = cacheKey === 'nifty100' ? 'Nifty 100' : 'Watchlist';
     notifyForBanners(buildScreenerAlertBanners(cacheKey, listLabel, prevScan, results, list));
   }
@@ -8049,6 +8076,161 @@
     all.forEach(r => { text += `${r.name}: ${r.price != null ? r.price.toFixed(2) : '—'} (${r.source})\n`; });
     openWhatsAppShare(text);
   }
+  // ---- Multibagger Candidates: a stricter shortlist than the Strong Buy list
+  // (100% signal alignment, not just the 80% threshold used for "Strong Buy"),
+  // plus a personal tracker (state.multibaggerWatch, household-shared like
+  // screenerScans) so candidates can be watched over time rather than just
+  // listed for one day. ----
+  function collectMultibaggerAutoRows(){
+    const scans = state.screenerScans || {};
+    const all = [];
+    [['nifty100', 'Nifty 100'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+      const scan = scans[key];
+      if(scan && scan.results) scan.results.forEach(r => {
+        if(!r.error && r.verdict === 'Strong Buy' && r.totalSignals && r.buySignals === r.totalSignals){
+          all.push(Object.assign({ source: label }, r));
+        }
+      });
+    });
+    all.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return all;
+  }
+  function renderMultibaggerCandidates(){
+    const box = document.getElementById('scrMultibaggerAutoResult');
+    if(!box) return;
+    const rows = collectMultibaggerAutoRows();
+    if(!rows.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No 100%-aligned signals in today\'s scans yet — run the Nifty 100 / Watchlist scans above first.</div>'; return; }
+    box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${r.price != null ? r.price.toFixed(2) : '—'}</td>
+        <td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td>
+        <td><button type="button" class="add-btn ghost mb-track-btn" data-name="${escapeHtml(r.name)}" data-symbol="${escapeHtml(r.symbol || '')}" data-price="${r.price != null ? r.price : ''}" style="padding:3px 8px;font-size:11px;">+ Track</button></td>
+      </tr>`).join('')}</table>`;
+    box.querySelectorAll('.mb-track-btn').forEach(btn => {
+      btn.addEventListener('click', () => addMultibaggerCandidate({
+        name: btn.getAttribute('data-name'),
+        symbol: btn.getAttribute('data-symbol') || null,
+        price: btn.getAttribute('data-price') ? parseFloat(btn.getAttribute('data-price')) : null,
+        verdict: 'Strong Buy',
+        notes: ''
+      }));
+    });
+  }
+  function renderMultibaggerWatch(){
+    const box = document.getElementById('scrMultibaggerWatchResult');
+    if(!box) return;
+    const list = state.multibaggerWatch || [];
+    if(!list.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Nothing tracked yet — add a candidate above.</div>'; return; }
+    const rows = list.slice().sort((a, b) => (b.addedDate || '').localeCompare(a.addedDate || '')).map(c => {
+      const changePct = (c.lastPrice != null && c.addedPrice) ? ((c.lastPrice - c.addedPrice) / c.addedPrice * 100) : null;
+      const changeColor = changePct == null ? 'var(--ink-soft)' : (changePct >= 0 ? 'var(--teal-dark)' : 'var(--coral)');
+      return `<tr>
+        <td>${escapeHtml(c.name)}${c.notes ? `<div style="font-size:10px;color:var(--ink-soft);">${escapeHtml(c.notes)}</div>` : ''}</td>
+        <td style="font-size:11px;">${c.addedDate || '—'}<br>${c.addedPrice != null ? c.addedPrice.toFixed(2) : '—'}</td>
+        <td style="font-size:11px;">${c.lastPrice != null ? c.lastPrice.toFixed(2) : '—'}</td>
+        <td style="color:${changeColor};font-weight:600;">${changePct != null ? (changePct >= 0 ? '+' : '') + changePct.toFixed(1) + '%' : '—'}</td>
+        <td><button type="button" class="add-btn ghost mb-remove-btn" data-id="${c.id}" style="padding:3px 8px;font-size:11px;">✕</button></td>
+      </tr>`;
+    }).join('');
+    box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);"><th style="text-align:left;">Name</th><th style="text-align:left;">Added</th><th style="text-align:left;">Now</th><th style="text-align:left;">Change</th><th></th></tr>${rows}</table>`;
+    box.querySelectorAll('.mb-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => removeMultibaggerCandidate(btn.getAttribute('data-id')));
+    });
+  }
+  function addMultibaggerCandidate({ name, symbol, price, verdict, notes }){
+    if(!state.multibaggerWatch) state.multibaggerWatch = [];
+    if(state.multibaggerWatch.some(c => c.name.toLowerCase() === (name || '').toLowerCase())){
+      renderMultibaggerWatch();
+      return;
+    }
+    state.multibaggerWatch.push({
+      id: uid(), name, symbol: symbol || null,
+      addedDate: todayStr(), addedPrice: price != null ? price : null, addedVerdict: verdict || null,
+      lastPrice: price != null ? price : null, lastCheckedDate: todayStr(),
+      notes: notes || ''
+    });
+    save();
+    renderMultibaggerWatch();
+  }
+  function removeMultibaggerCandidate(id){
+    if(!state.multibaggerWatch) return;
+    state.multibaggerWatch = state.multibaggerWatch.filter(c => c.id !== id);
+    save();
+    renderMultibaggerWatch();
+  }
+  async function manualAddMultibaggerCandidate(){
+    const nameEl = document.getElementById('scrMultibaggerAddInput');
+    const notesEl = document.getElementById('scrMultibaggerAddNotes');
+    const statusEl = document.getElementById('scrMultibaggerAddStatus');
+    const query = nameEl.value.trim();
+    if(!query){ if(statusEl) statusEl.textContent = 'Type a stock name or ticker first.'; return; }
+    if(statusEl) statusEl.textContent = `Looking up "${query}"…`;
+    try{
+      const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=IN`);
+      const data = await res.json();
+      if(!res.ok || data.error){
+        addMultibaggerCandidate({ name: query, symbol: null, price: null, verdict: null, notes: notesEl.value.trim() });
+        if(statusEl) statusEl.textContent = 'Added without a live price — could not fetch it right now.';
+      } else {
+        addMultibaggerCandidate({ name: data.name || query, symbol: data.symbol, price: data.price, verdict: null, notes: notesEl.value.trim() });
+        if(statusEl) statusEl.textContent = `✓ Added ${data.name || query} at ${data.price != null ? data.price.toFixed(2) : '—'}.`;
+      }
+      nameEl.value = ''; notesEl.value = '';
+    }catch(e){
+      addMultibaggerCandidate({ name: query, symbol: null, price: null, verdict: null, notes: notesEl.value.trim() });
+      if(statusEl) statusEl.textContent = 'Added without a live price — could not reach the live data source.';
+      nameEl.value = ''; notesEl.value = '';
+    }
+  }
+  async function refreshMultibaggerPrices(){
+    const list = state.multibaggerWatch || [];
+    const statusEl = document.getElementById('scrMultibaggerAddStatus');
+    if(!list.length){ if(statusEl) statusEl.textContent = 'Nothing tracked yet.'; return; }
+    if(statusEl) statusEl.textContent = `Refreshing ${list.length} price(s)…`;
+    let idx = 0;
+    const concurrency = 4;
+    async function worker(){
+      while(idx < list.length){
+        const c = list[idx++];
+        try{
+          const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(c.symbol || c.name)}&market=IN`);
+          const data = await res.json();
+          if(res.ok && !data.error && data.price != null){ c.lastPrice = data.price; c.lastCheckedDate = todayStr(); }
+        }catch(e){ /* leave last known price as-is */ }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
+    save();
+    renderMultibaggerWatch();
+    if(statusEl) statusEl.textContent = `✓ Refreshed — ${todayStr()}.`;
+  }
+  function exportMultibaggerCsv(){
+    const list = state.multibaggerWatch || [];
+    if(!list.length){ alert('Nothing tracked yet — add a candidate first.'); return; }
+    const header = ['Name', 'Added Date', 'Added Price', 'Current Price', 'Change %', 'Notes'];
+    const lines = [header.map(csvEscape).join(',')];
+    list.forEach(c => {
+      const changePct = (c.lastPrice != null && c.addedPrice) ? ((c.lastPrice - c.addedPrice) / c.addedPrice * 100) : null;
+      lines.push([c.name, c.addedDate || '', c.addedPrice != null ? c.addedPrice.toFixed(2) : '', c.lastPrice != null ? c.lastPrice.toFixed(2) : '', changePct != null ? changePct.toFixed(1) : '', c.notes || ''].map(csvEscape).join(','));
+    });
+    downloadCsvFile(lines, `multibagger-candidates-${todayStr()}.csv`);
+  }
+  function shareMultibaggerWhatsApp(){
+    const list = state.multibaggerWatch || [];
+    if(!list.length){ alert('Nothing tracked yet — add a candidate first.'); return; }
+    let text = `💎 Multibagger Candidates — Tracked\\n\\n`;
+    list.forEach(c => {
+      const changePct = (c.lastPrice != null && c.addedPrice) ? ((c.lastPrice - c.addedPrice) / c.addedPrice * 100) : null;
+      text += `${c.name}: ${c.addedPrice != null ? c.addedPrice.toFixed(2) : '—'} → ${c.lastPrice != null ? c.lastPrice.toFixed(2) : '—'} (${changePct != null ? (changePct >= 0 ? '+' : '') + changePct.toFixed(1) + '%' : '—'})\\n`;
+    });
+    openWhatsAppShare(text);
+  }
+  const scrMultibaggerAddBtn = document.getElementById('scrMultibaggerAddBtn');
+  if(scrMultibaggerAddBtn) scrMultibaggerAddBtn.addEventListener('click', manualAddMultibaggerCandidate);
+  const scrMultibaggerRefreshBtn = document.getElementById('scrMultibaggerRefreshBtn');
+  if(scrMultibaggerRefreshBtn) scrMultibaggerRefreshBtn.addEventListener('click', refreshMultibaggerPrices);
+
   [
     ['scrNifty100ExportCsv', () => exportScreenerCsv('nifty100', 'nifty100-screener')],
     ['scrNifty100ShareWa', () => shareScreenerWhatsApp('nifty100', 'Nifty 100')],
@@ -8056,6 +8238,8 @@
     ['scrCustomShareWa', () => shareScreenerWhatsApp('custom', 'My Watchlist')],
     ['scrStrongBuyExportCsv', exportStrongBuyCsv],
     ['scrStrongBuyShareWa', shareStrongBuyWhatsApp],
+    ['scrMultibaggerExportCsv', exportMultibaggerCsv],
+    ['scrMultibaggerShareWa', shareMultibaggerWhatsApp],
   ].forEach(([id, handler]) => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('click', handler);
@@ -8182,6 +8366,8 @@
   renderBatchResults('nifty100', 'scrNifty100Result');
   renderBatchResults('custom', 'scrCustomResult');
   renderStrongBuyList();
+  renderMultibaggerCandidates();
+  renderMultibaggerWatch();
 
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
@@ -9762,6 +9948,8 @@
     renderBatchResults('nifty100', 'scrNifty100Result');
     renderBatchResults('custom', 'scrCustomResult');
     renderStrongBuyList();
+    renderMultibaggerCandidates();
+    renderMultibaggerWatch();
   }
   const indiaIncludeRemitToggle = document.getElementById('indiaIncludeRemitInDebt');
   if(indiaIncludeRemitToggle) indiaIncludeRemitToggle.addEventListener('change', () => {
