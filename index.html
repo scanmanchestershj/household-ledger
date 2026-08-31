@@ -10453,23 +10453,29 @@
     const marketCode = market.code;
     const cached = marketSnapshotCache[marketCode];
     if(cached && (Date.now() - cached.ts) < 120000){
-      renderMarketSnapshotHtml(box, cached.data);
+      renderMarketSnapshotHtml(box, cached.data, countryKey);
       return;
     }
     box.innerHTML = `<div class="empty" style="padding:8px 0;">Loading ${escapeHtml(market.label)} snapshot…</div>`;
     try{
       const res = await fetch(`/api/market-index?market=${marketCode}`);
       const data = await res.json();
-      marketSnapshotCache[marketCode] = { ts: Date.now(), data };
-      renderMarketSnapshotHtml(box, data);
+      const hasAnyPrice = (data && data.indices || []).some(i => i.price != null);
+      if(hasAnyPrice) marketSnapshotCache[marketCode] = { ts: Date.now(), data }; // don't cache a failed/empty fetch — let the next render retry instead of showing stale nothing for 2 minutes
+      renderMarketSnapshotHtml(box, data, countryKey);
     }catch(e){
-      box.innerHTML = '';
+      renderMarketSnapshotHtml(box, null, countryKey);
     }
   }
-  function renderMarketSnapshotHtml(box, data){
+  function renderMarketSnapshotHtml(box, data, countryKey){
     const indices = (data && data.indices) || [];
     const withPrice = indices.filter(i => i.price != null);
-    if(!withPrice.length){ box.innerHTML = ''; return; }
+    if(!withPrice.length){
+      box.innerHTML = `<div class="empty" style="padding:8px 0;">Couldn't load live market data right now (the data source may be temporarily unavailable). <button type="button" class="add-btn ghost mkt-retry-btn" data-country="${escapeHtml(countryKey || '')}" style="margin-left:6px;padding:2px 8px;font-size:11px;">Retry</button></div>`;
+      const retryBtn = box.querySelector('.mkt-retry-btn');
+      if(retryBtn) retryBtn.addEventListener('click', () => renderMarketSnapshot(countryKey));
+      return;
+    }
     box.innerHTML = withPrice.map(i => {
       const up = i.changePercent != null && i.changePercent >= 0;
       const changeStr = i.changePercent != null ? `${up ? '▲' : '▼'} ${Math.abs(i.changePercent).toFixed(2)}%` : '';

@@ -3,7 +3,7 @@
 // GET /api/market-index?market=IN|AE
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
+const YAHOO_HOSTS = ['https://query1.finance.yahoo.com/v8/finance/chart', 'https://query2.finance.yahoo.com/v8/finance/chart'];
 
 const INDICES = {
   IN: [
@@ -35,20 +35,23 @@ function withTimeout(promise, ms) {
 }
 
 async function fetchIndex(def) {
-  try {
-    const res = await withTimeout(fetch(`${YAHOO_CHART}/${encodeURIComponent(def.symbol)}?interval=1d&range=1d`, {
-      headers: { 'User-Agent': UA, 'Accept': 'application/json' }
-    }), 8000);
-    if (!res.ok) return { ...def, price: null, changePercent: null };
-    const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-    if (!meta || typeof meta.regularMarketPrice !== 'number') return { ...def, price: null, changePercent: null };
-    const prevClose = typeof meta.chartPreviousClose === 'number' ? meta.chartPreviousClose : meta.previousClose;
-    const changePercent = prevClose ? ((meta.regularMarketPrice - prevClose) / prevClose) * 100 : null;
-    return { ...def, price: meta.regularMarketPrice, changePercent, currency: meta.currency || null };
-  } catch (e) {
-    return { ...def, price: null, changePercent: null };
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const res = await withTimeout(fetch(`${host}/${encodeURIComponent(def.symbol)}?interval=1d&range=1d`, {
+        headers: { 'User-Agent': UA, 'Accept': 'application/json' }
+      }), 8000);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (!meta || typeof meta.regularMarketPrice !== 'number') continue;
+      const prevClose = typeof meta.chartPreviousClose === 'number' ? meta.chartPreviousClose : meta.previousClose;
+      const changePercent = prevClose ? ((meta.regularMarketPrice - prevClose) / prevClose) * 100 : null;
+      return { ...def, price: meta.regularMarketPrice, changePercent, currency: meta.currency || null };
+    } catch (e) {
+      // try the next host
+    }
   }
+  return { ...def, price: null, changePercent: null };
 }
 
 module.exports = async (req, res) => {
