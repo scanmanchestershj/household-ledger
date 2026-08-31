@@ -201,7 +201,9 @@
   .msb-label.current{ color:var(--teal-dark); font-weight:600; }
   .monthly-spend-avg{ font-size:12.5px; color:var(--ink-soft); margin-top:6px; }
 
-  .section-title{ font-family:'Fraunces', serif; font-size:18px; font-weight:600; margin:22px 0 10px 0; color:var(--heading-ink); }
+  .section-title{ font-family:'Fraunces', serif; font-size:18px; font-weight:600; margin:22px 0 10px 0; color:var(--heading-ink); user-select:text; -webkit-user-select:text; -webkit-touch-callout:default; }
+  h1, h2, h3, .eyebrow{ user-select:text; -webkit-user-select:text; -webkit-touch-callout:default; }
+  .accordion-header{ user-select:text; -webkit-user-select:text; }
   .accordion{ border:1px solid var(--line); border-radius:6px; margin:14px 0; background:var(--card); overflow:hidden; }
   .accordion-header{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--paper-deep); border:none; cursor:pointer; padding:12px 14px; font-family:'Fraunces', serif; font-size:16px; font-weight:600; color:var(--heading-ink); text-align:left; }
   .accordion-header:hover{ background:var(--card-hover, var(--paper-deep)); }
@@ -2271,7 +2273,6 @@
               <button type="button" class="accordion-header"><span>📋 Fundamentals — Market Cap to RSI</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
                 <div class="form-grid">
-                  <div><label class="field-label">Market Cap (₹ Cr)</label><input type="number" id="scrMarketCap" step="1" placeholder="e.g. 45000"></div>
                   <div><label class="field-label">Current price (₹)</label><input type="number" id="scrPrice" step="0.01"></div>
                   <div><label class="field-label">P/E</label><input type="number" id="scrPe" step="0.01"></div>
                   <div><label class="field-label">Industry P/E</label><input type="number" id="scrIndustryPe" step="0.01"></div>
@@ -2295,20 +2296,6 @@
               </div>
             </div>
 
-            <button type="button" class="add-btn full-width" id="scrCheckAll" style="margin-top:10px;">Check against all 3 screens</button>
-
-            <div class="accordion" data-key="screen-a" style="margin-top:12px;">
-              <button type="button" class="accordion-header"><span>SCREEN A — Deeply Undervalued</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body" id="scrResultA"></div>
-            </div>
-            <div class="accordion" data-key="screen-b">
-              <button type="button" class="accordion-header"><span>SCREEN B — Quality at Reasonable Price</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body" id="scrResultB"></div>
-            </div>
-            <div class="accordion" data-key="screen-c">
-              <button type="button" class="accordion-header"><span>SCREEN C — Potential Deep Value</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body" id="scrResultC"></div>
-            </div>
             <div class="accordion" data-key="screen-tech" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>📈 Technical Analysis Summary</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -2330,6 +2317,48 @@
                   <button type="button" class="add-btn ghost" id="scrNifty100ShareWa" style="flex:1;">📲 Share</button>
                 </div>
                 <div id="scrNifty100Result" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-nifty500" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🏆 Nifty 500 — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Same scan as Nifty 100 above, run across all Nifty 500 constituents. With 500 stocks this takes noticeably longer the first time — expect several minutes. Cached once per day after that.</div>
+                <button type="button" class="add-btn full-width" id="scrNifty500Rescan">🔄 Rescan now</button>
+                <div id="scrNifty500Status" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                  <button type="button" class="add-btn ghost" id="scrNifty500ExportCsv" style="flex:1;">⬇️ CSV</button>
+                  <button type="button" class="add-btn ghost" id="scrNifty500ShareWa" style="flex:1;">📲 Share</button>
+                </div>
+                <div id="scrNifty500Result" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-niftymidcap" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🏆 Nifty Midcap — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Same scan, run across the Nifty Midcap 150 constituents. Cached once per day.</div>
+                <button type="button" class="add-btn full-width" id="scrNiftyMidcapRescan">🔄 Rescan now</button>
+                <div id="scrNiftyMidcapStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                  <button type="button" class="add-btn ghost" id="scrNiftyMidcapExportCsv" style="flex:1;">⬇️ CSV</button>
+                  <button type="button" class="add-btn ghost" id="scrNiftyMidcapShareWa" style="flex:1;">📲 Share</button>
+                </div>
+                <div id="scrNiftyMidcapResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-niftysmallcap" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🏆 Nifty Smallcap — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Same scan, run across the Nifty Smallcap 250 constituents. Small-caps are more volatile and less liquid — treat these verdicts with extra caution. Cached once per day.</div>
+                <button type="button" class="add-btn full-width" id="scrNiftySmallcapRescan">🔄 Rescan now</button>
+                <div id="scrNiftySmallcapStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                  <button type="button" class="add-btn ghost" id="scrNiftySmallcapExportCsv" style="flex:1;">⬇️ CSV</button>
+                  <button type="button" class="add-btn ghost" id="scrNiftySmallcapShareWa" style="flex:1;">📲 Share</button>
+                </div>
+                <div id="scrNiftySmallcapResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
               </div>
             </div>
 
@@ -2370,31 +2399,6 @@
           </div>
         </div>
 
-        <div class="accordion" data-key="india-inv-multibagger">
-          <button type="button" class="accordion-header"><span>💎 Multibagger Candidates</span><span class="accordion-arrow">▸</span></button>
-          <div class="accordion-body">
-            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">There's no reliable way to predict which stock will multiply — this isn't that. It's a tighter shortlist than the Strong Buy list in the Screener above (every single moving average and oscillator bullish, not just 80% of them), plus a personal tracker so you can note candidates and watch how they actually perform over time. Formula + your own notes, not a prediction. Kept as its own section, separate from the Screener, so it's easy to find.</div>
-
-            <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;">🔬 Peak technical strength — today's scans</div>
-            <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Stocks from the Nifty 100 and Watchlist scans (in the Screener section) where every indicator agrees (100% bullish alignment). Run those scans first if this looks empty or stale.</div>
-            <div id="scrMultibaggerAutoResult"></div>
-
-            <div style="font-weight:600;font-size:12.5px;margin:14px 0 4px;">⭐ My tracked candidates</div>
-            <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;">Add a stock you're personally convicted on (from the auto list, or type any name below) and track its price from the day you flagged it.</div>
-            <div class="add-row" style="margin-bottom:6px;">
-              <input type="text" id="scrMultibaggerAddInput" placeholder="e.g. Wipro" style="flex:1;">
-              <button type="button" class="add-btn" id="scrMultibaggerAddBtn">+ Track</button>
-            </div>
-            <input type="text" id="scrMultibaggerAddNotes" placeholder="Why? (optional note)" style="width:100%;margin-bottom:8px;">
-            <div id="scrMultibaggerAddStatus" style="font-size:10.5px;color:var(--ink-soft);margin-bottom:8px;"></div>
-            <div style="display:flex;gap:6px;margin-bottom:8px;">
-              <button type="button" class="add-btn ghost" id="scrMultibaggerRefreshBtn" style="flex:1;">🔄 Refresh prices</button>
-              <button type="button" class="add-btn ghost" id="scrMultibaggerExportCsv" style="flex:1;">⬇️ CSV</button>
-              <button type="button" class="add-btn ghost" id="scrMultibaggerShareWa" style="flex:1;">📲 Share</button>
-            </div>
-            <div id="scrMultibaggerWatchResult"></div>
-          </div>
-        </div>
 
         <div class="accordion" data-key="india-inv-mf">
           <button type="button" class="accordion-header"><span>📊 Mutual Funds</span><span class="accordion-arrow">▸</span></button>
@@ -2756,13 +2760,31 @@
     localStorage.setItem('shb_privacy_mode', on ? '1' : '0');
     const btn = document.getElementById('privacyToggleBtn');
     if(btn){ btn.textContent = on ? '🙈' : '👁️'; btn.title = on ? 'Show amounts' : 'Hide amounts'; btn.setAttribute('aria-label', btn.title); }
-    renderAll();
+    renderPrivacySensitiveSections();
+  }
+  // Toggling the eye only needs to redraw sections that actually display money
+  // amounts (Budget, Overview, Report, UAE, India, Health). Chores, groceries,
+  // cards list, devices, admin panels etc. never read privacyMode, so a full
+  // renderAll() on every eye tap was doing a lot of unnecessary work — that's
+  // what made the toggle feel slow to update.
+  function renderPrivacySensitiveSections(){
+    renderBudget();
+    renderOverview();
+    renderReport();
+    renderUAE();
+    renderIndia();
+    renderHealth();
   }
 
   // ---- Per-field eye toggles: individual masked values that are hidden by
   // default and revealed one at a time on click, independent of the global
-  // privacy toggle above. Used for the standout Budget/Overview/Report figures. ----
+  // privacy toggle above. Used for the standout Budget/Overview/Report figures.
+  // Toggling swaps the DOM directly from a cached raw-HTML map (fieldRawHtmlCache)
+  // instead of re-running the full renderBudget()/renderReport() pass — those
+  // rebuild large sections of the page, which is why a single eye tap used to
+  // take a visible moment to update. ----
   const revealedFields = new Set();
+  const fieldRawHtmlCache = new Map();
   function rawValue(fn){
     const saved = privacyMode;
     privacyMode = false;
@@ -2771,21 +2793,40 @@
     return result;
   }
   function maskedField(fieldId, rawValueHtml){
+    fieldRawHtmlCache.set(fieldId, rawValueHtml);
     const revealed = revealedFields.has(fieldId);
     const icon = revealed ? '🙈' : '👁️';
     const shown = revealed ? rawValueHtml : PRIVACY_MASK;
-    return `<span class="mval-inline">${shown} <button type="button" class="mval-eye" data-field="${escapeHtml(fieldId)}" aria-label="Toggle visibility" title="${revealed ? 'Hide' : 'Show'}">${icon}</button></span>`;
+    return `<span class="mval-inline"><span class="mval-value">${shown}</span> <button type="button" class="mval-eye" data-field="${escapeHtml(fieldId)}" aria-label="Toggle visibility" title="${revealed ? 'Hide' : 'Show'}">${icon}</button></span>`;
   }
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.mval-eye');
     if(!btn) return;
     e.stopPropagation();
     const fieldId = btn.dataset.field;
-    if(revealedFields.has(fieldId)) revealedFields.delete(fieldId); else revealedFields.add(fieldId);
-    renderBudget();
-    renderReport();
-    const detailBox = document.getElementById('statBudgetDetail');
-    if(detailBox && detailBox.style.display !== 'none') renderOverviewBalanceDetail();
+    const wasRevealed = revealedFields.has(fieldId);
+    if(wasRevealed) revealedFields.delete(fieldId); else revealedFields.add(fieldId);
+    const nowRevealed = !wasRevealed;
+    const rawHtml = fieldRawHtmlCache.get(fieldId);
+    if(rawHtml == null){
+      // Field wasn't rendered into the cache yet (shouldn't normally happen) —
+      // fall back to a full re-render so it's never stuck showing stale state.
+      renderBudget();
+      renderReport();
+      const detailBox = document.getElementById('statBudgetDetail');
+      if(detailBox && detailBox.style.display !== 'none') renderOverviewBalanceDetail();
+      return;
+    }
+    // Same fieldId can appear more than once on screen (e.g. Overview + Report
+    // showing the same summary figure) — update every instance in place.
+    document.querySelectorAll(`.mval-eye[data-field="${CSS.escape(fieldId)}"]`).forEach(matchBtn => {
+      const wrap = matchBtn.closest('.mval-inline');
+      const valueSpan = wrap ? wrap.querySelector('.mval-value') : null;
+      if(valueSpan) valueSpan.innerHTML = nowRevealed ? rawHtml : PRIVACY_MASK;
+      matchBtn.textContent = nowRevealed ? '🙈' : '👁️';
+      matchBtn.title = nowRevealed ? 'Hide' : 'Show';
+      matchBtn.setAttribute('aria-label', matchBtn.title);
+    });
   });
   const COUNTRY_DB = [
     { name: 'United Arab Emirates', currency: 'AED', banks: ['Emirates NBD','ADCB','FAB (First Abu Dhabi Bank)','Mashreq','ADIB','Dubai Islamic Bank','RAKBANK','CBD (Commercial Bank of Dubai)','HSBC UAE','Citibank UAE','Standard Chartered UAE'] },
@@ -7694,7 +7735,6 @@
   }
   function scrCollectValues(){
     return {
-      marketCap: scrNum('scrMarketCap'),
       price: scrNum('scrPrice'),
       pe: scrNum('scrPe'),
       industryPe: scrNum('scrIndustryPe'),
@@ -7716,107 +7756,6 @@
       rsi: scrNum('scrRsi')
     };
   }
-  function chk(label, a, cmp, b){
-    if(a === null || b === null) return { label, state: 'na' };
-    let pass;
-    if(cmp === '<') pass = a < b;
-    else if(cmp === '>') pass = a > b;
-    else if(cmp === '=') pass = a === b;
-    return { label, state: pass ? 'pass' : 'fail' };
-  }
-  function screenAChecks(v){
-    return [
-      chk('Market Cap > 5000', v.marketCap, '>', 5000),
-      chk('P/E < 15', v.pe, '<', 15),
-      chk('P/E < Industry P/E', v.pe, '<', v.industryPe),
-      chk('PEG Ratio < 1', v.peg, '<', 1),
-      chk('Price to Book Value < 2', v.pb, '<', 2),
-      chk('Debt to Equity < 0.5', v.de, '<', 0.5),
-      chk('Return on Equity > 15%', v.roe, '>', 15),
-      chk('Avg ROCE (3yr) > 14%', v.roce3yr, '>', 14),
-      chk('Sales growth (3yr) > 10%', v.salesGrowth3yr, '>', 10),
-      chk('Profit growth (3yr) > 10%', v.profitGrowth3yr, '>', 10),
-      chk('EPS growth (5yr) > 10%', v.epsGrowth5yr, '>', 10),
-      chk('Free cash flow (3yr) > 0', v.fcf3yr, '>', 0),
-      chk('Operating cash flow (3yr) > 0', v.ocf3yr, '>', 0),
-      chk('Pledged % = 0', v.pledged, '=', 0),
-      chk('RSI < 70', v.rsi, '<', 70)
-    ];
-  }
-  function screenBChecks(v){
-    return [
-      chk('Market Cap > 5000', v.marketCap, '>', 5000),
-      chk('P/E < 20', v.pe, '<', 20),
-      chk('P/E < Industry P/E', v.pe, '<', v.industryPe),
-      chk('PEG Ratio < 1.25', v.peg, '<', 1.25),
-      chk('Price to Book Value < 3', v.pb, '<', 3),
-      chk('Debt to Equity < 0.5', v.de, '<', 0.5),
-      chk('Return on Equity > 15%', v.roe, '>', 15),
-      chk('Avg ROCE (3yr) > 15%', v.roce3yr, '>', 15),
-      chk('Sales growth (3yr) > 10%', v.salesGrowth3yr, '>', 10),
-      chk('Profit growth (3yr) > 10%', v.profitGrowth3yr, '>', 10),
-      chk('EPS growth (5yr) > 10%', v.epsGrowth5yr, '>', 10),
-      chk('Free cash flow (3yr) > 0', v.fcf3yr, '>', 0),
-      chk('Operating cash flow (3yr) > 0', v.ocf3yr, '>', 0),
-      chk('Pledged % = 0', v.pledged, '=', 0)
-    ];
-  }
-  function screenCChecks(v){
-    const checks = [
-      chk('Market Cap > 5000', v.marketCap, '>', 5000),
-      chk('P/E < 15', v.pe, '<', 15),
-      chk('P/E < Industry P/E', v.pe, '<', v.industryPe),
-      chk('PEG Ratio < 1', v.peg, '<', 1),
-      chk('Price to Book Value < 2', v.pb, '<', 2),
-      chk('Debt to Equity < 0.5', v.de, '<', 0.5),
-      chk('Current Ratio > 1.5', v.currentRatio, '>', 1.5),
-      chk('Return on Equity > 15%', v.roe, '>', 15),
-      chk('Avg ROCE (3yr) > 14%', v.roce3yr, '>', 14),
-      chk('Sales growth (3yr) > 10%', v.salesGrowth3yr, '>', 10),
-      chk('Profit growth (3yr) > 10%', v.profitGrowth3yr, '>', 10),
-      chk('Operating cash flow (3yr) > 0', v.ocf3yr, '>', 0),
-      chk('Free cash flow (5yr) > 0', v.fcf5yr, '>', 0),
-      chk('Pledged % = 0', v.pledged, '=', 0)
-    ];
-    // FCF yield — informational only, since the threshold wasn't specified.
-    let fcfYieldNote = null;
-    if(v.fcfPrecYear !== null && v.shares !== null && v.shares > 0 && v.price !== null && v.price > 0){
-      const fcfYield = ((v.fcfPrecYear / v.shares) / v.price) * 100;
-      fcfYieldNote = fcfYield;
-    }
-    return { checks, fcfYieldNote };
-  }
-  function renderScreenChecklist(elId, checks, extraNote){
-    const box = document.getElementById(elId);
-    if(!box) return;
-    const passCount = checks.filter(c => c.state === 'pass').length;
-    const failCount = checks.filter(c => c.state === 'fail').length;
-    const naCount = checks.filter(c => c.state === 'na').length;
-    let verdict, color;
-    if(naCount > 0) { verdict = `Incomplete — fill in ${naCount} more field${naCount === 1 ? '' : 's'} to check`; color = 'var(--ink-soft)'; }
-    else if(failCount === 0) { verdict = '✓ PASSES this screen'; color = 'var(--teal-dark)'; }
-    else { verdict = `✗ Fails ${failCount} of ${checks.length} conditions`; color = 'var(--coral)'; }
-    box.innerHTML = `
-      <div style="font-weight:600;color:${color};margin-bottom:6px;">${verdict}</div>
-      <ul style="margin:0 0 0 18px;padding:0;font-size:12px;line-height:1.8;">
-        ${checks.map(c => {
-          const icon = c.state === 'pass' ? '✓' : (c.state === 'fail' ? '✗' : '—');
-          const clr = c.state === 'pass' ? 'var(--teal-dark)' : (c.state === 'fail' ? 'var(--coral)' : 'var(--ink-soft)');
-          return `<li style="color:${clr};">${icon} ${escapeHtml(c.label)}</li>`;
-        }).join('')}
-      </ul>
-      ${extraNote != null ? `<div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">FCF yield (preceding year FCF ÷ shares ÷ price): <strong>${extraNote.toFixed(2)}%</strong> — informational only; the pass/fail threshold for this wasn't specified, so it's not counted in the verdict above.</div>` : ''}
-    `;
-  }
-  function renderAllScreens(){
-    const v = scrCollectValues();
-    renderScreenChecklist('scrResultA', screenAChecks(v));
-    renderScreenChecklist('scrResultB', screenBChecks(v));
-    const c = screenCChecks(v);
-    renderScreenChecklist('scrResultC', c.checks, c.fcfYieldNote);
-  }
-  const scrCheckAllBtn = document.getElementById('scrCheckAll');
-  if(scrCheckAllBtn) scrCheckAllBtn.addEventListener('click', renderAllScreens);
   const scrAutoFillBtn = document.getElementById('scrAutoFill');
   if(scrAutoFillBtn){
     scrAutoFillBtn.addEventListener('click', async () => {
@@ -7839,7 +7778,6 @@
         setIf('scrPb', data.priceToBook, 2, 'P/B');
         setIf('scrRoe', data.returnOnEquity, 1, 'ROE');
         setIf('scrCurrentRatio', data.currentRatio, 2, 'current ratio');
-        if(data.marketCap != null) { document.getElementById('scrMarketCap').value = (data.marketCap / 1e7).toFixed(0); filled.push('market cap'); } // absolute currency -> ₹ Cr
         if(data.operatingCashflow != null) { document.getElementById('scrOcf3yr').value = (data.operatingCashflow / 1e7).toFixed(1); filled.push('operating cash flow (TTM, not a true 3yr sum)'); }
         if(data.freeCashflow != null) { document.getElementById('scrFcf3yr').value = (data.freeCashflow / 1e7).toFixed(1); filled.push('free cash flow (TTM, not a true 3yr sum)'); }
         nameEl.value = data.name || query;
@@ -7954,7 +7892,6 @@
     if(statusEl) statusEl.textContent = `✓ Scanned ${results.length} stocks — last updated ${todayStr()}.`;
     renderBatchResults(cacheKey, resultElId);
     renderStrongBuyList();
-    renderMultibaggerCandidates();
     const listLabel = cacheKey === 'nifty100' ? 'Nifty 100' : 'Watchlist';
     notifyForBanners(buildScreenerAlertBanners(cacheKey, listLabel, prevScan, results, list));
   }
@@ -8014,7 +7951,7 @@
     if(!box) return;
     const scans = state.screenerScans || {};
     const all = [];
-    [['nifty100', 'Nifty 100'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+    [['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
@@ -8055,7 +7992,7 @@
   function collectStrongBuyRows(){
     const scans = state.screenerScans || {};
     const all = [];
-    [['nifty100', 'Nifty 100'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+    [['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
@@ -8076,170 +8013,20 @@
     all.forEach(r => { text += `${r.name}: ${r.price != null ? r.price.toFixed(2) : '—'} (${r.source})\n`; });
     openWhatsAppShare(text);
   }
-  // ---- Multibagger Candidates: a stricter shortlist than the Strong Buy list
-  // (100% signal alignment, not just the 80% threshold used for "Strong Buy"),
-  // plus a personal tracker (state.multibaggerWatch, household-shared like
-  // screenerScans) so candidates can be watched over time rather than just
-  // listed for one day. ----
-  function collectMultibaggerAutoRows(){
-    const scans = state.screenerScans || {};
-    const all = [];
-    [['nifty100', 'Nifty 100'], ['custom', 'Watchlist']].forEach(([key, label]) => {
-      const scan = scans[key];
-      if(scan && scan.results) scan.results.forEach(r => {
-        if(!r.error && r.verdict === 'Strong Buy' && r.totalSignals && r.buySignals === r.totalSignals){
-          all.push(Object.assign({ source: label }, r));
-        }
-      });
-    });
-    all.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    return all;
-  }
-  function renderMultibaggerCandidates(){
-    const box = document.getElementById('scrMultibaggerAutoResult');
-    if(!box) return;
-    const rows = collectMultibaggerAutoRows();
-    if(!rows.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No 100%-aligned signals in today\'s scans yet — run the Nifty 100 / Watchlist scans above first.</div>'; return; }
-    box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows.map(r => `
-      <tr>
-        <td>${escapeHtml(r.name)}</td>
-        <td>${r.price != null ? r.price.toFixed(2) : '—'}</td>
-        <td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td>
-        <td><button type="button" class="add-btn ghost mb-track-btn" data-name="${escapeHtml(r.name)}" data-symbol="${escapeHtml(r.symbol || '')}" data-price="${r.price != null ? r.price : ''}" style="padding:3px 8px;font-size:11px;">+ Track</button></td>
-      </tr>`).join('')}</table>`;
-    box.querySelectorAll('.mb-track-btn').forEach(btn => {
-      btn.addEventListener('click', () => addMultibaggerCandidate({
-        name: btn.getAttribute('data-name'),
-        symbol: btn.getAttribute('data-symbol') || null,
-        price: btn.getAttribute('data-price') ? parseFloat(btn.getAttribute('data-price')) : null,
-        verdict: 'Strong Buy',
-        notes: ''
-      }));
-    });
-  }
-  function renderMultibaggerWatch(){
-    const box = document.getElementById('scrMultibaggerWatchResult');
-    if(!box) return;
-    const list = state.multibaggerWatch || [];
-    if(!list.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Nothing tracked yet — add a candidate above.</div>'; return; }
-    const rows = list.slice().sort((a, b) => (b.addedDate || '').localeCompare(a.addedDate || '')).map(c => {
-      const changePct = (c.lastPrice != null && c.addedPrice) ? ((c.lastPrice - c.addedPrice) / c.addedPrice * 100) : null;
-      const changeColor = changePct == null ? 'var(--ink-soft)' : (changePct >= 0 ? 'var(--teal-dark)' : 'var(--coral)');
-      return `<tr>
-        <td>${escapeHtml(c.name)}${c.notes ? `<div style="font-size:10px;color:var(--ink-soft);">${escapeHtml(c.notes)}</div>` : ''}</td>
-        <td style="font-size:11px;">${c.addedDate || '—'}<br>${c.addedPrice != null ? c.addedPrice.toFixed(2) : '—'}</td>
-        <td style="font-size:11px;">${c.lastPrice != null ? c.lastPrice.toFixed(2) : '—'}</td>
-        <td style="color:${changeColor};font-weight:600;">${changePct != null ? (changePct >= 0 ? '+' : '') + changePct.toFixed(1) + '%' : '—'}</td>
-        <td><button type="button" class="add-btn ghost mb-remove-btn" data-id="${c.id}" style="padding:3px 8px;font-size:11px;">✕</button></td>
-      </tr>`;
-    }).join('');
-    box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);"><th style="text-align:left;">Name</th><th style="text-align:left;">Added</th><th style="text-align:left;">Now</th><th style="text-align:left;">Change</th><th></th></tr>${rows}</table>`;
-    box.querySelectorAll('.mb-remove-btn').forEach(btn => {
-      btn.addEventListener('click', () => removeMultibaggerCandidate(btn.getAttribute('data-id')));
-    });
-  }
-  function addMultibaggerCandidate({ name, symbol, price, verdict, notes }){
-    if(!state.multibaggerWatch) state.multibaggerWatch = [];
-    if(state.multibaggerWatch.some(c => c.name.toLowerCase() === (name || '').toLowerCase())){
-      renderMultibaggerWatch();
-      return;
-    }
-    state.multibaggerWatch.push({
-      id: uid(), name, symbol: symbol || null,
-      addedDate: todayStr(), addedPrice: price != null ? price : null, addedVerdict: verdict || null,
-      lastPrice: price != null ? price : null, lastCheckedDate: todayStr(),
-      notes: notes || ''
-    });
-    save();
-    renderMultibaggerWatch();
-  }
-  function removeMultibaggerCandidate(id){
-    if(!state.multibaggerWatch) return;
-    state.multibaggerWatch = state.multibaggerWatch.filter(c => c.id !== id);
-    save();
-    renderMultibaggerWatch();
-  }
-  async function manualAddMultibaggerCandidate(){
-    const nameEl = document.getElementById('scrMultibaggerAddInput');
-    const notesEl = document.getElementById('scrMultibaggerAddNotes');
-    const statusEl = document.getElementById('scrMultibaggerAddStatus');
-    const query = nameEl.value.trim();
-    if(!query){ if(statusEl) statusEl.textContent = 'Type a stock name or ticker first.'; return; }
-    if(statusEl) statusEl.textContent = `Looking up "${query}"…`;
-    try{
-      const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=IN`);
-      const data = await res.json();
-      if(!res.ok || data.error){
-        addMultibaggerCandidate({ name: query, symbol: null, price: null, verdict: null, notes: notesEl.value.trim() });
-        if(statusEl) statusEl.textContent = 'Added without a live price — could not fetch it right now.';
-      } else {
-        addMultibaggerCandidate({ name: data.name || query, symbol: data.symbol, price: data.price, verdict: null, notes: notesEl.value.trim() });
-        if(statusEl) statusEl.textContent = `✓ Added ${data.name || query} at ${data.price != null ? data.price.toFixed(2) : '—'}.`;
-      }
-      nameEl.value = ''; notesEl.value = '';
-    }catch(e){
-      addMultibaggerCandidate({ name: query, symbol: null, price: null, verdict: null, notes: notesEl.value.trim() });
-      if(statusEl) statusEl.textContent = 'Added without a live price — could not reach the live data source.';
-      nameEl.value = ''; notesEl.value = '';
-    }
-  }
-  async function refreshMultibaggerPrices(){
-    const list = state.multibaggerWatch || [];
-    const statusEl = document.getElementById('scrMultibaggerAddStatus');
-    if(!list.length){ if(statusEl) statusEl.textContent = 'Nothing tracked yet.'; return; }
-    if(statusEl) statusEl.textContent = `Refreshing ${list.length} price(s)…`;
-    let idx = 0;
-    const concurrency = 4;
-    async function worker(){
-      while(idx < list.length){
-        const c = list[idx++];
-        try{
-          const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(c.symbol || c.name)}&market=IN`);
-          const data = await res.json();
-          if(res.ok && !data.error && data.price != null){ c.lastPrice = data.price; c.lastCheckedDate = todayStr(); }
-        }catch(e){ /* leave last known price as-is */ }
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
-    save();
-    renderMultibaggerWatch();
-    if(statusEl) statusEl.textContent = `✓ Refreshed — ${todayStr()}.`;
-  }
-  function exportMultibaggerCsv(){
-    const list = state.multibaggerWatch || [];
-    if(!list.length){ alert('Nothing tracked yet — add a candidate first.'); return; }
-    const header = ['Name', 'Added Date', 'Added Price', 'Current Price', 'Change %', 'Notes'];
-    const lines = [header.map(csvEscape).join(',')];
-    list.forEach(c => {
-      const changePct = (c.lastPrice != null && c.addedPrice) ? ((c.lastPrice - c.addedPrice) / c.addedPrice * 100) : null;
-      lines.push([c.name, c.addedDate || '', c.addedPrice != null ? c.addedPrice.toFixed(2) : '', c.lastPrice != null ? c.lastPrice.toFixed(2) : '', changePct != null ? changePct.toFixed(1) : '', c.notes || ''].map(csvEscape).join(','));
-    });
-    downloadCsvFile(lines, `multibagger-candidates-${todayStr()}.csv`);
-  }
-  function shareMultibaggerWhatsApp(){
-    const list = state.multibaggerWatch || [];
-    if(!list.length){ alert('Nothing tracked yet — add a candidate first.'); return; }
-    let text = `💎 Multibagger Candidates — Tracked\\n\\n`;
-    list.forEach(c => {
-      const changePct = (c.lastPrice != null && c.addedPrice) ? ((c.lastPrice - c.addedPrice) / c.addedPrice * 100) : null;
-      text += `${c.name}: ${c.addedPrice != null ? c.addedPrice.toFixed(2) : '—'} → ${c.lastPrice != null ? c.lastPrice.toFixed(2) : '—'} (${changePct != null ? (changePct >= 0 ? '+' : '') + changePct.toFixed(1) + '%' : '—'})\\n`;
-    });
-    openWhatsAppShare(text);
-  }
-  const scrMultibaggerAddBtn = document.getElementById('scrMultibaggerAddBtn');
-  if(scrMultibaggerAddBtn) scrMultibaggerAddBtn.addEventListener('click', manualAddMultibaggerCandidate);
-  const scrMultibaggerRefreshBtn = document.getElementById('scrMultibaggerRefreshBtn');
-  if(scrMultibaggerRefreshBtn) scrMultibaggerRefreshBtn.addEventListener('click', refreshMultibaggerPrices);
 
   [
     ['scrNifty100ExportCsv', () => exportScreenerCsv('nifty100', 'nifty100-screener')],
     ['scrNifty100ShareWa', () => shareScreenerWhatsApp('nifty100', 'Nifty 100')],
+    ['scrNifty500ExportCsv', () => exportScreenerCsv('nifty500', 'nifty500-screener')],
+    ['scrNifty500ShareWa', () => shareScreenerWhatsApp('nifty500', 'Nifty 500')],
+    ['scrNiftyMidcapExportCsv', () => exportScreenerCsv('niftymidcap', 'nifty-midcap150-screener')],
+    ['scrNiftyMidcapShareWa', () => shareScreenerWhatsApp('niftymidcap', 'Nifty Midcap 150')],
+    ['scrNiftySmallcapExportCsv', () => exportScreenerCsv('niftysmallcap', 'nifty-smallcap250-screener')],
+    ['scrNiftySmallcapShareWa', () => shareScreenerWhatsApp('niftysmallcap', 'Nifty Smallcap 250')],
     ['scrCustomExportCsv', () => exportScreenerCsv('custom', 'watchlist-screener')],
     ['scrCustomShareWa', () => shareScreenerWhatsApp('custom', 'My Watchlist')],
     ['scrStrongBuyExportCsv', exportStrongBuyCsv],
     ['scrStrongBuyShareWa', shareStrongBuyWhatsApp],
-    ['scrMultibaggerExportCsv', exportMultibaggerCsv],
-    ['scrMultibaggerShareWa', shareMultibaggerWhatsApp],
   ].forEach(([id, handler]) => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('click', handler);
@@ -8273,6 +8060,95 @@
   }
   const scrNifty100RescanBtn = document.getElementById('scrNifty100Rescan');
   if(scrNifty100RescanBtn) scrNifty100RescanBtn.addEventListener('click', () => ensureNifty100Scan(true));
+
+  // ---- Nifty 500 / Midcap 150 / Smallcap 250 — same batch-scan pattern as
+  // Nifty 100 above, just a different constituent list + cache key. ----
+  let nifty500ListCache = null;
+  async function getNifty500List(){
+    if(nifty500ListCache) return { list: nifty500ListCache };
+    try{
+      const res = await fetch('/api/nifty500');
+      const data = await res.json();
+      nifty500ListCache = data.list || [];
+      return { list: nifty500ListCache, note: data.note };
+    }catch(e){
+      return { list: [], note: "Couldn't load the Nifty 500 list." };
+    }
+  }
+  async function ensureNifty500Scan(force){
+    const scan = state.screenerScans && state.screenerScans.nifty500;
+    const statusEl = document.getElementById('scrNifty500Status');
+    if(scan && scan.date === todayStr() && !force){
+      renderBatchResults('nifty500', 'scrNifty500Result');
+      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Loading Nifty 500 constituent list…';
+    const { list, note } = await getNifty500List();
+    if(note && statusEl) statusEl.textContent = note;
+    if(!list.length) return;
+    await runBatchScan(list, 'nifty500', 'scrNifty500Status', 'scrNifty500Result');
+  }
+  const scrNifty500RescanBtn = document.getElementById('scrNifty500Rescan');
+  if(scrNifty500RescanBtn) scrNifty500RescanBtn.addEventListener('click', () => ensureNifty500Scan(true));
+
+  let niftyMidcapListCache = null;
+  async function getNiftyMidcapList(){
+    if(niftyMidcapListCache) return { list: niftyMidcapListCache };
+    try{
+      const res = await fetch('/api/niftymidcap');
+      const data = await res.json();
+      niftyMidcapListCache = data.list || [];
+      return { list: niftyMidcapListCache, note: data.note };
+    }catch(e){
+      return { list: [], note: "Couldn't load the Nifty Midcap 150 list." };
+    }
+  }
+  async function ensureNiftyMidcapScan(force){
+    const scan = state.screenerScans && state.screenerScans.niftymidcap;
+    const statusEl = document.getElementById('scrNiftyMidcapStatus');
+    if(scan && scan.date === todayStr() && !force){
+      renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
+      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Loading Nifty Midcap 150 constituent list…';
+    const { list, note } = await getNiftyMidcapList();
+    if(note && statusEl) statusEl.textContent = note;
+    if(!list.length) return;
+    await runBatchScan(list, 'niftymidcap', 'scrNiftyMidcapStatus', 'scrNiftyMidcapResult');
+  }
+  const scrNiftyMidcapRescanBtn = document.getElementById('scrNiftyMidcapRescan');
+  if(scrNiftyMidcapRescanBtn) scrNiftyMidcapRescanBtn.addEventListener('click', () => ensureNiftyMidcapScan(true));
+
+  let niftySmallcapListCache = null;
+  async function getNiftySmallcapList(){
+    if(niftySmallcapListCache) return { list: niftySmallcapListCache };
+    try{
+      const res = await fetch('/api/niftysmallcap');
+      const data = await res.json();
+      niftySmallcapListCache = data.list || [];
+      return { list: niftySmallcapListCache, note: data.note };
+    }catch(e){
+      return { list: [], note: "Couldn't load the Nifty Smallcap 250 list." };
+    }
+  }
+  async function ensureNiftySmallcapScan(force){
+    const scan = state.screenerScans && state.screenerScans.niftysmallcap;
+    const statusEl = document.getElementById('scrNiftySmallcapStatus');
+    if(scan && scan.date === todayStr() && !force){
+      renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
+      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Loading Nifty Smallcap 250 constituent list…';
+    const { list, note } = await getNiftySmallcapList();
+    if(note && statusEl) statusEl.textContent = note;
+    if(!list.length) return;
+    await runBatchScan(list, 'niftysmallcap', 'scrNiftySmallcapStatus', 'scrNiftySmallcapResult');
+  }
+  const scrNiftySmallcapRescanBtn = document.getElementById('scrNiftySmallcapRescan');
+  if(scrNiftySmallcapRescanBtn) scrNiftySmallcapRescanBtn.addEventListener('click', () => ensureNiftySmallcapScan(true));
 
   // customWatchlist entries were originally plain strings; normalize any of those
   // to {name, target} objects (in place, saved once) so older saved data keeps working.
@@ -8360,14 +8236,18 @@
     const acc = header.closest('.accordion');
     if(!acc || !acc.classList.contains('open')) return; // only fires right after it was opened
     if(acc.dataset.key === 'screen-nifty100') ensureNifty100Scan(false);
+    if(acc.dataset.key === 'screen-nifty500') ensureNifty500Scan(false);
+    if(acc.dataset.key === 'screen-niftymidcap') ensureNiftyMidcapScan(false);
+    if(acc.dataset.key === 'screen-niftysmallcap') ensureNiftySmallcapScan(false);
     if(acc.dataset.key === 'screen-customwatch'){ renderWatchlistItems(); ensureCustomScan(false); }
   });
   renderWatchlistItems();
   renderBatchResults('nifty100', 'scrNifty100Result');
+  renderBatchResults('nifty500', 'scrNifty500Result');
+  renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
+  renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
   renderBatchResults('custom', 'scrCustomResult');
   renderStrongBuyList();
-  renderMultibaggerCandidates();
-  renderMultibaggerWatch();
 
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
@@ -9946,10 +9826,11 @@
     renderInvestmentCountry('India');
     renderWatchlistItems();
     renderBatchResults('nifty100', 'scrNifty100Result');
+    renderBatchResults('nifty500', 'scrNifty500Result');
+    renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
+    renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
     renderBatchResults('custom', 'scrCustomResult');
     renderStrongBuyList();
-    renderMultibaggerCandidates();
-    renderMultibaggerWatch();
   }
   const indiaIncludeRemitToggle = document.getElementById('indiaIncludeRemitInDebt');
   if(indiaIncludeRemitToggle) indiaIncludeRemitToggle.addEventListener('change', () => {
