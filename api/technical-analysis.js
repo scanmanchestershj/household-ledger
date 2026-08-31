@@ -11,6 +11,8 @@
 //
 // GET /api/technical-analysis?q=<company name or ticker>&market=IN|AE
 
+const { calculateTechnicalScore } = require('../investment-verdict-formulas.js');
+
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const YAHOO_SEARCH = 'https://query1.finance.yahoo.com/v1/finance/search';
 const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
@@ -216,6 +218,7 @@ module.exports = async (req, res) => {
   const totalSell = maSell + oscSell;
   const totalSignals = movingAverages.length + oscillators.length;
   const overallVerdict = verdictFromCounts(totalBuy, totalSell, totalSignals);
+  const technicalScore = calculateTechnicalScore({ movingAverages, oscillators });
 
   res.status(200).json({
     symbol: resolved.symbol,
@@ -226,6 +229,7 @@ module.exports = async (req, res) => {
     oscillators,
     oscillatorVerdict,
     overallVerdict,
+    technicalScore,
     buySignals: totalBuy,
     sellSignals: totalSell,
     totalSignals,

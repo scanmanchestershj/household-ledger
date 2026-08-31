@@ -2293,6 +2293,8 @@
                   <div><label class="field-label">Pledged %</label><input type="number" id="scrPledged" step="0.1" placeholder="0"></div>
                   <div><label class="field-label">RSI</label><input type="number" id="scrRsi" step="0.1"></div>
                 </div>
+                <button type="button" class="add-btn full-width" id="scrScoreFundamentals" style="margin-top:10px;">Score fundamentals</button>
+                <div id="scrFundamentalScoreResult" style="margin-top:8px;"></div>
               </div>
             </div>
 
@@ -7756,6 +7758,27 @@
       rsi: scrNum('scrRsi')
     };
   }
+  const scrScoreFundamentalsBtn = document.getElementById('scrScoreFundamentals');
+  if(scrScoreFundamentalsBtn){
+    scrScoreFundamentalsBtn.addEventListener('click', async () => {
+      const box = document.getElementById('scrFundamentalScoreResult');
+      if(box) box.innerHTML = '<div class="empty" style="padding:4px 0;">Scoring…</div>';
+      try{
+        const res = await fetch('/api/score-fundamentals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(scrCollectValues())
+        });
+        const data = await res.json();
+        if(!res.ok || data.error){ if(box) box.innerHTML = `<div class="empty" style="padding:4px 0;color:var(--coral);">${escapeHtml(data.error || "Couldn't score fundamentals.")}</div>`; return; }
+        const score = data.fundamentalScore;
+        const color = score >= 35 ? 'var(--teal-dark)' : (score >= 20 ? 'var(--ink-soft)' : 'var(--coral)');
+        if(box) box.innerHTML = `<div style="font-weight:600;color:${color};">Fundamental Score: ${score} / 50</div><div style="font-size:10.5px;color:var(--ink-soft);margin-top:2px;">Based on ROCE, ROE, debt/equity, sales &amp; profit growth, and P/E vs industry P/E from the fields above. Fill in more fields for a fuller score — blank fields score 0.</div>`;
+      }catch(e){
+        if(box) box.innerHTML = '<div class="empty" style="padding:4px 0;color:var(--coral);">Could not reach the scoring endpoint.</div>';
+      }
+    });
+  }
   const scrAutoFillBtn = document.getElementById('scrAutoFill');
   if(scrAutoFillBtn){
     scrAutoFillBtn.addEventListener('click', async () => {
@@ -7815,6 +7838,7 @@
         <div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(data.name || data.symbol)} (${escapeHtml(data.symbol)}) &middot; ${data.price.toFixed(2)}</div>
         <div style="font-size:20px;font-weight:700;color:${verdictColor(data.overallVerdict)};margin-top:4px;">${data.overallVerdict}</div>
         <div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">${data.buySignals} buy · ${data.totalSignals - data.buySignals - data.sellSignals} neutral · ${data.sellSignals} sell (of ${data.totalSignals} signals)</div>
+        ${data.technicalScore != null ? `<div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">Technical Score: ${data.technicalScore} / 50</div>` : ''}
       </div>
       <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;color:${verdictColor(data.movingAverageVerdict)};">Moving Averages — ${data.movingAverageVerdict}</div>
       <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:10px;">${maRows}</table>
