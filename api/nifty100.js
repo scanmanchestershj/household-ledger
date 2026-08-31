@@ -27,7 +27,16 @@ const FALLBACK_LIST = [
   ['Divi\'s Laboratories', 'DIVISLAB'], ['Apollo Hospitals', 'APOLLOHOSP'], ['Bharat Petroleum', 'BPCL'],
   ['SBI Life Insurance', 'SBILIFE'], ['HDFC Life Insurance', 'HDFCLIFE'], ['Shriram Finance', 'SHRIRAMFIN'],
   ['LTIMindtree', 'LTIM'], ['Adani Ports', 'ADANIPORTS'], ['Bajaj Auto', 'BAJAJ-AUTO'],
-  ['Vedanta', 'VEDL'], ['DLF', 'DLF']
+  ['Vedanta', 'VEDL'], ['DLF', 'DLF'],
+  ['Trent', 'TRENT'], ['Zomato', 'ETERNAL'], ['Adani Green Energy', 'ADANIGREEN'], ['Adani Power', 'ADANIPOWER'],
+  ['Ambuja Cements', 'AMBUJACEM'], ['ACC', 'ACC'], ['Godrej Consumer Products', 'GODREJCP'], ['Pidilite Industries', 'PIDILITIND'],
+  ['Siemens', 'SIEMENS'], ['ABB India', 'ABB'], ['Havells India', 'HAVELLS'], ['Bharat Electronics', 'BEL'],
+  ['Hindustan Aeronautics', 'HAL'], ['InterGlobe Aviation', 'INDIGO'], ['Zydus Lifesciences', 'ZYDUSLIFE'], ['Lupin', 'LUPIN'],
+  ['Aurobindo Pharma', 'AUROPHARMA'], ['Torrent Pharmaceuticals', 'TORNTPHARM'], ['Bank of Baroda', 'BANKBARODA'], ['Canara Bank', 'CANBK'],
+  ['PNB', 'PNB'], ['Union Bank of India', 'UNIONBANK'], ['IDFC First Bank', 'IDFCFIRSTB'], ['Federal Bank', 'FEDERALBNK'],
+  ['Bandhan Bank', 'BANDHANBNK'], ['Yes Bank', 'YESBANK'], ['GAIL India', 'GAIL'],
+  ['Indian Oil Corporation', 'IOC'], ['Hindustan Petroleum', 'HINDPETRO'], ['LIC of India', 'LICI'],
+  ['PB Fintech', 'POLICYBZR'], ['Info Edge', 'NAUKRI'], ['United Spirits', 'MCDOWELL-N']
 ];
 
 function withTimeout(promise, ms) {
@@ -54,7 +63,7 @@ function parseCsv(text) {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=172800');
   try {
-    const r = await withTimeout(fetch(CSV_URL, { headers: { 'User-Agent': UA, 'Accept': 'text/csv' } }), 8000);
+    const r = await withTimeout(fetch(CSV_URL, { headers: { 'User-Agent': UA, 'Accept': 'text/csv,*/*', 'Accept-Language': 'en-US,en;q=0.9', 'Referer': 'https://www.niftyindices.com/', 'Cache-Control': 'no-cache' } }), 10000);
     if (!r.ok) throw new Error('bad status ' + r.status);
     const text = await r.text();
     const list = parseCsv(text);
@@ -62,6 +71,6 @@ module.exports = async (req, res) => {
     res.status(200).json({ source: 'live', count: list.length, list });
   } catch (e) {
     const list = FALLBACK_LIST.map(([name, symbol]) => ({ name, symbol: symbol + '.NS' }));
-    res.status(200).json({ source: 'fallback', count: list.length, list, note: 'Live Nifty 100 list unavailable — showing a fallback set of well-known large caps instead.' });
+    res.status(200).json({ source: 'fallback', count: list.length, list, note: 'Live Nifty 100 list unavailable — showing a fallback set of well-known large caps instead. Reason: ' + (e && e.message ? e.message : 'unknown error') });
   }
 };

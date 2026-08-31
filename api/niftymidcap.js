@@ -18,7 +18,14 @@ const FALLBACK_LIST = [
   ['Aurobindo Pharma', 'AUROPHARMA'], ['Alkem Laboratories', 'ALKEM'], ['Torrent Pharmaceuticals', 'TORNTPHARM'],
   ['Biocon', 'BIOCON'], ['Max Healthcare Institute', 'MAXHEALTH'], ['Fortis Healthcare', 'FORTIS'],
   ['Indian Hotels', 'INDHOTEL'], ['Mphasis', 'MPHASIS'], ['L&T Technology Services', 'LTTS'],
-  ['AU Small Finance Bank', 'AUBANK'], ['City Union Bank', 'CUB'], ['Bank of India', 'BANKINDIA']
+  ['AU Small Finance Bank', 'AUBANK'], ['City Union Bank', 'CUB'], ['Bank of India', 'BANKINDIA'],
+  ['Sundram Fasteners', 'SUNDRMFAST'], ['KEI Industries', 'KEI'], ['Finolex Cables', 'FINCABLES'],
+  ['Amber Enterprises', 'AMBER'], ['Century Plyboards', 'CENTURYPLY'], ['Vedant Fashions', 'VEDANTFASHN'],
+  ['Metro Brands', 'METROBRAND'], ['Aavas Financiers', 'AAVAS'], ['CreditAccess Grameen', 'CREDITACC'],
+  ['Suprajit Engineering', 'SUPRAJIT'], ['Thermax', 'THERMAX'], ['Elgi Equipments', 'ELGIEQUIP'],
+  ['Ratnamani Metals & Tubes', 'RATNAMANI'], ['Grindwell Norton', 'GRINDWELL'], ['Carborundum Universal', 'CARBORUNIV'],
+  ['Godrej Industries', 'GODREJIND'], ['Aditya Birla Capital', 'ABCAPITAL'], ['PI Industries', 'PIIND'],
+  ['Tata Elxsi', 'TATAELXSI'], ['ICICI Prudential Life', 'ICICIPRULI'], ['Star Health Insurance', 'STARHEALTH']
 ];
 
 function withTimeout(promise, ms) {
@@ -45,7 +52,7 @@ function parseCsv(text) {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=172800');
   try {
-    const r = await withTimeout(fetch(CSV_URL, { headers: { 'User-Agent': UA, 'Accept': 'text/csv' } }), 8000);
+    const r = await withTimeout(fetch(CSV_URL, { headers: { 'User-Agent': UA, 'Accept': 'text/csv,*/*', 'Accept-Language': 'en-US,en;q=0.9', 'Referer': 'https://www.niftyindices.com/', 'Cache-Control': 'no-cache' } }), 10000);
     if (!r.ok) throw new Error('bad status ' + r.status);
     const text = await r.text();
     const list = parseCsv(text);
@@ -53,6 +60,6 @@ module.exports = async (req, res) => {
     res.status(200).json({ source: 'live', count: list.length, list });
   } catch (e) {
     const list = FALLBACK_LIST.map(([name, symbol]) => ({ name, symbol: symbol + '.NS' }));
-    res.status(200).json({ source: 'fallback', count: list.length, list, note: 'Live Nifty Midcap 150 list unavailable — showing a short fallback set instead.' });
+    res.status(200).json({ source: 'fallback', count: list.length, list, note: 'Live Nifty Midcap 150 list unavailable — showing a short fallback set instead. Reason: ' + (e && e.message ? e.message : 'unknown error') });
   }
 };

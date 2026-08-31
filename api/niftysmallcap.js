@@ -18,7 +18,12 @@ const FALLBACK_LIST = [
   ['Aavas Financiers', 'AAVAS'], ['CreditAccess Grameen', 'CREDITACC'], ['Home First Finance', 'HOMEFIRST'],
   ['Sansera Engineering', 'SANSERA'], ['Endurance Technologies', 'ENDURANCE'], ['Suprajit Engineering', 'SUPRAJIT'],
   ['Triveni Turbine', 'TRITURBINE'], ['Thermax', 'THERMAX'], ['Elgi Equipments', 'ELGIEQUIP'],
-  ['Ratnamani Metals & Tubes', 'RATNAMANI'], ['Grindwell Norton', 'GRINDWELL'], ['Carborundum Universal', 'CARBORUNIV']
+  ['Ratnamani Metals & Tubes', 'RATNAMANI'], ['Grindwell Norton', 'GRINDWELL'], ['Carborundum Universal', 'CARBORUNIV'],
+  ['Jindal Stainless', 'JSL'], ['NCC', 'NCC'], ['PNC Infratech', 'PNCINFRA'], ['KNR Constructions', 'KNRCON'],
+  ['Blue Dart Express', 'BLUEDART'], ['TCI Express', 'TCIEXP'], ['Redington', 'REDINGTON'],
+  ['Zensar Technologies', 'ZENSARTECH'], ['Birlasoft', 'BSOFT'], ['eClerx Services', 'ECLERX'],
+  ['Gujarat Gas', 'GUJGASLTD'], ['Gujarat State Petronet', 'GSPL'], ['Petronet LNG', 'PETRONET'],
+  ['Kalyan Jewellers', 'KALYANKJIL'], ['Titagarh Rail Systems', 'TITAGARH'], ['Texmaco Rail & Engineering', 'TEXRAIL']
 ];
 
 function withTimeout(promise, ms) {
@@ -45,7 +50,7 @@ function parseCsv(text) {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=172800');
   try {
-    const r = await withTimeout(fetch(CSV_URL, { headers: { 'User-Agent': UA, 'Accept': 'text/csv' } }), 8000);
+    const r = await withTimeout(fetch(CSV_URL, { headers: { 'User-Agent': UA, 'Accept': 'text/csv,*/*', 'Accept-Language': 'en-US,en;q=0.9', 'Referer': 'https://www.niftyindices.com/', 'Cache-Control': 'no-cache' } }), 10000);
     if (!r.ok) throw new Error('bad status ' + r.status);
     const text = await r.text();
     const list = parseCsv(text);
@@ -53,6 +58,6 @@ module.exports = async (req, res) => {
     res.status(200).json({ source: 'live', count: list.length, list });
   } catch (e) {
     const list = FALLBACK_LIST.map(([name, symbol]) => ({ name, symbol: symbol + '.NS' }));
-    res.status(200).json({ source: 'fallback', count: list.length, list, note: 'Live Nifty Smallcap 250 list unavailable — showing a short fallback set instead.' });
+    res.status(200).json({ source: 'fallback', count: list.length, list, note: 'Live Nifty Smallcap 250 list unavailable — showing a short fallback set instead. Reason: ' + (e && e.message ? e.message : 'unknown error') });
   }
 };
