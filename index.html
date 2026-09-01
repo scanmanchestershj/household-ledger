@@ -7901,7 +7901,6 @@
   async function runBatchScan(list, cacheKey, statusElId, resultElId){
     const statusEl = document.getElementById(statusElId);
     if(!list.length){ if(statusEl) statusEl.textContent = 'Nothing to scan yet.'; return; }
-    const prevScan = state.screenerScans && state.screenerScans[cacheKey];
     const results = new Array(list.length);
     let idx = 0;
     const concurrency = 4;
@@ -7920,8 +7919,6 @@
     if(statusEl) statusEl.textContent = `✓ Scanned ${results.length} stocks — last updated ${todayStr()}.`;
     renderBatchResults(cacheKey, resultElId);
     renderStrongBuyList();
-    const listLabel = cacheKey === 'nifty100' ? 'Nifty 100' : 'Watchlist';
-    notifyForBanners(buildScreenerAlertBanners(cacheKey, listLabel, prevScan, results, list));
   }
   // ---- Screener alerts: a stock newly flipping to "Strong Buy" since the previous
   // scan, or a watchlist stock's live price reaching a target the user set. Reuses
