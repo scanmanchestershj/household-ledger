@@ -211,6 +211,9 @@
   .accordion.open > .accordion-header .accordion-arrow{ transform:rotate(90deg); }
   .accordion-body{ display:none; padding:14px; border-top:1px solid var(--line); }
   .accordion.open > .accordion-body{ display:block; }
+  .stock-row{ cursor:pointer; }
+  .stock-row:hover td{ background:var(--line); }
+  .stock-range-tab.active{ background:var(--teal); color:#fff; border-color:var(--teal); }
   .accordion-drag-handle{ cursor:grab; color:var(--ink-soft); font-size:13px; padding:0 4px; }
   .ov-section{ cursor:grab; padding:6px 4px; border-radius:6px; }
   .ov-section:hover{ background:var(--paper-deep); }
@@ -7839,6 +7842,7 @@
         <div style="font-size:20px;font-weight:700;color:${verdictColor(data.overallVerdict)};margin-top:4px;">${data.overallVerdict}</div>
         <div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">${data.buySignals} buy · ${data.totalSignals - data.buySignals - data.sellSignals} neutral · ${data.sellSignals} sell (of ${data.totalSignals} signals)</div>
         ${data.technicalScore != null ? `<div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">Technical Score: ${data.technicalScore} / 50</div>` : ''}
+        <button type="button" class="add-btn ghost stock-chart-open" data-symbol="${escapeHtml(data.symbol)}" data-name="${escapeHtml(data.name || data.symbol)}" style="margin-top:8px;padding:5px 12px;font-size:11.5px;">📈 View price chart</button>
       </div>
       <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;color:${verdictColor(data.movingAverageVerdict)};">Moving Averages — ${data.movingAverageVerdict}</div>
       <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:10px;">${maRows}</table>
@@ -7966,7 +7970,7 @@
     });
     const rows = sorted.map(r => {
       if(r.error) return `<tr><td>${escapeHtml(r.name)}</td><td colspan="2" style="color:var(--ink-soft);font-size:11px;">${escapeHtml(r.error)}</td></tr>`;
-      return `<tr><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td>${verdictBadge(r.verdict)}</td></tr>`;
+      return `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td>${verdictBadge(r.verdict)}</td></tr>`;
     }).join('');
     box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date}</div><table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
   }
@@ -7980,7 +7984,7 @@
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
     if(!all.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No Strong Buy signals yet today — run the scans above first.</div>'; return; }
-    const rows = all.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td></tr>`).join('');
+    const rows = all.map(r => `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td></tr>`).join('');
     box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
   }
 
@@ -8054,6 +8058,117 @@
   ].forEach(([id, handler]) => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('click', handler);
+  });
+
+  // ---- Stock detail chart: click any stock in the scanner/watchlist/
+  // Strong Buy tables (or "View price chart" on a single-stock technical
+  // summary) to monitor its price over 1D–All using /api/stock-history. ----
+  const STOCK_CHART_RANGES = [
+    { key: '1d', label: '1D' }, { key: '1w', label: '1W' }, { key: '1mo', label: '1M' },
+    { key: '3mo', label: '3M' }, { key: '6mo', label: '6M' }, { key: '1y', label: '1Y' },
+    { key: '5y', label: '5Y' }, { key: 'max', label: 'All' }
+  ];
+  let stockChartState = { symbol: null, name: null, range: '3mo' };
+
+  function fmtChartDate(ms, range){
+    const d = new Date(ms);
+    if(range === '1d') return d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+    return d.toLocaleDateString(undefined, {day:'numeric', month:'short', year: (range === '5y' || range === 'max') ? 'numeric' : undefined});
+  }
+
+  function renderStockSparkline(points, isUp, range){
+    if(!points || points.length < 2) return '<div class="empty" style="padding:20px 0;">Not enough data to chart.</div>';
+    const w = 480, h = 180, pad = 10;
+    const closes = points.map(p => p.c);
+    const min = Math.min(...closes), max = Math.max(...closes);
+    const spread = (max - min) || 1;
+    const stepX = (w - pad * 2) / (points.length - 1);
+    const coords = points.map((p, i) => {
+      const x = pad + i * stepX;
+      const y = pad + (h - pad * 2) * (1 - (p.c - min) / spread);
+      return [x, y];
+    });
+    const linePath = coords.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+    const areaPath = linePath + ` L${coords[coords.length - 1][0].toFixed(1)},${h - pad} L${coords[0][0].toFixed(1)},${h - pad} Z`;
+    const colorVar = isUp ? 'var(--teal-dark)' : 'var(--coral)';
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:180px;display:block;">
+        <path d="${areaPath}" style="fill:${colorVar};opacity:.12;stroke:none;"></path>
+        <path d="${linePath}" style="fill:none;stroke:${colorVar};stroke-width:2;"></path>
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-soft);margin-top:2px;">
+        <span>${escapeHtml(fmtChartDate(points[0].t, range))}</span>
+        <span>${escapeHtml(fmtChartDate(points[points.length - 1].t, range))}</span>
+      </div>`;
+  }
+
+  function ensureStockChartModal(){
+    let modal = document.getElementById('stockChartModal');
+    if(modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'stockChartModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:flex-end;justify-content:center;';
+    modal.innerHTML = `<div style="background:var(--card);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <div id="stockChartName" class="section-title" style="margin:0;"></div>
+            <div id="stockChartPrice" style="font-size:13px;color:var(--ink-soft);margin-top:2px;"></div>
+          </div>
+          <button type="button" id="stockChartModalClose" class="add-btn ghost" style="padding:4px 10px;">Close</button>
+        </div>
+        <div id="stockChartRangeTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;"></div>
+        <div id="stockChartArea" style="width:100%;min-height:180px;"></div>
+        <div id="stockChartStatus" style="font-size:11px;color:var(--ink-soft);margin-top:6px;"></div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (ev) => { if(ev.target === modal) modal.style.display = 'none'; });
+    modal.querySelector('#stockChartModalClose').addEventListener('click', () => { modal.style.display = 'none'; });
+    modal.querySelector('#stockChartRangeTabs').innerHTML = STOCK_CHART_RANGES.map(r =>
+      `<button type="button" class="add-btn ghost stock-range-tab" data-range="${r.key}" style="padding:4px 10px;font-size:11px;">${r.label}</button>`
+    ).join('');
+    modal.querySelector('#stockChartRangeTabs').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.stock-range-tab');
+      if(!btn) return;
+      loadStockChart(stockChartState.symbol, stockChartState.name, btn.dataset.range);
+    });
+    return modal;
+  }
+
+  async function loadStockChart(symbol, name, range){
+    if(!symbol) return;
+    stockChartState = { symbol, name, range };
+    const modal = ensureStockChartModal();
+    modal.style.display = 'flex';
+    document.getElementById('stockChartName').textContent = name || symbol;
+    modal.querySelectorAll('.stock-range-tab').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+    const statusEl = document.getElementById('stockChartStatus');
+    const areaEl = document.getElementById('stockChartArea');
+    const priceEl = document.getElementById('stockChartPrice');
+    statusEl.textContent = 'Loading chart…';
+    try{
+      const res = await fetch(`/api/stock-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`);
+      const data = await res.json();
+      if(!res.ok || data.error){ statusEl.textContent = data.error || 'Could not load chart.'; areaEl.innerHTML = ''; return; }
+      const isUp = data.changePct == null || data.changePct >= 0;
+      const changeStr = data.changePct != null ? `${isUp ? '▲' : '▼'} ${Math.abs(data.changePct).toFixed(2)}%` : '';
+      priceEl.innerHTML = `${data.price != null ? data.price.toFixed(2) : '—'} ${escapeHtml(data.currency || '')} <span style="color:${isUp ? 'var(--teal-dark)' : 'var(--coral)'};font-weight:600;">${changeStr}</span>`;
+      areaEl.innerHTML = renderStockSparkline(data.points, isUp, range);
+      const rangeLabel = (STOCK_CHART_RANGES.find(r => r.key === range) || {}).label || range;
+      statusEl.textContent = `Range: ${rangeLabel} · ${data.points.length} data points`;
+    }catch(e){
+      statusEl.textContent = 'Network error loading chart.';
+      areaEl.innerHTML = '';
+    }
+  }
+
+  function openStockChartModal(symbol, name){
+    loadStockChart(symbol, name, stockChartState.range || '3mo');
+  }
+
+  document.addEventListener('click', (e) => {
+    const row = e.target.closest('.stock-row');
+    if(row && row.dataset.symbol){ openStockChartModal(row.dataset.symbol, row.dataset.name); return; }
+    const btn = e.target.closest('.stock-chart-open');
+    if(btn && btn.dataset.symbol){ openStockChartModal(btn.dataset.symbol, btn.dataset.name); }
   });
 
   let nifty100ListCache = null;
