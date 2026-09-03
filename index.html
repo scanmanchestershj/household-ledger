@@ -4919,7 +4919,7 @@
     const shownTx = filterPeriod ? data.transactions.filter(t => inPeriod(t.date, filterPeriod)) : data.transactions;
 
     const noteEl = document.getElementById(prefix + 'BudgetPeriodNote');
-    if(noteEl) noteEl.textContent = filterMonth ? `Showing ${monthLabel(filterMonth)} — income, expenses, debt and card spend below are all for this month.` : `Showing all-time totals.`;
+    if(noteEl) noteEl.textContent = filterMonth ? `Showing ${monthLabel(filterMonth)} — Balance carries forward every prior month's leftover; Debt/Expenses/card spend below are for this month only.` : `Showing all-time totals.`;
 
     list.innerHTML = '';
     const searchEl = document.getElementById(prefix + 'TxSearch');
@@ -5012,7 +5012,13 @@
     // Balance/Debt/Expense boxes: for a selected month, these are that month's totals;
     // for "All time" they're the running, cumulative totals (borrowing is a liability,
     // not income, so it never inflates the balance either way).
-    const balance = shownTx.reduce((sum, t) => {
+    // Balance/Debt/Expense boxes: for a selected month, the balance is the opening
+    // balance carried forward from every earlier transaction PLUS this month's own
+    // income/expenses — so August's leftover balance shows up as September's starting
+    // point instead of September looking like it starts from zero. Debt/Expense boxes
+    // stay month-only totals on purpose. "All time" just uses the plain running total.
+    const monthOpening = filterPeriod ? computeOpeningBalance(periodStartDate(filterPeriod), countryKey) : 0;
+    const balance = monthOpening + shownTx.reduce((sum, t) => {
       if(t.type === 'income') return sum + Number(t.amount);
       if(t.type === 'borrowing') return sum;
       return sum - Number(t.amount);
