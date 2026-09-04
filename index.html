@@ -7886,6 +7886,8 @@
         if(!res.ok || data.error){ statusEl.textContent = data.error || "Couldn't compute a technical summary — try again shortly."; return; }
         statusEl.textContent = `✓ ${data.symbol} — based on ${data.totalSignals} indicators over ~2 years of daily prices.`;
         renderTechSummary(data);
+        recordVerdictHistory([{ symbol: data.symbol, verdict: data.overallVerdict, price: data.price }]);
+        save();
         // Also feed the RSI value into the fundamentals checklist above,
         // since Screen A already has an RSI < 70 condition.
         const rsiInput = document.getElementById('scrRsi');
@@ -7904,6 +7906,28 @@
   // just this feature). Instead the browser drives the scan itself, a
   // handful of requests at a time, and the result is cached in state for
   // the rest of the day so it only actually runs once daily. ----
+  // ---- Verdict history: logs the DATE a stock's verdict actually changed
+  // (e.g. moved to Strong Buy), not just today's snapshot — so you can see
+  // whether a stock turned Strong Buy recently (worth a look) or has been
+  // sitting there for weeks (you may have already missed the early move).
+  // Only transitions are stored, keyed by symbol, capped at 60 entries. ----
+  function recordVerdictHistory(results){
+    if(!state.verdictHistory) state.verdictHistory = {};
+    const today = todayStr();
+    results.forEach(r => {
+      if(r.error || !r.symbol || !r.verdict) return;
+      const hist = state.verdictHistory[r.symbol] || (state.verdictHistory[r.symbol] = []);
+      const last = hist[hist.length - 1];
+      if(!last || last.verdict !== r.verdict){
+        if(last && last.date === today){ last.verdict = r.verdict; last.price = r.price; }
+        else{
+          hist.push({ date: today, verdict: r.verdict, price: r.price });
+          if(hist.length > 60) hist.splice(0, hist.length - 60);
+        }
+      }
+    });
+  }
+
   function verdictBadge(v){
     const label = v === 'Neutral' ? 'Hold' : v;
     return `<span style="color:${verdictColor(v)};font-weight:700;">${label}</span>`;
@@ -7935,6 +7959,7 @@
     await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
     if(!state.screenerScans) state.screenerScans = {};
     state.screenerScans[cacheKey] = { date: todayStr(), results };
+    recordVerdictHistory(results);
     save();
     if(statusEl) statusEl.textContent = `✓ Scanned ${results.length} stocks — last updated ${todayStr()}.`;
     renderBatchResults(cacheKey, resultElId);
@@ -8169,6 +8194,69 @@
     svg.addEventListener('pointerleave', () => { if(!dragging) hide(); });
   }
 
+  // ---- "When did it move to Strong Buy?" history panel + a formula-based
+  // buy/hold/sell zone, so a Strong Buy can be caught early instead of
+  // after the price has already run up. Both fetched once per chart open,
+  // not on every range-tab switch (they don't depend on the chart range). ----
+  function renderVerdictHistory(symbol){
+    const el = document.getElementById('stockChartHistory');
+    if(!el) return;
+    const hist = (state.verdictHistory && state.verdictHistory[symbol]) || [];
+    if(!hist.length){
+      el.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);">No verdict history yet for this stock — run a scan (or check it here) on a few different days and this will fill in with the date it moves between Strong Buy/Buy/Hold/Sell/Strong Sell.</div>`;
+      return;
+    }
+    const rows = [...hist].reverse().map(h =>
+      `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line);font-size:12px;">
+         <span>${escapeHtml(h.date)}</span>
+         <span style="color:${verdictColor(h.verdict)};font-weight:600;">${escapeHtml(h.verdict === 'Neutral' ? 'Hold' : h.verdict)}</span>
+         <span style="color:var(--ink-soft);">${h.price != null ? h.price.toFixed(2) : '—'}</span>
+       </div>`
+    ).join('');
+    el.innerHTML = `<div class="section-title" style="margin:0 0 4px 0;font-size:13px;">Verdict history</div>${rows}`;
+  }
+
+  function buildActionSuggestion(data){
+    const v = data.overallVerdict;
+    const price = data.price;
+    const mas = (data.movingAverages || []).filter(m => m.value != null);
+    const below = mas.filter(m => m.value < price).sort((a, b) => b.value - a.value);
+    const above = mas.filter(m => m.value > price).sort((a, b) => a.value - b.value);
+    if(v === 'Strong Buy' || v === 'Buy'){
+      const support = below[0] ? below[0].value : price * 0.97;
+      return { icon: '🟢', color: 'var(--teal-dark)',
+        label: v === 'Strong Buy' ? 'Strong Buy — time to accumulate' : 'Buy — favourable entry zone',
+        detail: `Consider buying between ₹${support.toFixed(2)} and ₹${price.toFixed(2)}${below[0] ? ` (just above its ${below[0].period}-day average)` : ''}. Scale in rather than all at once — this is a formula-based read on price trend, not a guarantee.` };
+    }
+    if(v === 'Sell' || v === 'Strong Sell'){
+      const resistance = above[0] ? above[0].value : price * 1.03;
+      return { icon: '🔴', color: 'var(--coral)',
+        label: v === 'Strong Sell' ? 'Strong Sell — time to exit' : 'Sell — trend has turned weak',
+        detail: `Price is trading below most of its key moving averages. If holding, a bounce toward ₹${resistance.toFixed(2)} could be a better exit point than selling into weakness right now.` };
+    }
+    return { icon: '🟡', color: 'var(--ink-soft)',
+      label: 'Hold — no clear signal either way',
+      detail: `Price is mixed relative to its key averages — neither a clear dip to buy nor a breakdown to exit. It's time to hold and wait for a clearer signal.` };
+  }
+
+  async function loadStockActionAndHistory(symbol){
+    renderVerdictHistory(symbol);
+    const actionEl = document.getElementById('stockChartAction');
+    if(actionEl) actionEl.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);">Working out a buy/hold/sell suggestion…</div>`;
+    try{
+      const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(symbol)}&market=IN`);
+      const data = await res.json();
+      if(!res.ok || data.error || !actionEl) return;
+      const a = buildActionSuggestion(data);
+      actionEl.innerHTML = `<div style="border:1px solid var(--line);border-radius:8px;padding:10px;">
+          <div style="font-weight:700;color:${a.color};">${a.icon} ${escapeHtml(a.label)}</div>
+          <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">${escapeHtml(a.detail)}</div>
+        </div>`;
+    }catch(e){
+      if(actionEl) actionEl.innerHTML = '';
+    }
+  }
+
   function ensureStockChartModal(){
     let modal = document.getElementById('stockChartModal');
     if(modal) return modal;
@@ -8186,6 +8274,8 @@
         <div id="stockChartRangeTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;"></div>
         <div id="stockChartArea" style="width:100%;min-height:180px;"></div>
         <div id="stockChartStatus" style="font-size:11px;color:var(--ink-soft);margin-top:6px;"></div>
+        <div id="stockChartAction" style="margin-top:12px;"></div>
+        <div id="stockChartHistory" style="margin-top:12px;"></div>
       </div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', (ev) => { if(ev.target === modal) modal.style.display = 'none'; });
@@ -8231,6 +8321,7 @@
 
   function openStockChartModal(symbol, name){
     loadStockChart(symbol, name, stockChartState.range || '3mo');
+    loadStockActionAndHistory(symbol);
   }
 
   document.addEventListener('click', (e) => {
