@@ -2311,6 +2311,20 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-nifty50" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🏆 Nifty 50 — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Scans all Nifty 50 stocks for a Strong Buy / Buy / Hold / Sell / Strong Sell verdict using the same technical engine above. Runs once automatically per day (first time you open this section that day) and caches the result — opening it again the same day just shows what was already scanned. The constituent list is fetched live from NSE Indices; if that's unreachable, a fallback list of well-known large caps is used instead.</div>
+                <button type="button" class="add-btn full-width" id="scrNifty50Rescan">🔄 Rescan now</button>
+                <div id="scrNifty50Status" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                  <button type="button" class="add-btn ghost" id="scrNifty50ExportCsv" style="flex:1;">⬇️ CSV</button>
+                  <button type="button" class="add-btn ghost" id="scrNifty50ShareWa" style="flex:1;">📲 Share</button>
+                </div>
+                <div id="scrNifty50Result" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-nifty100" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>🏆 Nifty 100 — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -7982,7 +7996,7 @@
     if(!box) return;
     const scans = state.screenerScans || {};
     const all = [];
-    [['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+    [['nifty50', 'Nifty 50'], ['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
@@ -8023,7 +8037,7 @@
   function collectStrongBuyRows(){
     const scans = state.screenerScans || {};
     const all = [];
-    [['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+    [['nifty50', 'Nifty 50'], ['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
@@ -8046,6 +8060,8 @@
   }
 
   [
+    ['scrNifty50ExportCsv', () => exportScreenerCsv('nifty50', 'nifty50-screener')],
+    ['scrNifty50ShareWa', () => shareScreenerWhatsApp('nifty50', 'Nifty 50')],
     ['scrNifty100ExportCsv', () => exportScreenerCsv('nifty100', 'nifty100-screener')],
     ['scrNifty100ShareWa', () => shareScreenerWhatsApp('nifty100', 'Nifty 100')],
     ['scrNifty500ExportCsv', () => exportScreenerCsv('nifty500', 'nifty500-screener')],
@@ -8223,6 +8239,35 @@
     const btn = e.target.closest('.stock-chart-open');
     if(btn && btn.dataset.symbol){ openStockChartModal(btn.dataset.symbol, btn.dataset.name); }
   });
+
+  let nifty50ListCache = null;
+  async function getNifty50List(){
+    if(nifty50ListCache) return { list: nifty50ListCache };
+    try{
+      const res = await fetch('/api/nifty50');
+      const data = await res.json();
+      nifty50ListCache = data.list || [];
+      return { list: nifty50ListCache, note: data.note };
+    }catch(e){
+      return { list: [], note: "Couldn't load the Nifty 50 list." };
+    }
+  }
+  async function ensureNifty50Scan(force){
+    const scan = state.screenerScans && state.screenerScans.nifty50;
+    const statusEl = document.getElementById('scrNifty50Status');
+    if(scan && scan.date === todayStr() && !force){
+      renderBatchResults('nifty50', 'scrNifty50Result');
+      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Loading Nifty 50 constituent list…';
+    const { list, note } = await getNifty50List();
+    if(note && statusEl) statusEl.textContent = note;
+    if(!list.length) return;
+    await runBatchScan(list, 'nifty50', 'scrNifty50Status', 'scrNifty50Result');
+  }
+  const scrNifty50RescanBtn = document.getElementById('scrNifty50Rescan');
+  if(scrNifty50RescanBtn) scrNifty50RescanBtn.addEventListener('click', () => ensureNifty50Scan(true));
 
   let nifty100ListCache = null;
   async function getNifty100List(){
@@ -8427,6 +8472,7 @@
     if(!header) return;
     const acc = header.closest('.accordion');
     if(!acc || !acc.classList.contains('open')) return; // only fires right after it was opened
+    if(acc.dataset.key === 'screen-nifty50') ensureNifty50Scan(false);
     if(acc.dataset.key === 'screen-nifty100') ensureNifty100Scan(false);
     if(acc.dataset.key === 'screen-nifty500') ensureNifty500Scan(false);
     if(acc.dataset.key === 'screen-niftymidcap') ensureNiftyMidcapScan(false);
@@ -8434,6 +8480,7 @@
     if(acc.dataset.key === 'screen-customwatch'){ renderWatchlistItems(); ensureCustomScan(false); }
   });
   renderWatchlistItems();
+  renderBatchResults('nifty50', 'scrNifty50Result');
   renderBatchResults('nifty100', 'scrNifty100Result');
   renderBatchResults('nifty500', 'scrNifty500Result');
   renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
@@ -10017,6 +10064,7 @@
     renderDebtSummary('India');
     renderInvestmentCountry('India');
     renderWatchlistItems();
+    renderBatchResults('nifty50', 'scrNifty50Result');
     renderBatchResults('nifty100', 'scrNifty100Result');
     renderBatchResults('nifty500', 'scrNifty500Result');
     renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
