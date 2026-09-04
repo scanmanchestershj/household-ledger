@@ -1725,6 +1725,20 @@
           </div>
         </div>
 
+        <div class="accordion" data-key="uae-inv-screener">
+          <button type="button" class="accordion-header"><span>🇦🇪 UAE Index Screener — DFM &amp; ADX</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Scans the largest DFM General Index and FTSE ADX General Index constituents for a Strong Buy / Buy / Hold / Sell / Strong Sell verdict, using the same technical engine as the India screener. Runs once automatically per day and caches the result. This list is curated by hand (20 largest names across both exchanges) rather than pulled live — unlike NSE, neither DFM nor ADX publish a public, unauthenticated constituent feed.</div>
+            <button type="button" class="add-btn full-width" id="scrUaeRescan">🔄 Rescan now</button>
+            <div id="scrUaeStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button type="button" class="add-btn ghost" id="scrUaeExportCsv" style="flex:1;">⬇️ CSV</button>
+              <button type="button" class="add-btn ghost" id="scrUaeShareWa" style="flex:1;">📲 Share</button>
+            </div>
+            <div id="scrUaeResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
         <div class="accordion" data-key="uae-inv-mf">
           <button type="button" class="accordion-header"><span>📊 Mutual Funds</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
@@ -7932,9 +7946,9 @@
     const label = v === 'Neutral' ? 'Hold' : v;
     return `<span style="color:${verdictColor(v)};font-weight:700;">${label}</span>`;
   }
-  async function fetchOneVerdict(symbol){
+  async function fetchOneVerdict(symbol, market){
     try{
-      const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(symbol)}&market=IN`);
+      const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market || 'IN')}`);
       const data = await res.json();
       if(!res.ok || data.error) return { symbol, name: symbol, error: data.error || 'unavailable' };
       return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict, buySignals: data.buySignals, sellSignals: data.sellSignals, totalSignals: data.totalSignals };
@@ -7942,7 +7956,7 @@
       return { symbol, name: symbol, error: 'network error' };
     }
   }
-  async function runBatchScan(list, cacheKey, statusElId, resultElId){
+  async function runBatchScan(list, cacheKey, statusElId, resultElId, market){
     const statusEl = document.getElementById(statusElId);
     if(!list.length){ if(statusEl) statusEl.textContent = 'Nothing to scan yet.'; return; }
     const results = new Array(list.length);
@@ -7953,7 +7967,7 @@
         const i = idx++;
         const item = list[i];
         if(statusEl) statusEl.textContent = `Scanning ${i + 1} of ${list.length}: ${item.name || item.symbol}…`;
-        results[i] = await fetchOneVerdict(item.symbol || item.name);
+        results[i] = await fetchOneVerdict(item.symbol || item.name, market);
       }
     }
     await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
@@ -8087,6 +8101,8 @@
   [
     ['scrNifty50ExportCsv', () => exportScreenerCsv('nifty50', 'nifty50-screener')],
     ['scrNifty50ShareWa', () => shareScreenerWhatsApp('nifty50', 'Nifty 50')],
+    ['scrUaeExportCsv', () => exportScreenerCsv('uaeindex', 'uae-index-screener')],
+    ['scrUaeShareWa', () => shareScreenerWhatsApp('uaeindex', 'UAE Index (DFM/ADX)')],
     ['scrNifty100ExportCsv', () => exportScreenerCsv('nifty100', 'nifty100-screener')],
     ['scrNifty100ShareWa', () => shareScreenerWhatsApp('nifty100', 'Nifty 100')],
     ['scrNifty500ExportCsv', () => exportScreenerCsv('nifty500', 'nifty500-screener')],
@@ -8331,6 +8347,35 @@
     if(btn && btn.dataset.symbol){ openStockChartModal(btn.dataset.symbol, btn.dataset.name); }
   });
 
+  let uaeIndexListCache = null;
+  async function getUaeIndexList(){
+    if(uaeIndexListCache) return { list: uaeIndexListCache };
+    try{
+      const res = await fetch('/api/uae-index');
+      const data = await res.json();
+      uaeIndexListCache = data.list || [];
+      return { list: uaeIndexListCache, note: data.note };
+    }catch(e){
+      return { list: [], note: "Couldn't load the UAE index list." };
+    }
+  }
+  async function ensureUaeIndexScan(force){
+    const scan = state.screenerScans && state.screenerScans.uaeindex;
+    const statusEl = document.getElementById('scrUaeStatus');
+    if(scan && scan.date === todayStr() && !force){
+      renderBatchResults('uaeindex', 'scrUaeResult');
+      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Loading DFM/ADX constituent list…';
+    const { list, note } = await getUaeIndexList();
+    if(note && statusEl) statusEl.textContent = note;
+    if(!list.length) return;
+    await runBatchScan(list, 'uaeindex', 'scrUaeStatus', 'scrUaeResult', 'AE');
+  }
+  const scrUaeRescanBtn = document.getElementById('scrUaeRescan');
+  if(scrUaeRescanBtn) scrUaeRescanBtn.addEventListener('click', () => ensureUaeIndexScan(true));
+
   let nifty50ListCache = null;
   async function getNifty50List(){
     if(nifty50ListCache) return { list: nifty50ListCache };
@@ -8564,6 +8609,7 @@
     const acc = header.closest('.accordion');
     if(!acc || !acc.classList.contains('open')) return; // only fires right after it was opened
     if(acc.dataset.key === 'screen-nifty50') ensureNifty50Scan(false);
+    if(acc.dataset.key === 'uae-inv-screener') ensureUaeIndexScan(false);
     if(acc.dataset.key === 'screen-nifty100') ensureNifty100Scan(false);
     if(acc.dataset.key === 'screen-nifty500') ensureNifty500Scan(false);
     if(acc.dataset.key === 'screen-niftymidcap') ensureNiftyMidcapScan(false);
@@ -8572,6 +8618,7 @@
   });
   renderWatchlistItems();
   renderBatchResults('nifty50', 'scrNifty50Result');
+  renderBatchResults('uaeindex', 'scrUaeResult');
   renderBatchResults('nifty100', 'scrNifty100Result');
   renderBatchResults('nifty500', 'scrNifty500Result');
   renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
@@ -10156,6 +10203,7 @@
     renderInvestmentCountry('India');
     renderWatchlistItems();
     renderBatchResults('nifty50', 'scrNifty50Result');
+    renderBatchResults('uaeindex', 'scrUaeResult');
     renderBatchResults('nifty100', 'scrNifty100Result');
     renderBatchResults('nifty500', 'scrNifty500Result');
     renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
