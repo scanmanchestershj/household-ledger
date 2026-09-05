@@ -1699,6 +1699,11 @@
             </div>
             <div class="inv-ltp-panel" id="uaeInvStocksPrices"></div>
             <div id="uaeInvStocksSummary"></div>
+            <div style="margin:10px 0;">
+              <button type="button" class="add-btn ghost full-width" id="uaeInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
+              <div id="uaeInvStocksRescanStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
+            </div>
+            <div id="uaeInvStocksOverview" style="overflow-x:auto;margin-bottom:10px;"></div>
             <div id="uaeInvStocksList"></div>
           </div>
         </div>
@@ -2276,6 +2281,11 @@
             </div>
             <div class="inv-ltp-panel" id="indiaInvStocksPrices"></div>
             <div id="indiaInvStocksSummary"></div>
+            <div style="margin:10px 0;">
+              <button type="button" class="add-btn ghost full-width" id="indiaInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
+              <div id="indiaInvStocksRescanStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
+            </div>
+            <div id="indiaInvStocksOverview" style="overflow-x:auto;margin-bottom:10px;"></div>
             <div id="indiaInvStocksList"></div>
           </div>
         </div>
@@ -11168,6 +11178,7 @@
       `;
     }
     renderPortfolioRebalancing(countryKey);
+    renderStocksOverview(countryKey);
   }
 
   INVESTMENT_CATS.forEach(catCfg => {
@@ -11304,6 +11315,82 @@
   }
   wireStocksAutoFill('UAE');
   wireStocksAutoFill('India');
+
+  // ---- All Stocks Overview + Rescan Now: a single consolidated table across
+  // every held stock (qty, avg buy price, LTP, current value, return) sitting
+  // above the expandable per-stock cards for a one-glance view, plus a button
+  // that refreshes the live price for every held stock in one tap instead of
+  // opening each one individually. Average buy price is already computed from
+  // your buy/sell entries (weighted average cost) and doesn't need refetching —
+  // rescanning only refreshes the live LTP that Current Value/Return use. ----
+  function renderStocksOverview(countryKey){
+    const box = document.getElementById(invPrefix(countryKey) + 'InvStocksOverview');
+    if(!box) return;
+    const held = investmentGroupByName(countryKey, 'stocks').filter(g => g.qty > 0.0000001);
+    if(!held.length){ box.innerHTML = ''; return; }
+    const sorted = held.slice().sort((a, b) => b.current - a.current);
+    box.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:480px;">
+        <thead>
+          <tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;">
+            <th style="padding:4px 6px 4px 0;">Stock</th>
+            <th style="padding:4px 6px;text-align:right;">Qty</th>
+            <th style="padding:4px 6px;text-align:right;">Avg</th>
+            <th style="padding:4px 6px;text-align:right;">LTP</th>
+            <th style="padding:4px 6px;text-align:right;">Current</th>
+            <th style="padding:4px 0 4px 6px;text-align:right;">Return</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map(g => `
+            <tr style="border-top:1px solid var(--hairline, #eee);">
+              <td style="padding:5px 6px 5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${escapeHtml(g.name)}</td>
+              <td style="padding:5px 6px;text-align:right;">${g.qty}</td>
+              <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.avgPrice, countryKey)}</td>
+              <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.curPrice, countryKey)}</td>
+              <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.current, countryKey)}</td>
+              <td style="padding:5px 0 5px 6px;text-align:right;" class="${g.pnl >= 0 ? 'positive-pnl' : 'negative-pnl'}">${g.pnl >= 0 ? '+' : '−'}${Math.abs(g.pnlPct).toFixed(1)}%</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+  async function rescanStocksNow(countryKey){
+    const idBase = invPrefix(countryKey) + 'InvStocks';
+    const btn = document.getElementById(idBase + 'Rescan');
+    const statusEl = document.getElementById(idBase + 'RescanStatus');
+    const held = investmentGroupByName(countryKey, 'stocks').filter(g => g.qty > 0.0000001);
+    if(!held.length){ statusEl.textContent = 'No stock holdings yet — add one first.'; return; }
+    btn.disabled = true;
+    const marketInfo = currentMarketInfo(countryKey);
+    const market = marketInfo.code || (countryKey === 'UAE' ? 'AE' : 'IN');
+    let updated = 0, failed = [];
+    for(let i = 0; i < held.length; i++){
+      const g = held[i];
+      statusEl.textContent = `Rescanning ${i + 1}/${held.length}: ${g.name}…`;
+      try{
+        const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(g.name)}&market=${market}`);
+        const data = await res.json();
+        if(res.ok && !data.error && data.price != null){
+          investmentPricesMap(countryKey, 'stocks')[g.key] = data.price;
+          updated++;
+        } else {
+          failed.push(g.name);
+        }
+      }catch(e){
+        failed.push(g.name);
+      }
+    }
+    save();
+    renderInvestmentCountry(countryKey);
+    statusEl.textContent = `✓ Refreshed live price for ${updated} of ${held.length} stock${held.length === 1 ? '' : 's'}.` +
+      (failed.length ? ` Couldn't find a live price for: ${failed.join(', ')} — check the name or set it manually above.` : '') +
+      ' Average buy price is unaffected — that comes from your own buy/sell entries.';
+    btn.disabled = false;
+  }
+  ['UAE', 'India'].forEach(countryKey => {
+    const btn = document.getElementById(invPrefix(countryKey) + 'InvStocksRescan');
+    if(btn) btn.addEventListener('click', () => rescanStocksNow(countryKey));
+  });
 
   // ---- Backup & restore (choose where to save) ----
   async function saveBackupNow(){
