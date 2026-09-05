@@ -1042,6 +1042,14 @@
         </div>
       </div>
 
+      <div class="accordion" data-key="spending-anomalies">
+        <button type="button" class="accordion-header"><span>🚨 Spending Anomalies</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Compares this month's card spend per category against your last 3 months — flags anything running well above your normal pattern. Always checks the real current month, regardless of which period you're browsing above.</div>
+          <div id="spendingAnomalies"></div>
+        </div>
+      </div>
+
       <div class="accordion" data-key="category-budgets">
         <button type="button" class="accordion-header"><span>Category budgets <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(this month, card spend)</span></span><span class="accordion-arrow">▸</span></button>
         <div class="accordion-body">
@@ -1188,6 +1196,25 @@
           <div class="add-row">
             <button class="add-btn full-width" id="returnableGeneratePdf" style="margin-top:8px;">Generate PDF</button>
             <button class="add-btn ghost full-width" id="returnableShareWhatsApp" style="margin-top:8px;">📲 Share via WhatsApp</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion" data-key="year-in-review">
+        <button type="button" class="accordion-header"><span>📅 Year in Review</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">A one-page look back at a full year — income, spending, savings rate, biggest category, and where your investments stand today. Respects the Resident/Home/Combined filter above.</div>
+          <div class="form-grid" style="margin-bottom:8px;">
+            <div>
+              <label class="field-label">Year</label>
+              <input type="number" id="yirYear" step="1" placeholder="e.g. 2026">
+            </div>
+          </div>
+          <button type="button" class="add-btn full-width" id="yirGenerate">Generate Year in Review</button>
+          <div id="yirResult" style="margin-top:10px;white-space:pre-wrap;font-size:12.5px;"></div>
+          <div class="add-row" id="yirActions" style="display:none;margin-top:8px;">
+            <button class="add-btn" id="yirDownloadPdf">⬇ Download PDF</button>
+            <button class="add-btn ghost" id="yirShareWhatsApp">📲 Share via WhatsApp</button>
           </div>
         </div>
       </div>
@@ -2500,6 +2527,16 @@
               <div class="accordion-body">
                 <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Your Stocks holdings (below, under Investment) matched against the latest scan verdicts above — flags what to trim, what to add to, and what hasn't been scanned yet.</div>
                 <div id="indiaRebalanceResult"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-ltcg" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🇮🇳 Tax-Harvesting Helper (LTCG)</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Finds stock lots you've held over 12 months that are sitting on a gain — those qualify for Long-Term Capital Gains treatment. Gains up to ₹1,25,000 per financial year are tax-free; harvesting means selling a qualifying lot and immediately rebuying it, which locks in that tax-free gain and resets your cost basis higher for the future.</div>
+                <button type="button" class="add-btn full-width" id="ltcgHarvestCheck">🔍 Check my holdings</button>
+                <div id="ltcgHarvestResult" style="margin-top:10px;"></div>
+                <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Based on your logged buy/sell entries (FIFO lot matching) and current LTP — not tax advice. Rules and the ₹1.25L threshold can change (this reflects the rate effective from July 2024); confirm with a CA before acting, and remember brokerage/STT still applies on the sell + rebuy.</div>
               </div>
             </div>
 
@@ -8380,6 +8417,91 @@
     return { key: 'monthly-digest-' + month.replace(/\s/g, ''), type: 'info', emoji: '📮', title: `Your ${month} portfolio digest is ready to generate`, body: 'Open Investment → Screener → Monthly Portfolio Digest to view and share it.' };
   }
 
+  // ---- Tax-Harvesting Helper (India LTCG): FIFO-matches each stock's buy
+  // lots against its sells to find what's still actually held, then flags
+  // lots older than 365 days sitting on an unrealized gain — those qualify
+  // for Long-Term Capital Gains tax treatment (gains up to ₹1.25L/FY are
+  // tax-free under the rate effective since the July 2024 Budget). ----
+  const INDIA_LTCG_EXEMPTION = 125000;
+  const INDIA_LTCG_HOLDING_DAYS = 365;
+  function computeLtcgHarvesting(){
+    const entries = investmentEntriesList('India', 'stocks');
+    const names = {};
+    entries.forEach(e => {
+      const key = invKeyName(e.name);
+      if(!names[key]) names[key] = e.name;
+      if(e.type !== 'sell') names[key] = e.name; // prefer a buy entry's spelling for display
+    });
+    const groups = investmentGroupByName('India', 'stocks');
+    const results = [];
+    let totalHarvestable = 0;
+    Object.keys(names).forEach(key => {
+      const buys = entries.filter(e => invKeyName(e.name) === key && e.type !== 'sell')
+        .slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      const sells = entries.filter(e => invKeyName(e.name) === key && e.type === 'sell')
+        .slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      const lots = buys.map(b => ({ date: b.date, price: Number(b.price), qtyRemaining: Number(b.qty) }));
+      sells.forEach(s => {
+        let toSell = Number(s.qty);
+        for(const lot of lots){
+          if(toSell <= 0) break;
+          const consume = Math.min(lot.qtyRemaining, toSell);
+          lot.qtyRemaining -= consume;
+          toSell -= consume;
+        }
+      });
+      const openLots = lots.filter(l => l.qtyRemaining > 0.0000001);
+      if(!openLots.length) return;
+      const g = groups.find(x => x.key === key);
+      const ltp = g ? g.curPrice : null;
+      if(ltp == null) return;
+      const today = new Date();
+      let stockHarvestable = 0;
+      const qualifyingLots = [];
+      openLots.forEach(lot => {
+        if(!lot.date) return;
+        const days = Math.floor((today - new Date(lot.date)) / 86400000);
+        if(days >= INDIA_LTCG_HOLDING_DAYS){
+          const gain = lot.qtyRemaining * (ltp - lot.price);
+          if(gain > 0){
+            stockHarvestable += gain;
+            qualifyingLots.push({ date: lot.date, qty: lot.qtyRemaining, gain, days });
+          }
+        }
+      });
+      if(stockHarvestable > 0){
+        results.push({ name: names[key], gain: stockHarvestable, lots: qualifyingLots });
+        totalHarvestable += stockHarvestable;
+      }
+    });
+    results.sort((a, b) => b.gain - a.gain);
+    return { results, totalHarvestable };
+  }
+  const ltcgBtn = document.getElementById('ltcgHarvestCheck');
+  if(ltcgBtn){
+    ltcgBtn.addEventListener('click', () => {
+      const box = document.getElementById('ltcgHarvestResult');
+      const { results, totalHarvestable } = computeLtcgHarvesting();
+      if(!results.length){
+        box.innerHTML = '<div class="empty" style="padding:8px 0;">No stock lots held over 12 months are currently showing an unrealized gain.</div>';
+        return;
+      }
+      const withinExemption = Math.min(totalHarvestable, INDIA_LTCG_EXEMPTION);
+      const overExemption = Math.max(0, totalHarvestable - INDIA_LTCG_EXEMPTION);
+      let html = `<div style="font-size:12.5px;margin-bottom:8px;">Total eligible long-term gain across qualifying lots: <strong>${fmtCountry(totalHarvestable, 'India')}</strong>.
+        ${overExemption > 0
+          ? `That's above the ₹1,25,000 exemption — roughly ${fmtCountry(withinExemption, 'India')} could be harvested tax-free this FY, with the remaining ${fmtCountry(overExemption, 'India')} taxed at 12.5%.`
+          : `That's within the ₹1,25,000 tax-free exemption for this FY (${fmtCountry(INDIA_LTCG_EXEMPTION - totalHarvestable, 'India')} of headroom left if you want to realize more).`}
+      </div>`;
+      html += results.map(r => `
+        <div style="margin-bottom:8px;padding:8px 10px;background:var(--paper-deep);border-radius:8px;">
+          <div style="font-size:12.5px;font-weight:600;">${escapeHtml(r.name)} — ${fmtCountry(r.gain, 'India')} eligible</div>
+          ${r.lots.map(l => `<div style="font-size:10.5px;color:var(--ink-soft);">${l.qty} shares bought ${escapeHtml(l.date)} (${l.days} days) — +${fmtCountry(l.gain, 'India')}</div>`).join('')}
+        </div>`).join('');
+      box.innerHTML = html;
+    });
+  }
+
   // ---- Stock detail chart: click any stock in the scanner/watchlist/
   // Strong Buy tables (or "View price chart" on a single-stock technical
   // summary) to monitor its price over 1D–All using /api/stock-history. ----
@@ -9009,6 +9131,59 @@
     }).join('');
   }
 
+  // ---- Spending Anomalies: current month vs trailing 3-month average per
+  // category (same 5-category split as Category Budgets, for consistency).
+  // Always evaluates the real current month, independent of whatever period
+  // the Report page's own selector is showing. ----
+  function renderSpendingAnomalies(scope, curFmt){
+    const box = document.getElementById('spendingAnomalies');
+    if(!box) return;
+    const now = new Date();
+    const keys = [];
+    for(let i = 0; i <= 3; i++){
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      keys.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    }
+    const [curKey, ...priorKeys] = keys;
+    function spendSnapshot(key){
+      const rr = computeReportData({ type: 'monthly', key }, scope);
+      const spend = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, Others: 0 };
+      rr.cardsBySpend.forEach(c => {
+        const label = (c.desc || '').trim();
+        if(spend.hasOwnProperty(label)) spend[label] += Number(c.amount);
+        else spend.Others += Number(c.amount);
+      });
+      return { spend, total: rr.totalOutflow };
+    }
+    const cur = spendSnapshot(curKey);
+    const priors = priorKeys.map(spendSnapshot);
+    const anomalies = [];
+    CATEGORY_BUDGET_CATS.forEach(cat => {
+      const priorVals = priors.map(p => p.spend[cat] || 0);
+      const avg = priorVals.reduce((s, v) => s + v, 0) / priorVals.length;
+      const curVal = cur.spend[cat] || 0;
+      if(avg > 0 && curVal >= avg * 1.5 && (curVal - avg) > avg * 0.2){
+        anomalies.push({ cat, cur: curVal, avg, pct: ((curVal - avg) / avg) * 100 });
+      }
+    });
+    const priorTotalAvg = priors.reduce((s, p) => s + p.total, 0) / priors.length;
+    const totalFlagged = priorTotalAvg > 0 && cur.total >= priorTotalAvg * 1.3;
+
+    if(!anomalies.length && !totalFlagged){
+      box.innerHTML = '<div class="empty">Nothing looks unusual this month — spending is in line with your last few months across tracked categories.</div>';
+      return;
+    }
+    let html = '';
+    if(totalFlagged){
+      const pct = Math.round(((cur.total - priorTotalAvg) / priorTotalAvg) * 100);
+      html += `<div class="suggestion-card"><span class="emoji">📈</span><span>Total spend this month is ${curFmt(cur.total)}, about ${pct}% above your recent ${curFmt(priorTotalAvg)} average.</span></div>`;
+    }
+    anomalies.sort((a, b) => b.pct - a.pct).forEach(a => {
+      html += `<div class="suggestion-card"><span class="emoji">🚨</span><span><strong>${escapeHtml(a.cat)}</strong>: ${curFmt(a.cur)} this month vs ${curFmt(a.avg)} average — up ${Math.round(a.pct)}%.</span></div>`;
+    });
+    box.innerHTML = html;
+  }
+
   function renderOverspendCheck(r, scope, curFmt){
     const targetEl = document.getElementById('overspendTarget');
     const gaugeEl = document.getElementById('overspendGauge');
@@ -9113,6 +9288,7 @@
 
     renderOverspendCheck(r, scope, curFmt);
     renderCategoryBudgets(r, scope, curFmt);
+    renderSpendingAnomalies(scope, curFmt);
 
     const maxVal = Math.max(r.income, r.totalOutflow, 1);
     document.getElementById('barIncome').style.width = Math.min(100, (r.income/maxVal)*100) + '%';
@@ -9867,6 +10043,24 @@
     doc.autoTable({ startY: y + 2, head: table.head, body: table.body, headStyles:{ fillColor:[58,90,140] } });
     y = doc.lastAutoTable.finalY + 12;
 
+    // Net Worth (as of today — cash balance all-time + investments' current value)
+    y = ensureRoom(doc, y, 18);
+    y = addSectionTitle(doc, 'Net Worth (as of today)', y);
+    const uaeSym = CURRENCIES[state.countryConfig.country1.currency] || state.countryConfig.country1.currency;
+    const indiaSym = CURRENCIES[state.countryConfig.country2.currency] || state.countryConfig.country2.currency;
+    const uaeNetWorth = allTimeBalance('UAE') + totalInvestmentsCurrent('UAE');
+    const indiaNetWorth = allTimeBalance('India') + totalInvestmentsCurrent('India');
+    const rate = state.exchangeRate || 22.5;
+    const combinedAed = uaeNetWorth + (indiaNetWorth / rate);
+    const netWorthRecords = [
+      { Item: `${state.countryConfig.country1.name} (cash + investments)`, Amount: uaeSym + ' ' + Math.round(uaeNetWorth).toLocaleString() },
+      { Item: `${state.countryConfig.country2.name} (cash + investments)`, Amount: indiaSym + ' ' + Math.round(indiaNetWorth).toLocaleString() },
+      { Item: 'Combined net worth', Amount: uaeSym + ' ' + Math.round(combinedAed).toLocaleString() }
+    ];
+    table = rowsPdfTable(netWorthRecords, [{ key:'Item', label:'Item' }, { key:'Amount', label:'Amount' }]);
+    doc.autoTable({ startY: y + 2, head: table.head, body: table.body, styles:{ fontSize: 9 }, headStyles:{ fillColor:[31,111,99] } });
+    y = doc.lastAutoTable.finalY + 12;
+
     // Transactions
     y = ensureRoom(doc, y, 20);
     y = addSectionTitle(doc, 'Transactions', y);
@@ -9933,6 +10127,107 @@
     y = addInvestmentSection(doc, 'India', state.countryConfig.country2.name || 'India', y);
 
     doc.save(`All_In_One_Report_${period.type}_${period.key}.pdf`);
+  });
+
+  // ---- Year in Review: a one-page narrative summary for a full year —
+  // income/expense/savings from computeReportData's existing 'yearly' period
+  // support, plus investments' current snapshot (today's value, not a
+  // historical Dec 31 figure — noted in the text so it isn't misread as one).
+  // Respects the same Resident/Home/Combined scope toggle as the rest of
+  // the Report tab. ----
+  let lastYirText = '', lastYirYear = '';
+  document.getElementById('yirYear').value = new Date().getFullYear();
+  function computeYearInReview(year, scope){
+    const period = { type: 'yearly', key: String(year) };
+    const r = computeReportData(period, scope);
+    const curFmt = scope ? (amt) => fmtCountry(amt, scope) : fmt;
+    const net = r.income - r.totalOutflow - r.lending;
+    const savingsRate = r.income > 0 ? (net / r.income) * 100 : 0;
+    const catTotals = {};
+    r.cardsBySpend.forEach(c => {
+      const label = (c.desc || '').trim() || 'Other';
+      catTotals[label] = (catTotals[label] || 0) + Number(c.amount);
+    });
+    const topCat = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0];
+    const countryKeys = scope ? [scope] : ['UAE', 'India'];
+    let invested = 0, current = 0;
+    countryKeys.forEach(ck => {
+      INVESTMENT_CATS.forEach(cat => investmentGroupByName(ck, cat.key).forEach(g => { invested += g.invested; current += g.current; }));
+    });
+    // Investment invested/current are per-country native currencies when scope is set
+    // to one country; when combined, this mixes AED+INR the same way the rest of the
+    // Report tab's combined view already does — consistent with existing convention.
+    return { year, r, net, savingsRate, topCat, invested, current, curFmt };
+  }
+  function buildYirText(data){
+    const { year, r, net, savingsRate, topCat, invested, current, curFmt } = data;
+    const investReturn = invested > 0 ? ((current - invested) / invested) * 100 : null;
+    const lines = [
+      `📅 Year in Review — ${year}`,
+      '',
+      `Income: ${curFmt(r.income)}`,
+      `Expenses: ${curFmt(r.totalOutflow)}`,
+      `Net savings: ${curFmt(net)} (${savingsRate.toFixed(1)}% savings rate)`
+    ];
+    if(topCat) lines.push(`Biggest category: ${topCat[0]} — ${curFmt(topCat[1])}`);
+    if(invested > 0){
+      lines.push('');
+      lines.push(`Investments today: ${curFmt(current)} (invested ${curFmt(invested)}${investReturn != null ? ', ' + (investReturn >= 0 ? '+' : '') + investReturn.toFixed(1) + '%' : ''})`);
+      lines.push(`(Investment figures are today's snapshot, not this year's Dec 31 value.)`);
+    }
+    lines.push('');
+    lines.push('Not investment or tax advice — your own numbers, laid out for a look back.');
+    return lines.join('\n');
+  }
+  document.getElementById('yirGenerate').addEventListener('click', () => {
+    const year = parseInt(document.getElementById('yirYear').value, 10) || new Date().getFullYear();
+    const scope = reportScopeVal();
+    const data = computeYearInReview(year, scope);
+    lastYirText = buildYirText(data);
+    lastYirYear = String(year);
+    document.getElementById('yirResult').textContent = lastYirText;
+    document.getElementById('yirActions').style.display = '';
+  });
+  document.getElementById('yirShareWhatsApp').addEventListener('click', () => {
+    if(lastYirText) openWhatsAppShare(lastYirText);
+  });
+  document.getElementById('yirDownloadPdf').addEventListener('click', () => {
+    if(!lastYirText){ alert('Generate the Year in Review first.'); return; }
+    const scope = reportScopeVal();
+    const data = computeYearInReview(lastYirYear, scope);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFillColor(31, 111, 99);
+    doc.rect(0, 0, 210, 24, 'F');
+    doc.setFontSize(16);
+    doc.setTextColor(255,255,255);
+    doc.text(state.appTitle || 'Household Ledger', 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Year in Review — ${lastYirYear}`, 196, 15, { align: 'right' });
+    doc.setTextColor(0);
+    let y = 36;
+    y = addSectionTitle(doc, 'Summary', y);
+    const net = data.net;
+    const investReturn = data.invested > 0 ? ((data.current - data.invested) / data.invested) * 100 : null;
+    const records = [
+      { Item: 'Income', Value: data.curFmt(data.r.income) },
+      { Item: 'Expenses', Value: data.curFmt(data.r.totalOutflow) },
+      { Item: 'Net savings', Value: data.curFmt(net) },
+      { Item: 'Savings rate', Value: data.savingsRate.toFixed(1) + '%' },
+      { Item: 'Biggest category', Value: data.topCat ? `${data.topCat[0]} (${data.curFmt(data.topCat[1])})` : '—' },
+      { Item: 'Investments — invested', Value: data.invested > 0 ? data.curFmt(data.invested) : '—' },
+      { Item: 'Investments — current (today)', Value: data.invested > 0 ? data.curFmt(data.current) : '—' },
+      { Item: 'Investment return', Value: investReturn != null ? (investReturn >= 0 ? '+' : '') + investReturn.toFixed(1) + '%' : '—' }
+    ];
+    const table = rowsPdfTable(records, [{ key:'Item', label:'Item' }, { key:'Value', label:'Value' }]);
+    doc.autoTable({ startY: y + 2, head: table.head, body: table.body, headStyles:{ fillColor:[31,111,99] } });
+    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : y + 10;
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text('Investment figures are today\'s snapshot, not this year\'s Dec 31 value. Not investment or tax advice.', 14, finalY + 10, { maxWidth: 182 });
+    doc.setFontSize(8);
+    doc.text('Generated by ' + (state.appTitle || 'Household Ledger'), 14, 287);
+    doc.save(`Year_In_Review_${lastYirYear}.pdf`);
   });
 
   function exportDebtPdf(countryKey, countryLabel){
