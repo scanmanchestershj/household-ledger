@@ -8251,7 +8251,7 @@
 
   // ---- Monthly Portfolio Digest: builds a plain-text summary from real
   // holdings/rebalancing numbers already computed above, sends it to
-  // /api/portfolio-digest for Claude to write up (falls back to a
+  // /api/portfolio-tools for Claude to write up (falls back to a
   // rule-based version client-side if no ANTHROPIC_API_KEY is configured on
   // Vercel), then offers a WhatsApp share — same openWhatsAppShare() used
   // elsewhere in the Screener. A lightweight monthly reminder (first 3 days
@@ -8301,7 +8301,7 @@
       digestResultEl.textContent = '';
       digestShareBtn.style.display = 'none';
       try{
-        const res = await fetch('/api/portfolio-digest', {
+        const res = await fetch('/api/portfolio-tools', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ month, summary })
         });
@@ -11120,13 +11120,13 @@
   });
 
   // ---- Live gold rate widget (Gold sections, both countries) — fetches
-  // /api/gold-rate and can apply the chosen karat's rate as today's LTP to
+  // /api/portfolio-tools and can apply the chosen karat's rate as today's LTP to
   // every held gold entry in one tap, same update+re-render path as manually
   // editing the LTP box above (investmentPricesMap + save() + renderInvestmentCountry()). ----
   const goldRateCache = {};
   async function fetchGoldRate(){
     if(goldRateCache._promise) return goldRateCache._promise;
-    goldRateCache._promise = fetch('/api/gold-rate').then(r => r.json()).then(data => {
+    goldRateCache._promise = fetch('/api/portfolio-tools').then(r => r.json()).then(data => {
       if(data && data.rates){ goldRateCache.rates = data.rates; goldRateCache.asOf = data.asOf; }
       return data;
     }).finally(() => { goldRateCache._promise = null; });
