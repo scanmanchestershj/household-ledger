@@ -1741,7 +1741,10 @@
               <button type="button" class="add-btn ghost full-width" id="uaeInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
               <div id="uaeInvStocksRescanStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
             </div>
-            <div id="uaeInvStocksOverview" style="overflow-x:auto;margin-bottom:10px;"></div>
+            <div class="inv-ltp-panel" id="uaeInvStocksOverviewPanel" style="margin-top:4px;">
+              <div style="font-size:11.5px;font-weight:600;margin-bottom:6px;">📊 Your Stocks — Qty · Avg · LTP · Current · Return</div>
+              <div id="uaeInvStocksOverview" style="overflow-x:auto;"></div>
+            </div>
             <div id="uaeInvStocksList"></div>
           </div>
         </div>
@@ -2322,7 +2325,10 @@
               <button type="button" class="add-btn ghost full-width" id="indiaInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
               <div id="indiaInvStocksRescanStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
             </div>
-            <div id="indiaInvStocksOverview" style="overflow-x:auto;margin-bottom:10px;"></div>
+            <div class="inv-ltp-panel" id="indiaInvStocksOverviewPanel" style="margin-top:4px;">
+              <div style="font-size:11.5px;font-weight:600;margin-bottom:6px;">📊 Your Stocks — Qty · Avg · LTP · Current · Return</div>
+              <div id="indiaInvStocksOverview" style="overflow-x:auto;"></div>
+            </div>
             <div id="indiaInvStocksList"></div>
           </div>
         </div>
@@ -11654,9 +11660,11 @@
   // rescanning only refreshes the live LTP that Current Value/Return use. ----
   function renderStocksOverview(countryKey){
     const box = document.getElementById(invPrefix(countryKey) + 'InvStocksOverview');
+    const panel = document.getElementById(invPrefix(countryKey) + 'InvStocksOverviewPanel');
     if(!box) return;
     const held = investmentGroupByName(countryKey, 'stocks').filter(g => g.qty > 0.0000001);
-    if(!held.length){ box.innerHTML = ''; return; }
+    if(!held.length){ box.innerHTML = ''; if(panel) panel.style.display = 'none'; return; }
+    if(panel) panel.style.display = '';
     const sorted = held.slice().sort((a, b) => b.current - a.current);
     const entries = investmentEntriesList(countryKey, 'stocks');
     box.innerHTML = `
