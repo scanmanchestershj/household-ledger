@@ -554,6 +554,12 @@
           <div id="statGroceriesDetail" class="debt-summary-box" style="display:none;margin-top:2px;"></div>
         </div>
 
+        <div class="ov-section" draggable="true" data-ov="networth">
+          <div class="section-title" style="margin-top:0;"><span class="accordion-drag-handle">⠿</span> 💰 Net Worth (combined)</div>
+          <div class="stat-grid" id="netWorthGrid"></div>
+          <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Cash balance (all-time) + investments' current value, both countries combined using today's exchange rate.</div>
+        </div>
+
         <div class="ov-section" draggable="true" data-ov="upnext">
           <div class="section-title" style="margin-top:0;"><span class="accordion-drag-handle">⠿</span> Up next</div>
           <ul class="item-list" id="overviewNext"></ul>
@@ -4071,6 +4077,7 @@
     if(darkMode) applyDarkMode(true); // household theme sets teal/accent; re-apply dark backdrop on top
     generateRecurringTransactions();
     generateRecurringChoresCheck();
+    applyDeepLinkFromUrl();
   }
 
   async function logout(){
@@ -4167,22 +4174,39 @@
     populateCardCountrySelect();
     renderCards();
   }
+  function activateSubtab(country, sub){
+    const btn = document.querySelector(`.subtab[data-country="${country}"][data-sub="${sub}"]`);
+    const panel = document.querySelector(`.subpanel[data-country="${country}"][data-sub="${sub}"]`);
+    if(!btn || !panel) return;
+    document.querySelectorAll(`.subtab[data-country="${country}"]`).forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.subpanel[data-country="${country}"]`).forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    panel.classList.add('active');
+    if(sub === 'cards') mountCardsInto(country === 'uae' ? 'resident' : 'home');
+    if(sub === 'chores') renderChoresCountry(country === 'uae' ? 'UAE' : 'India');
+    if(sub === 'budget') renderBudgetCountry(country === 'uae' ? 'UAE' : 'India');
+    if(sub === 'investment') renderInvestmentCountry(country === 'uae' ? 'UAE' : 'India');
+  }
   document.querySelectorAll('.subtabs').forEach(bar => {
     bar.addEventListener('click', (e) => {
       const btn = e.target.closest('.subtab');
       if(!btn) return;
-      const country = btn.dataset.country; // 'uae' or 'india'
-      const sub = btn.dataset.sub;
-      document.querySelectorAll(`.subtab[data-country="${country}"]`).forEach(b => b.classList.remove('active'));
-      document.querySelectorAll(`.subpanel[data-country="${country}"]`).forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelector(`.subpanel[data-country="${country}"][data-sub="${sub}"]`).classList.add('active');
-      if(sub === 'cards') mountCardsInto(country === 'uae' ? 'resident' : 'home');
-      if(sub === 'chores') renderChoresCountry(country === 'uae' ? 'UAE' : 'India');
-      if(sub === 'budget') renderBudgetCountry(country === 'uae' ? 'UAE' : 'India');
-      if(sub === 'investment') renderInvestmentCountry(country === 'uae' ? 'UAE' : 'India');
+      activateSubtab(btn.dataset.country, btn.dataset.sub);
     });
   });
+
+  // ---- Deep links from PWA home-screen shortcuts (see manifest.json
+  // "shortcuts") — e.g. index.html?panel=uae&sub=budget jumps straight to a
+  // tab/sub-tab after login instead of always landing on Overview. ----
+  function applyDeepLinkFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const panel = params.get('panel');
+    if(!panel) return;
+    if(!document.querySelector(`.tab[data-panel="${panel}"]`)) return;
+    switchToPanel(panel);
+    const sub = params.get('sub');
+    if(sub && (panel === 'uae' || panel === 'india')) activateSubtab(panel, sub);
+  }
 
   function escapeHtml(str){
     const d = document.createElement('div');
@@ -11663,6 +11687,41 @@
     notifyForBanners(banners);
   }
 
+  // ---- Net Worth (Overview): all-time cash balance + investments' current
+  // value, per country, rolled into one combined figure using the exchange
+  // rate already used everywhere else in the app (budgetFmt, debt convert).
+  // Independent of the Overview month filter — net worth is as-of-now, not
+  // a period total. ----
+  function allTimeBalance(countryKey){
+    return (currentData().countries[countryKey].transactions || []).reduce((sum, t) => {
+      if(t.type === 'income') return sum + Number(t.amount);
+      if(t.type === 'borrowing') return sum;
+      return sum - Number(t.amount);
+    }, 0);
+  }
+  function totalInvestmentsCurrent(countryKey){
+    let total = 0;
+    INVESTMENT_CATS.forEach(cat => { investmentGroupByName(countryKey, cat.key).forEach(g => { total += g.current; }); });
+    return total;
+  }
+  function renderNetWorth(){
+    const grid = document.getElementById('netWorthGrid');
+    if(!grid) return;
+    const uaeTotal = allTimeBalance('UAE') + totalInvestmentsCurrent('UAE');
+    const indiaTotal = allTimeBalance('India') + totalInvestmentsCurrent('India');
+    const rate = state.exchangeRate || 22.5;
+    const combinedInAed = uaeTotal + (indiaTotal / rate);
+    const combinedInInr = (uaeTotal * rate) + indiaTotal;
+    const uaeSym = CURRENCIES[state.countryConfig.country1.currency] || state.countryConfig.country1.currency;
+    const indiaSym = CURRENCIES[state.countryConfig.country2.currency] || state.countryConfig.country2.currency;
+    const round = (n) => Math.round(n).toLocaleString();
+    grid.innerHTML = `
+      <div class="stat teal"><div class="num">${maskedField('networth_combined', rawValue(() => uaeSym + ' ' + round(combinedInAed)))}</div><div class="label">combined net worth <span style="font-size:10px;color:var(--ink-soft);">(${indiaSym} ${round(combinedInInr)})</span></div></div>
+      <div class="stat gold"><div class="num">${maskedField('networth_uae', rawValue(() => uaeSym + ' ' + round(uaeTotal)))}</div><div class="label">${escapeHtml(state.countryConfig.country1.name)} · cash + investments</div></div>
+      <div class="stat gold"><div class="num">${maskedField('networth_india', rawValue(() => indiaSym + ' ' + round(indiaTotal)))}</div><div class="label">${escapeHtml(state.countryConfig.country2.name)} · cash + investments</div></div>
+    `;
+  }
+
   function renderOverview(){
     updateRequestsSectionVisibility();
     populateOverviewMonthOptions();
@@ -11672,6 +11731,7 @@
     renderActivityLog();
     renderDocumentVault();
     renderGoals();
+    renderNetWorth();
     const monthFilter = overviewMonthFilter();
     const periodLabelEl = document.getElementById('statBudgetPeriodLabel');
     if(periodLabelEl) periodLabelEl.textContent = monthFilter ? `balance — ${monthLabel(monthFilter)}` : 'balance — all time';
