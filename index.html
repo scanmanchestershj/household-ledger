@@ -555,9 +555,15 @@
         </div>
 
         <div class="ov-section" draggable="true" data-ov="networth">
-          <div class="section-title" style="margin-top:0;"><span class="accordion-drag-handle">⠿</span> 💰 Net Worth (combined)</div>
+          <div class="section-title" style="margin-top:0;display:flex;align-items:center;gap:6px;">
+            <span class="accordion-drag-handle">⠿</span> 💰 Net Worth (combined)
+            <span style="margin-left:auto;display:flex;gap:4px;">
+              <button type="button" class="add-btn ghost" id="netWorthMoveUp" style="padding:2px 8px;font-size:11px;" aria-label="Move Net Worth section up">▲</button>
+              <button type="button" class="add-btn ghost" id="netWorthMoveDown" style="padding:2px 8px;font-size:11px;" aria-label="Move Net Worth section down">▼</button>
+            </span>
+          </div>
           <div class="stat-grid" id="netWorthGrid"></div>
-          <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Cash balance (all-time) + investments' current value, both countries combined using today's exchange rate.</div>
+          <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Cash balance (all-time) + investments' current value, minus outstanding loans/EMIs and unpaid borrowings, both countries combined using today's exchange rate. If dragging by ⠿ doesn't move this on your device, use ▲▼ instead.</div>
         </div>
 
         <div class="ov-section" draggable="true" data-ov="upnext">
@@ -1730,7 +1736,6 @@
               <button class="add-btn full-width" id="uaeInvStocksAdd">Add entry</button>
               <button class="add-btn ghost full-width" id="uaeInvStocksCancelEdit" style="display:none;">Cancel edit</button>
             </div>
-            <div class="inv-ltp-panel" id="uaeInvStocksPrices"></div>
             <div id="uaeInvStocksSummary"></div>
             <div style="margin:10px 0;">
               <button type="button" class="add-btn ghost full-width" id="uaeInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
@@ -2312,7 +2317,6 @@
               <button class="add-btn full-width" id="indiaInvStocksAdd">Add entry</button>
               <button class="add-btn ghost full-width" id="indiaInvStocksCancelEdit" style="display:none;">Cancel edit</button>
             </div>
-            <div class="inv-ltp-panel" id="indiaInvStocksPrices"></div>
             <div id="indiaInvStocksSummary"></div>
             <div style="margin:10px 0;">
               <button type="button" class="add-btn ghost full-width" id="indiaInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
@@ -11244,13 +11248,14 @@
       if(entries.length === 0){
         summaryEl.innerHTML = '';
       } else {
-        const pnlClass = totalPnl >= 0 ? 'positive-pnl' : 'negative-pnl';
+        const pnlClass = catCfg.key === 'stocks' ? '' : (totalPnl >= 0 ? 'positive-pnl' : 'negative-pnl');
+        const pnlStyle = catCfg.key === 'stocks' ? `style="color:${totalPnl >= 0 ? '#1e8449' : '#c0392b'};"` : '';
         const fieldBase = 'inv_' + countryKey + '_' + catCfg.key;
         summaryEl.innerHTML = `
           <div class="inv-summary-row">
             <div><div class="eyebrow">Invested</div><div class="inv-summary-val">${maskedField(fieldBase + '_invested', rawValue(() => fmtCountry(totalInvested, countryKey)))}</div></div>
             <div><div class="eyebrow">Current value</div><div class="inv-summary-val">${maskedField(fieldBase + '_current', rawValue(() => fmtCountry(totalCurrent, countryKey)))}</div></div>
-            <div><div class="eyebrow">Returns</div><div class="inv-summary-val ${pnlClass}">${maskedField(fieldBase + '_returns', rawValue(() => (totalPnl >= 0 ? '+' : '−') + fmtCountry(Math.abs(totalPnl), countryKey) + ' (' + (totalPnl >= 0 ? '+' : '−') + Math.abs(totalPnlPct).toFixed(2) + '%)'))}</div></div>
+            <div><div class="eyebrow">Returns</div><div class="inv-summary-val ${pnlClass}" ${pnlStyle}>${maskedField(fieldBase + '_returns', rawValue(() => (totalPnl >= 0 ? '+' : '−') + fmtCountry(Math.abs(totalPnl), countryKey) + ' (' + (totalPnl >= 0 ? '+' : '−') + Math.abs(totalPnlPct).toFixed(2) + '%)'))}</div></div>
           </div>`;
       }
     }
@@ -11260,6 +11265,11 @@
       list.innerHTML = `<div class="empty">No ${catCfg.label.toLowerCase()} entries added yet.</div>`;
       return { invested: totalInvested, current: totalCurrent };
     }
+    // Stocks: the All Stocks Overview table above (renderStocksOverview) is
+    // the single consolidated view — qty/avg/LTP/current/return per stock,
+    // one row each, with its own pencil edit — so no separate expandable
+    // card list is built here for that category.
+    if(catCfg.key === 'stocks') return { invested: totalInvested, current: totalCurrent };
 
     // One expandable card per instrument (grouped by name via investmentGroupByName
     // above) — collapsed view shows the numbers that actually matter (qty held,
@@ -11648,8 +11658,9 @@
     const held = investmentGroupByName(countryKey, 'stocks').filter(g => g.qty > 0.0000001);
     if(!held.length){ box.innerHTML = ''; return; }
     const sorted = held.slice().sort((a, b) => b.current - a.current);
+    const entries = investmentEntriesList(countryKey, 'stocks');
     box.innerHTML = `
-      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:480px;">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:520px;">
         <thead>
           <tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;">
             <th style="padding:4px 6px 4px 0;">Stock</th>
@@ -11657,21 +11668,43 @@
             <th style="padding:4px 6px;text-align:right;">Avg</th>
             <th style="padding:4px 6px;text-align:right;">LTP</th>
             <th style="padding:4px 6px;text-align:right;">Current</th>
-            <th style="padding:4px 0 4px 6px;text-align:right;">Return</th>
+            <th style="padding:4px 6px;text-align:right;">Return</th>
+            <th style="padding:4px 0 4px 6px;text-align:right;"></th>
           </tr>
         </thead>
         <tbody>
           ${sorted.map(g => `
-            <tr style="border-top:1px solid var(--hairline, #eee);">
+            <tr style="border-top:1px solid var(--hairline, #eee);" data-stock-key="${escapeHtml(g.key)}">
               <td style="padding:5px 6px 5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${escapeHtml(g.name)}</td>
               <td style="padding:5px 6px;text-align:right;">${g.qty}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.avgPrice, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.curPrice, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.current, countryKey)}</td>
-              <td style="padding:5px 0 5px 6px;text-align:right;" class="${g.pnl >= 0 ? 'positive-pnl' : 'negative-pnl'}">${g.pnl >= 0 ? '+' : '−'}${Math.abs(g.pnlPct).toFixed(1)}%</td>
+              <td style="padding:5px 6px;text-align:right;color:${g.pnl >= 0 ? '#1e8449' : '#c0392b'};">${g.pnl >= 0 ? '+' : '−'}${Math.abs(g.pnlPct).toFixed(1)}%</td>
+              <td style="padding:5px 0 5px 6px;text-align:right;white-space:nowrap;">
+                <button type="button" class="edit-btn stock-row-edit" data-key="${escapeHtml(g.key)}" aria-label="Edit ${escapeHtml(g.name)}">✎</button>
+                <button type="button" class="del-btn stock-row-del" data-key="${escapeHtml(g.key)}" aria-label="Delete ${escapeHtml(g.name)}">×</button>
+              </td>
             </tr>`).join('')}
         </tbody>
       </table>`;
+    const catCfg = INVESTMENT_CATS.find(c => c.key === 'stocks');
+    function latestEntryFor(key){
+      return entries.filter(e => invKeyName(e.name) === key)
+        .slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    }
+    box.querySelectorAll('.stock-row-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const h = latestEntryFor(btn.dataset.key);
+        if(h) startEditInvestment(countryKey, catCfg, h);
+      });
+    });
+    box.querySelectorAll('.stock-row-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const h = latestEntryFor(btn.dataset.key);
+        if(h) deleteInvestment(countryKey, catCfg, h.id);
+      });
+    });
   }
   async function rescanStocksNow(countryKey){
     const idBase = invPrefix(countryKey) + 'InvStocks';
@@ -11999,23 +12032,60 @@
     INVESTMENT_CATS.forEach(cat => { investmentGroupByName(countryKey, cat.key).forEach(g => { total += g.current; }); });
     return total;
   }
+  // Outstanding debt for Net Worth: structured loans/EMIs (principal still
+  // owed) plus any personal borrowings logged as transactions that haven't
+  // been marked repaid yet. Both are liabilities the cash-balance figure
+  // above doesn't otherwise account for.
+  function totalOutstandingDebt(countryKey){
+    const c = currentData().countries[countryKey];
+    const loanPrincipal = (c.debts || []).reduce((s, d) => s + Number(d.principal || 0), 0);
+    const unpaidBorrowing = (c.transactions || []).filter(t => t.type === 'borrowing' && !t.repaid).reduce((s, t) => s + Number(t.amount || 0), 0);
+    return loanPrincipal + unpaidBorrowing;
+  }
   function renderNetWorth(){
     const grid = document.getElementById('netWorthGrid');
     if(!grid) return;
-    const uaeTotal = allTimeBalance('UAE') + totalInvestmentsCurrent('UAE');
-    const indiaTotal = allTimeBalance('India') + totalInvestmentsCurrent('India');
+    const uaeAssets = allTimeBalance('UAE') + totalInvestmentsCurrent('UAE');
+    const indiaAssets = allTimeBalance('India') + totalInvestmentsCurrent('India');
+    const uaeDebt = totalOutstandingDebt('UAE');
+    const indiaDebt = totalOutstandingDebt('India');
+    const uaeNet = uaeAssets - uaeDebt;
+    const indiaNet = indiaAssets - indiaDebt;
     const rate = state.exchangeRate || 22.5;
-    const combinedInAed = uaeTotal + (indiaTotal / rate);
-    const combinedInInr = (uaeTotal * rate) + indiaTotal;
+    const combinedNetAed = uaeNet + (indiaNet / rate);
+    const combinedNetInr = (uaeNet * rate) + indiaNet;
+    const combinedDebtAed = uaeDebt + (indiaDebt / rate);
+    const combinedDebtInr = (uaeDebt * rate) + indiaDebt;
     const uaeSym = CURRENCIES[state.countryConfig.country1.currency] || state.countryConfig.country1.currency;
     const indiaSym = CURRENCIES[state.countryConfig.country2.currency] || state.countryConfig.country2.currency;
     const round = (n) => Math.round(n).toLocaleString();
     grid.innerHTML = `
-      <div class="stat teal"><div class="num">${maskedField('networth_combined', rawValue(() => uaeSym + ' ' + round(combinedInAed)))}</div><div class="label">combined net worth <span style="font-size:10px;color:var(--ink-soft);">(${indiaSym} ${round(combinedInInr)})</span></div></div>
-      <div class="stat gold"><div class="num">${maskedField('networth_uae', rawValue(() => uaeSym + ' ' + round(uaeTotal)))}</div><div class="label">${escapeHtml(state.countryConfig.country1.name)} · cash + investments</div></div>
-      <div class="stat gold"><div class="num">${maskedField('networth_india', rawValue(() => indiaSym + ' ' + round(indiaTotal)))}</div><div class="label">${escapeHtml(state.countryConfig.country2.name)} · cash + investments</div></div>
+      <div class="stat teal"><div class="num">${maskedField('networth_combined', rawValue(() => uaeSym + ' ' + round(combinedNetAed)))}</div><div class="label">net worth (after debt) <span style="font-size:10px;color:var(--ink-soft);">(${indiaSym} ${round(combinedNetInr)})</span></div></div>
+      <div class="stat" style="background:#fdf3e3;"><div class="num" style="color:#8a5a00;">${maskedField('networth_debt', rawValue(() => uaeSym + ' ' + round(combinedDebtAed)))}</div><div class="label">combined debt outstanding <span style="font-size:10px;color:var(--ink-soft);">(${indiaSym} ${round(combinedDebtInr)})</span></div></div>
+      <div class="stat gold"><div class="num">${maskedField('networth_uae', rawValue(() => uaeSym + ' ' + round(uaeNet)))}</div><div class="label">${escapeHtml(state.countryConfig.country1.name)} · net of debt</div></div>
+      <div class="stat gold"><div class="num">${maskedField('networth_india', rawValue(() => indiaSym + ' ' + round(indiaNet)))}</div><div class="label">${escapeHtml(state.countryConfig.country2.name)} · net of debt</div></div>
     `;
   }
+  // Reliable reorder fallback for this section — native HTML5 drag-and-drop
+  // (used by the other Overview sections) doesn't fire touch events on most
+  // mobile browsers, so dragging can silently fail to persist there. These
+  // buttons use the exact same state.layoutOrder.overviewSections mechanism
+  // setupGenericDragReorder reads/writes, so both stay in sync either way.
+  function moveOvSection(key, direction){
+    const container = document.getElementById('overviewSections');
+    if(!container) return;
+    const el = container.querySelector(`.ov-section[data-ov="${CSS.escape(key)}"]`);
+    if(!el) return;
+    if(direction === 'up' && el.previousElementSibling) container.insertBefore(el, el.previousElementSibling);
+    else if(direction === 'down' && el.nextElementSibling) container.insertBefore(el.nextElementSibling, el);
+    if(!state.layoutOrder) state.layoutOrder = {};
+    state.layoutOrder.overviewSections = [...container.querySelectorAll('.ov-section')].map(e => e.dataset.ov);
+    save();
+  }
+  const nwUpBtn = document.getElementById('netWorthMoveUp');
+  const nwDownBtn = document.getElementById('netWorthMoveDown');
+  if(nwUpBtn) nwUpBtn.addEventListener('click', () => moveOvSection('networth', 'up'));
+  if(nwDownBtn) nwDownBtn.addEventListener('click', () => moveOvSection('networth', 'down'));
 
   function renderOverview(){
     updateRequestsSectionVisibility();
