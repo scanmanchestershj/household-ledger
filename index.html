@@ -1741,9 +1741,11 @@
               <button type="button" class="add-btn ghost full-width" id="uaeInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
               <div id="uaeInvStocksRescanStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
             </div>
-            <div class="inv-ltp-panel" id="uaeInvStocksOverviewPanel" style="margin-top:4px;">
-              <div style="font-size:11.5px;font-weight:600;margin-bottom:6px;">📊 Your Stocks — Qty · Avg · LTP · Current · Return</div>
-              <div id="uaeInvStocksOverview" style="overflow-x:auto;"></div>
+            <div class="accordion" id="uaeInvStocksOverviewPanel" data-key="uae-inv-stocks-overview" style="margin-top:4px;">
+              <button type="button" class="accordion-header"><span>📊 Your Stocks — Qty · Avg · LTP · Current · Return</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div id="uaeInvStocksOverview" style="overflow-x:auto;"></div>
+              </div>
             </div>
             <div id="uaeInvStocksList"></div>
           </div>
@@ -2325,9 +2327,11 @@
               <button type="button" class="add-btn ghost full-width" id="indiaInvStocksRescan">🔄 Rescan Now — refresh all live prices</button>
               <div id="indiaInvStocksRescanStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
             </div>
-            <div class="inv-ltp-panel" id="indiaInvStocksOverviewPanel" style="margin-top:4px;">
-              <div style="font-size:11.5px;font-weight:600;margin-bottom:6px;">📊 Your Stocks — Qty · Avg · LTP · Current · Return</div>
-              <div id="indiaInvStocksOverview" style="overflow-x:auto;"></div>
+            <div class="accordion" id="indiaInvStocksOverviewPanel" data-key="india-inv-stocks-overview" style="margin-top:4px;">
+              <button type="button" class="accordion-header"><span>📊 Your Stocks — Qty · Avg · LTP · Current · Return</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div id="indiaInvStocksOverview" style="overflow-x:auto;"></div>
+              </div>
             </div>
             <div id="indiaInvStocksList"></div>
           </div>
