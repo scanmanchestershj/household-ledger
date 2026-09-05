@@ -1668,7 +1668,11 @@
             <div class="form-grid">
               <div class="full">
                 <label class="field-label">Stock name</label>
-                <input type="text" id="uaeInvStocksName" placeholder="e.g. Emaar Properties">
+                <div style="display:flex;gap:6px;">
+                  <input type="text" id="uaeInvStocksName" placeholder="e.g. Emaar Properties" style="flex:1;">
+                  <button type="button" class="add-btn ghost" id="uaeInvStocksAutoFill" style="padding:0 12px;white-space:nowrap;">🔍 Auto-fill</button>
+                </div>
+                <div id="uaeInvStocksAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
               </div>
               <div>
                 <label class="field-label">Buy / Sell</label>
@@ -1689,6 +1693,7 @@
                 <label class="field-label">Date</label>
                 <input type="date" id="uaeInvStocksDate">
               </div>
+              <div class="full" id="uaeInvStocksPreview"></div>
               <button class="add-btn full-width" id="uaeInvStocksAdd">Add entry</button>
               <button class="add-btn ghost full-width" id="uaeInvStocksCancelEdit" style="display:none;">Cancel edit</button>
             </div>
@@ -2240,7 +2245,11 @@
             <div class="form-grid">
               <div class="full">
                 <label class="field-label">Stock name</label>
-                <input type="text" id="indiaInvStocksName" placeholder="e.g. HDFC Bank, TCS">
+                <div style="display:flex;gap:6px;">
+                  <input type="text" id="indiaInvStocksName" placeholder="e.g. HDFC Bank, TCS" style="flex:1;">
+                  <button type="button" class="add-btn ghost" id="indiaInvStocksAutoFill" style="padding:0 12px;white-space:nowrap;">🔍 Auto-fill</button>
+                </div>
+                <div id="indiaInvStocksAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
               </div>
               <div>
                 <label class="field-label">Buy / Sell</label>
@@ -2261,6 +2270,7 @@
                 <label class="field-label">Date</label>
                 <input type="date" id="indiaInvStocksDate">
               </div>
+              <div class="full" id="indiaInvStocksPreview"></div>
               <button class="add-btn full-width" id="indiaInvStocksAdd">Add entry</button>
               <button class="add-btn ghost full-width" id="indiaInvStocksCancelEdit" style="display:none;">Cancel edit</button>
             </div>
@@ -10795,6 +10805,11 @@
     { key:'stocks', idPart:'Stocks', label:'Stocks', qtyLabel:'shares' },
     { key:'mf', idPart:'Mf', label:'Mutual Funds', qtyLabel:'units' }
   ];
+  // Caches a live-fetched price per "countryKey|normalizedName" between the
+  // Stocks 🔍 Auto-fill click and the next Add entry / preview render, so the
+  // live preview and the auto-applied LTP (see addOrUpdateInvestment) both
+  // use the same fetched number without refetching on every keystroke.
+  const stockLivePriceCache = {};
   const investmentEditId = { UAE: {gold:null, stocks:null, mf:null}, India: {gold:null, stocks:null, mf:null} };
 
   function invPrefix(countryKey){ return countryKey === 'UAE' ? 'uae' : 'india'; }
@@ -11008,6 +11023,18 @@
       ['Name','Qty','Avg'].forEach(f => { document.getElementById(idBase+f).value = ''; });
       if(typeEl) typeEl.value = 'buy';
     }
+    if(catCfg.key === 'stocks'){
+      // If a live price was fetched via 🔍 Auto-fill for this name, use it as
+      // today's LTP right away so Current Value/Return reflect the real
+      // market price immediately instead of silently falling back to the
+      // buy price until someone visits the LTP panel below.
+      const livePrice = stockLivePriceCache[countryKey + '|' + invKeyName(name)];
+      if(livePrice != null) investmentPricesMap(countryKey, 'stocks')[invKeyName(name)] = livePrice;
+      const previewEl = document.getElementById(idBase + 'Preview');
+      if(previewEl) previewEl.innerHTML = '';
+      const statusEl = document.getElementById(idBase + 'AutoFillStatus');
+      if(statusEl) statusEl.textContent = '';
+    }
     save(); renderInvestmentCountry(countryKey);
   }
 
@@ -11168,6 +11195,71 @@
   }
   wireGoldRateWidget('UAE');
   wireGoldRateWidget('India');
+
+  // ---- Stocks 🔍 Auto-fill: same /api/stock-quote proxy used by the
+  // Valuation calculator's auto-fill button, reused here so typing "TCS" or
+  // "Emaar" and tapping Auto-fill fills in the full official company name
+  // and caches a live price. The live preview below then recalculates
+  // Invested/Current/Return as you type, using that live price instead of
+  // silently assuming current = buy price. ----
+  function updateStocksPreview(countryKey){
+    const idBase = invPrefix(countryKey) + 'InvStocks';
+    const nameEl = document.getElementById(idBase + 'Name');
+    const qtyEl = document.getElementById(idBase + 'Qty');
+    const avgEl = document.getElementById(idBase + 'Avg');
+    const previewEl = document.getElementById(idBase + 'Preview');
+    if(!previewEl || !nameEl) return;
+    const qty = parseFloat(qtyEl.value);
+    const avg = parseFloat(avgEl.value);
+    if(isNaN(qty) || qty <= 0 || isNaN(avg) || avg < 0){ previewEl.innerHTML = ''; return; }
+    const invested = qty * avg;
+    const livePrice = stockLivePriceCache[countryKey + '|' + invKeyName(nameEl.value)];
+    const curPrice = livePrice != null ? livePrice : avg;
+    const current = qty * curPrice;
+    const ret = current - invested;
+    const retPct = invested > 0 ? (ret / invested) * 100 : 0;
+    const retColor = ret >= 0 ? 'var(--teal-dark)' : 'var(--coral)';
+    previewEl.innerHTML = `<div style="font-size:12px;background:var(--paper-deep);padding:8px 10px;border-radius:8px;line-height:1.6;">
+      Invested: <strong>${fmtCountry(invested, countryKey)}</strong> &nbsp;•&nbsp;
+      Current: <strong>${fmtCountry(current, countryKey)}</strong> <span style="font-size:10px;color:var(--ink-soft);">${livePrice != null ? '(live price)' : '(= buy price — tap 🔍 Auto-fill for live)'}</span> &nbsp;•&nbsp;
+      Return: <strong style="color:${retColor};">${ret >= 0 ? '+' : '−'}${fmtCountry(Math.abs(ret), countryKey)} (${ret >= 0 ? '+' : '−'}${Math.abs(retPct).toFixed(1)}%)</strong>
+    </div>`;
+  }
+  function wireStocksAutoFill(countryKey){
+    const idBase = invPrefix(countryKey) + 'InvStocks';
+    const nameEl = document.getElementById(idBase + 'Name');
+    const btn = document.getElementById(idBase + 'AutoFill');
+    const statusEl = document.getElementById(idBase + 'AutoFillStatus');
+    const qtyEl = document.getElementById(idBase + 'Qty');
+    const avgEl = document.getElementById(idBase + 'Avg');
+    if(!btn || !nameEl) return;
+    btn.addEventListener('click', async () => {
+      const query = nameEl.value.trim();
+      if(!query){ statusEl.textContent = 'Type a stock name or ticker first.'; return; }
+      const marketInfo = currentMarketInfo(countryKey);
+      const market = marketInfo.code || (countryKey === 'UAE' ? 'AE' : 'IN');
+      statusEl.textContent = `Looking up "${query}"…`;
+      try{
+        const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=${market}`);
+        const data = await res.json();
+        if(!res.ok || data.error){ statusEl.textContent = data.error || "Couldn't fetch live data — enter the name manually."; return; }
+        const fullName = data.name || query;
+        nameEl.value = fullName;
+        if(data.price != null){
+          stockLivePriceCache[countryKey + '|' + invKeyName(fullName)] = data.price;
+          statusEl.textContent = `✓ ${data.symbol || fullName} — live price ${fmtCountry(data.price, countryKey)}${data.exchange ? ' (' + data.exchange + ')' : ''}.`;
+        } else {
+          statusEl.textContent = `✓ Full name filled in, but no live price was available for ${data.symbol || fullName} — Current will use your buy price until you set one below.`;
+        }
+        updateStocksPreview(countryKey);
+      }catch(e){
+        statusEl.textContent = "Couldn't reach the live data source — enter the name manually.";
+      }
+    });
+    [nameEl, qtyEl, avgEl].forEach(el => { if(el) el.addEventListener('input', () => updateStocksPreview(countryKey)); });
+  }
+  wireStocksAutoFill('UAE');
+  wireStocksAutoFill('India');
 
   // ---- Backup & restore (choose where to save) ----
   async function saveBackupNow(){
