@@ -563,7 +563,7 @@
             </span>
           </div>
           <div class="stat-grid" id="netWorthGrid"></div>
-          <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Cash balance (all-time) + investments' current value, minus outstanding loans/EMIs and unpaid borrowings, both countries combined using today's exchange rate. If dragging by ⠿ doesn't move this on your device, use ▲▼ instead.</div>
+          <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Cash balance (all-time) + investments' current value, minus outstanding loans/EMIs, unpaid borrowings, and unpaid credit card charges, both countries combined using today's exchange rate. If dragging by ⠿ doesn't move this on your device, use ▲▼ instead.</div>
         </div>
 
         <div class="ov-section" draggable="true" data-ov="upnext">
@@ -12045,14 +12045,21 @@
     return total;
   }
   // Outstanding debt for Net Worth: structured loans/EMIs (principal still
-  // owed) plus any personal borrowings logged as transactions that haven't
-  // been marked repaid yet. Both are liabilities the cash-balance figure
-  // above doesn't otherwise account for.
+  // owed), personal borrowings not yet marked repaid, AND unpaid credit
+  // card charges (currentData().cards where paid === false — every card
+  // entry has this flag, defaulted to false until someone marks it paid).
+  // Card spend isn't otherwise reflected in allTimeBalance() at all unless
+  // a specific entry happens to be mapped to a transaction, so without this
+  // it was a real liability missing from the figure entirely.
   function totalOutstandingDebt(countryKey){
     const c = currentData().countries[countryKey];
     const loanPrincipal = (c.debts || []).reduce((s, d) => s + Number(d.principal || 0), 0);
     const unpaidBorrowing = (c.transactions || []).filter(t => t.type === 'borrowing' && !t.repaid).reduce((s, t) => s + Number(t.amount || 0), 0);
-    return loanPrincipal + unpaidBorrowing;
+    const countryName = countryKey === 'UAE' ? state.countryConfig.country1.name : state.countryConfig.country2.name;
+    const unpaidCards = (currentData().cards || [])
+      .filter(cd => (cd.country || 'United Arab Emirates') === countryName && !cd.paid)
+      .reduce((s, cd) => s + Number(cd.amount || 0), 0);
+    return loanPrincipal + unpaidBorrowing + unpaidCards;
   }
   function renderNetWorth(){
     const grid = document.getElementById('netWorthGrid');
