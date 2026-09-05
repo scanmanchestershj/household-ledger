@@ -10932,29 +10932,63 @@
       return { invested: totalInvested, current: totalCurrent };
     }
 
-    // Date-wise, newest first — e.g. Aug 1 sits right under the Add form, then Jul 31, then Jul 29.
-    const sortedEntries = entries.slice().sort((a,b) => {
-      const d = (b.date||'').localeCompare(a.date||'');
-      return d !== 0 ? d : String(b.id).localeCompare(String(a.id));
+    // One expandable card per instrument (grouped by name via investmentGroupByName
+    // above) — collapsed view shows the numbers that actually matter (qty held,
+    // Current Value, Return); tap to expand and see/edit the individual buy/sell
+    // transactions behind that total. Held stocks (qty > 0) sort by current value
+    // first; anything fully sold sits below so active holdings aren't buried.
+    const sortedGroups = groups.slice().sort((a, b) => {
+      const aHeld = a.qty > 0.0000001, bHeld = b.qty > 0.0000001;
+      if(aHeld !== bHeld) return aHeld ? -1 : 1;
+      return b.current - a.current;
     });
 
-    sortedEntries.forEach(h => {
-      const g = groups.find(x => x.key === invKeyName(h.name));
-      const row = document.createElement('div');
-      row.className = 'inv-holding-row';
-      const typeLabel = h.type === 'sell' ? 'Sell' : 'Buy';
-      const typeClass = h.type === 'sell' ? 'sell' : 'buy';
-      row.innerHTML = `
-        <div class="inv-holding-main">
-          <div class="inv-holding-name"><span class="inv-holding-txn ${typeClass}">${typeLabel}</span>${escapeHtml(h.name)}</div>
-          <div class="inv-holding-meta">${h.qty} ${catCfg.qtyLabel} @ ${fmtCountry(h.price, countryKey)}${h.date ? ' · ' + escapeHtml(h.date) : ''}${g ? ' · avg ' + fmtCountry(g.avgPrice, countryKey) + ' · LTP ' + fmtCountry(g.curPrice, countryKey) : ''}</div>
-        </div>
-        <button class="edit-btn" data-id="${h.id}" aria-label="Edit entry">✎</button>
-        <button class="del-btn" data-id="${h.id}" aria-label="Delete entry">×</button>
-      `;
-      row.querySelector('.edit-btn').addEventListener('click', () => startEditInvestment(countryKey, catCfg, h));
-      row.querySelector('.del-btn').addEventListener('click', () => deleteInvestment(countryKey, catCfg, h.id));
-      list.appendChild(row);
+    sortedGroups.forEach(g => {
+      const groupEntries = entries.filter(e => invKeyName(e.name) === g.key)
+        .slice().sort((a, b) => {
+          const d = (b.date || '').localeCompare(a.date || '');
+          return d !== 0 ? d : String(b.id).localeCompare(String(a.id));
+        });
+      const held = g.qty > 0.0000001;
+      const pnlClass = g.pnl >= 0 ? 'positive-pnl' : 'negative-pnl';
+      const card = document.createElement('div');
+      card.className = 'accordion';
+      card.style.margin = '8px 0';
+      card.innerHTML = `
+        <button type="button" class="accordion-header" style="font-family:inherit;font-size:13.5px;font-weight:600;padding:10px 12px;">
+          <span style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;">
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${escapeHtml(g.name)}</span>
+            <span style="font-size:10.5px;font-weight:400;color:var(--ink-soft);">${held ? g.qty + ' ' + catCfg.qtyLabel + ' held' : 'Fully sold'}</span>
+          </span>
+          <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
+            <span style="font-size:13px;">${fmtCountry(g.current, countryKey)}</span>
+            <span class="${pnlClass}" style="font-size:10.5px;">${g.pnl >= 0 ? '+' : '−'}${fmtCountry(Math.abs(g.pnl), countryKey)} (${g.pnl >= 0 ? '+' : '−'}${Math.abs(g.pnlPct).toFixed(1)}%)</span>
+          </span>
+          <span class="accordion-arrow">▸</span>
+        </button>
+        <div class="accordion-body" style="padding:10px 12px;">
+          <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;">Avg buy price ${fmtCountry(g.avgPrice, countryKey)} &nbsp;•&nbsp; LTP ${fmtCountry(g.curPrice, countryKey)}${held ? '' : ' (last known)'}</div>
+          <div class="inv-holding-txn-list"></div>
+        </div>`;
+      const txnList = card.querySelector('.inv-holding-txn-list');
+      groupEntries.forEach(h => {
+        const typeLabel = h.type === 'sell' ? 'Sell' : 'Buy';
+        const typeClass = h.type === 'sell' ? 'sell' : 'buy';
+        const row = document.createElement('div');
+        row.className = 'inv-holding-row';
+        row.innerHTML = `
+          <div class="inv-holding-main">
+            <div class="inv-holding-name"><span class="inv-holding-txn ${typeClass}">${typeLabel}</span>${escapeHtml(h.name)}</div>
+            <div class="inv-holding-meta">${h.qty} ${catCfg.qtyLabel} @ ${fmtCountry(h.price, countryKey)}${h.date ? ' · ' + escapeHtml(h.date) : ''}</div>
+          </div>
+          <button class="edit-btn" data-id="${h.id}" aria-label="Edit entry">✎</button>
+          <button class="del-btn" data-id="${h.id}" aria-label="Delete entry">×</button>
+        `;
+        row.querySelector('.edit-btn').addEventListener('click', (ev) => { ev.stopPropagation(); startEditInvestment(countryKey, catCfg, h); });
+        row.querySelector('.del-btn').addEventListener('click', (ev) => { ev.stopPropagation(); deleteInvestment(countryKey, catCfg, h.id); });
+        txnList.appendChild(row);
+      });
+      list.appendChild(card);
     });
 
     return { invested: totalInvested, current: totalCurrent };
@@ -11244,12 +11278,22 @@
         const data = await res.json();
         if(!res.ok || data.error){ statusEl.textContent = data.error || "Couldn't fetch live data — enter the name manually."; return; }
         const fullName = data.name || query;
-        nameEl.value = fullName;
+        // If you already hold this stock under the name you just typed (e.g. you
+        // typed "TCS" and already have a "TCS" holding), keep that exact name —
+        // switching it to Yahoo's official full name here would create a second,
+        // separate holding instead of updating the one you have, splitting your
+        // Current Value across two line items.
+        const typedKey = invKeyName(query);
+        const existing = investmentGroupByName(countryKey, 'stocks').find(g => g.key === typedKey && g.qty > 0.0000001);
+        const finalName = (existing && invKeyName(fullName) !== existing.key) ? existing.name : fullName;
+        nameEl.value = finalName;
         if(data.price != null){
-          stockLivePriceCache[countryKey + '|' + invKeyName(fullName)] = data.price;
-          statusEl.textContent = `✓ ${data.symbol || fullName} — live price ${fmtCountry(data.price, countryKey)}${data.exchange ? ' (' + data.exchange + ')' : ''}.`;
+          stockLivePriceCache[countryKey + '|' + invKeyName(finalName)] = data.price;
+          statusEl.textContent = finalName !== fullName
+            ? `✓ Matched your existing "${finalName}" holding — live price ${fmtCountry(data.price, countryKey)}.`
+            : `✓ ${data.symbol || fullName} — live price ${fmtCountry(data.price, countryKey)}${data.exchange ? ' (' + data.exchange + ')' : ''}.`;
         } else {
-          statusEl.textContent = `✓ Full name filled in, but no live price was available for ${data.symbol || fullName} — Current will use your buy price until you set one below.`;
+          statusEl.textContent = `✓ Full name filled in, but no live price was available for ${data.symbol || finalName} — Current will use your buy price until you set one below.`;
         }
         updateStocksPreview(countryKey);
       }catch(e){
