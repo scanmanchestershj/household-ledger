@@ -165,6 +165,7 @@
   .alert-banner{ display:flex; align-items:flex-start; gap:10px; border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; font-size:12.5px; line-height:1.45; }
   .alert-banner.warn{ background:#FDF3E3; color:#8A5A00; border:1px solid #F3DEA0; }
   .alert-banner.danger{ background:#FDE3E5; color:#8A2E2E; border:1px solid #F3B8BC; }
+  .alert-banner.info{ background:#E9F1FB; color:#1F4E79; border:1px solid #BCD6F0; }
   .alert-banner .alert-emoji{ font-size:16px; flex:0 0 auto; }
   .alert-banner strong{ display:block; margin-bottom:2px; }
   .suggestion-card{ display:flex; gap:10px; align-items:flex-start; background:var(--paper-deep); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; font-size:12.5px; }
@@ -1639,6 +1640,22 @@
               <button class="add-btn full-width" id="uaeInvGoldAdd">Add entry</button>
               <button class="add-btn ghost full-width" id="uaeInvGoldCancelEdit" style="display:none;">Cancel edit</button>
             </div>
+            <div class="inv-ltp-panel" style="margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div style="font-size:11.5px;font-weight:600;">🌐 Live gold rate</div>
+                <button type="button" class="add-btn ghost" id="uaeGoldRateRefresh" style="padding:4px 10px;font-size:11px;">🔄 Refresh</button>
+              </div>
+              <div id="uaeGoldRateResult" style="font-size:12px;margin-top:6px;color:var(--ink-soft);">Tap refresh to fetch today's rate.</div>
+              <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+                <select id="uaeGoldRateKarat" style="flex:1;min-width:90px;">
+                  <option value="24k">24K (pure)</option>
+                  <option value="22k" selected>22K</option>
+                  <option value="18k">18K</option>
+                </select>
+                <button type="button" class="add-btn" id="uaeGoldRateApply" style="flex:2;" disabled>Apply to my gold holdings</button>
+              </div>
+              <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Applies the chosen karat's rate as today's LTP for every gold entry below. Mixed-purity holdings? Fine-tune individual entries in the price list afterwards.</div>
+            </div>
             <div class="inv-ltp-panel" id="uaeInvGoldPrices"></div>
             <div id="uaeInvGoldSummary"></div>
             <div id="uaeInvGoldList"></div>
@@ -1736,6 +1753,14 @@
               <button type="button" class="add-btn ghost" id="scrUaeShareWa" style="flex:1;">📲 Share</button>
             </div>
             <div id="scrUaeResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <div class="accordion" data-key="uae-rebalance">
+          <button type="button" class="accordion-header"><span>🧮 Portfolio Rebalancing</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Your Stocks holdings (below) matched against the latest UAE Index Screener verdicts above.</div>
+            <div id="uaeRebalanceResult"></div>
           </div>
         </div>
 
@@ -2187,6 +2212,22 @@
               <button class="add-btn full-width" id="indiaInvGoldAdd">Add entry</button>
               <button class="add-btn ghost full-width" id="indiaInvGoldCancelEdit" style="display:none;">Cancel edit</button>
             </div>
+            <div class="inv-ltp-panel" style="margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div style="font-size:11.5px;font-weight:600;">🌐 Live gold rate</div>
+                <button type="button" class="add-btn ghost" id="indiaGoldRateRefresh" style="padding:4px 10px;font-size:11px;">🔄 Refresh</button>
+              </div>
+              <div id="indiaGoldRateResult" style="font-size:12px;margin-top:6px;color:var(--ink-soft);">Tap refresh to fetch today's rate.</div>
+              <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+                <select id="indiaGoldRateKarat" style="flex:1;min-width:90px;">
+                  <option value="24k">24K (pure)</option>
+                  <option value="22k" selected>22K</option>
+                  <option value="18k">18K</option>
+                </select>
+                <button type="button" class="add-btn" id="indiaGoldRateApply" style="flex:2;" disabled>Apply to my gold holdings</button>
+              </div>
+              <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Applies the chosen karat's rate as today's LTP for every gold entry below. Mixed-purity holdings? Fine-tune individual entries in the price list afterwards.</div>
+            </div>
             <div class="inv-ltp-panel" id="indiaInvGoldPrices"></div>
             <div id="indiaInvGoldSummary"></div>
             <div id="indiaInvGoldList"></div>
@@ -2425,6 +2466,25 @@
                   <button type="button" class="add-btn ghost" id="scrStrongBuyShareWa" style="flex:1;">📲 Share</button>
                 </div>
                 <div id="scrStrongBuyResult"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-rebalance" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🧮 Portfolio Rebalancing</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Your Stocks holdings (below, under Investment) matched against the latest scan verdicts above — flags what to trim, what to add to, and what hasn't been scanned yet.</div>
+                <div id="indiaRebalanceResult"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-digest" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>📮 Monthly Portfolio Digest</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">A one-tap summary of your holdings, returns and rebalancing suggestions across both countries — written by Claude when available, otherwise assembled from your numbers directly.</div>
+                <button type="button" class="add-btn full-width" id="portfolioDigestGenerate">✨ Generate this month's digest</button>
+                <div id="portfolioDigestStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="portfolioDigestResult" style="margin-top:10px;white-space:pre-wrap;font-size:12.5px;"></div>
+                <button type="button" class="add-btn ghost full-width" id="portfolioDigestShareWa" style="margin-top:8px;display:none;">📲 Share on WhatsApp</button>
               </div>
             </div>
 
@@ -7978,6 +8038,8 @@
     if(statusEl) statusEl.textContent = `✓ Scanned ${results.length} stocks — last updated ${todayStr()}.`;
     renderBatchResults(cacheKey, resultElId);
     renderStrongBuyList();
+    renderPortfolioRebalancing('India');
+    renderPortfolioRebalancing('UAE');
   }
   // ---- Screener alerts: a stock newly flipping to "Strong Buy" since the previous
   // scan, or a watchlist stock's live price reaching a target the user set. Reuses
@@ -8119,6 +8181,160 @@
     const el = document.getElementById(id);
     if(el) el.addEventListener('click', handler);
   });
+
+  // ---- Portfolio Rebalancing: matches real Stocks holdings (Investment tab,
+  // via investmentGroupByName — defined further below but hoisted, same as
+  // the rest of this module) against the latest scan verdicts above, so the
+  // screener's Buy/Sell calls translate into concrete "trim this / add to
+  // that" suggestions rather than staying abstract. ----
+  const REBALANCE_SCAN_KEYS = {
+    India: ['nifty50', 'nifty100', 'nifty500', 'niftymidcap', 'niftysmallcap', 'custom'],
+    UAE: ['uaeindex']
+  };
+  function normStockName(s){ return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function collectVerdictsForCountry(countryKey){
+    const scans = state.screenerScans || {};
+    const map = {};
+    (REBALANCE_SCAN_KEYS[countryKey] || []).forEach(key => {
+      const scan = scans[key];
+      if(scan && scan.results) scan.results.forEach(r => {
+        if(r.error) return;
+        const n = normStockName(r.name);
+        if(!n || map[n]) return; // first (highest-priority list) match wins
+        map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price };
+      });
+    });
+    return map;
+  }
+  function computeRebalancing(countryKey){
+    const holdings = investmentGroupByName(countryKey, 'stocks').filter(g => g.qty > 0.0000001);
+    const verdictMap = collectVerdictsForCountry(countryKey);
+    const totalCurrent = holdings.reduce((s, g) => s + g.current, 0);
+    const rows = holdings.map(g => {
+      const v = verdictMap[normStockName(g.name)];
+      const weightPct = totalCurrent > 0 ? (g.current / totalCurrent) * 100 : 0;
+      let action, note;
+      if(!v){ action = 'Not scanned'; note = 'Run a scan or a single-stock check for this name to get a verdict.'; }
+      else if(v.verdict === 'Strong Sell' || v.verdict === 'Sell'){ action = 'Trim'; note = `Rated ${v.verdict} — currently ${weightPct.toFixed(1)}% of your stock holdings.`; }
+      else if(v.verdict === 'Strong Buy' && weightPct < 15){ action = 'Add'; note = `Rated Strong Buy and only ${weightPct.toFixed(1)}% of your stock portfolio.`; }
+      else { action = 'Hold'; note = `Rated ${v.verdict}.`; }
+      return { name: g.name, weightPct, verdict: v ? v.verdict : null, action, note, current: g.current, pnlPct: g.pnlPct };
+    });
+    const heldNorm = new Set(holdings.map(g => normStockName(g.name)));
+    const opportunities = Object.values(verdictMap).filter(v => v.verdict === 'Strong Buy' && !heldNorm.has(normStockName(v.name)));
+    return { rows, opportunities, totalCurrent };
+  }
+  const REBALANCE_ACTION_ORDER = { 'Trim': 0, 'Not scanned': 1, 'Add': 2, 'Hold': 3 };
+  const REBALANCE_ACTION_COLOR = { 'Trim': '#c0392b', 'Add': '#1e8449', 'Hold': 'var(--ink-soft)', 'Not scanned': '#b8860b' };
+  function renderPortfolioRebalancing(countryKey){
+    const box = document.getElementById(countryKey === 'UAE' ? 'uaeRebalanceResult' : 'indiaRebalanceResult');
+    if(!box) return;
+    const { rows, opportunities } = computeRebalancing(countryKey);
+    if(!rows.length && !opportunities.length){
+      box.innerHTML = '<div class="empty" style="padding:8px 0;">No stock holdings yet — add some under Stocks below, then run a scan above.</div>';
+      return;
+    }
+    const sorted = [...rows].sort((a, b) => (REBALANCE_ACTION_ORDER[a.action] ?? 4) - (REBALANCE_ACTION_ORDER[b.action] ?? 4));
+    let html = rows.length ? `<table style="width:100%;font-size:12px;border-collapse:collapse;">` +
+      sorted.map(r => `
+        <tr>
+          <td style="padding:5px 0;">${escapeHtml(r.name)}<div style="font-size:10px;color:var(--ink-soft);">${r.weightPct.toFixed(1)}% of stocks${r.verdict ? ' · ' + escapeHtml(r.verdict) : ''}</div></td>
+          <td style="text-align:right;padding:5px 0;white-space:nowrap;"><span style="color:${REBALANCE_ACTION_COLOR[r.action] || 'inherit'};font-weight:600;">${escapeHtml(r.action)}</span></td>
+        </tr>`).join('') + `</table>` : '';
+    if(opportunities.length){
+      html += `<div style="font-size:11.5px;font-weight:600;margin-top:${rows.length ? 10 : 0}px;">💡 Strong Buy stocks you don't hold yet</div>`;
+      html += `<div style="font-size:12px;margin-top:2px;">${opportunities.map(o => escapeHtml(o.name)).join(', ')}</div>`;
+    }
+    html += `<div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Based on your latest scan verdicts — not investment advice. Rescan for up-to-date verdicts before acting.</div>`;
+    box.innerHTML = html;
+  }
+
+  // ---- Monthly Portfolio Digest: builds a plain-text summary from real
+  // holdings/rebalancing numbers already computed above, sends it to
+  // /api/portfolio-digest for Claude to write up (falls back to a
+  // rule-based version client-side if no ANTHROPIC_API_KEY is configured on
+  // Vercel), then offers a WhatsApp share — same openWhatsAppShare() used
+  // elsewhere in the Screener. A lightweight monthly reminder (first 3 days
+  // of the month) reuses the existing notifyForBanners() pattern. ----
+  function buildDigestSummary(){
+    const lines = [];
+    ['UAE', 'India'].forEach(countryKey => {
+      const label = countryKey === 'UAE' ? state.countryConfig.country1.name : state.countryConfig.country2.name;
+      lines.push(`${label} (${countryKey}):`);
+      INVESTMENT_CATS.forEach(cat => {
+        const groups = investmentGroupByName(countryKey, cat.key).filter(g => g.qty > 0.0000001);
+        if(!groups.length) return;
+        const invested = groups.reduce((s, g) => s + g.invested, 0);
+        const current = groups.reduce((s, g) => s + g.current, 0);
+        const pnl = current - invested;
+        const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
+        lines.push(`  ${cat.label}: invested ${fmtCountry(invested, countryKey)}, now worth ${fmtCountry(current, countryKey)} (${pnl >= 0 ? '+' : '−'}${Math.abs(pnlPct).toFixed(1)}%)`);
+        if(cat.key === 'stocks'){
+          const sorted = [...groups].sort((a, b) => Math.abs(b.pnlPct) - Math.abs(a.pnlPct)).slice(0, 3);
+          sorted.forEach(g => lines.push(`    - ${g.name}: ${g.pnlPct >= 0 ? '+' : ''}${g.pnlPct.toFixed(1)}%`));
+        }
+      });
+      const { rows, opportunities } = computeRebalancing(countryKey);
+      const trims = rows.filter(r => r.action === 'Trim').map(r => r.name);
+      const adds = rows.filter(r => r.action === 'Add').map(r => r.name);
+      if(trims.length) lines.push(`  Suggested to trim: ${trims.join(', ')}`);
+      if(adds.length) lines.push(`  Suggested to add to: ${adds.join(', ')}`);
+      if(opportunities.length) lines.push(`  Not held but Strong Buy: ${opportunities.slice(0, 5).map(o => o.name).join(', ')}`);
+    });
+    return lines.join('\n');
+  }
+  function buildFallbackDigest(summary, month){
+    return `📮 Portfolio Digest — ${month}\n\n${summary}\n\nNot investment advice — your own numbers, laid out for a quick monthly check-in.`;
+  }
+  const digestGenerateBtn = document.getElementById('portfolioDigestGenerate');
+  const digestStatusEl = document.getElementById('portfolioDigestStatus');
+  const digestResultEl = document.getElementById('portfolioDigestResult');
+  const digestShareBtn = document.getElementById('portfolioDigestShareWa');
+  let lastDigestText = '';
+  if(digestGenerateBtn){
+    digestGenerateBtn.addEventListener('click', async () => {
+      const month = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      const summary = buildDigestSummary();
+      if(!summary.trim()){ digestStatusEl.textContent = 'Add some holdings first — nothing to summarize yet.'; return; }
+      digestGenerateBtn.disabled = true;
+      digestStatusEl.textContent = 'Writing your digest…';
+      digestResultEl.textContent = '';
+      digestShareBtn.style.display = 'none';
+      try{
+        const res = await fetch('/api/portfolio-digest', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ month, summary })
+        });
+        const data = await res.json();
+        if(data && data.digest){
+          lastDigestText = data.digest;
+          digestStatusEl.textContent = '✓ Written by Claude.';
+        } else {
+          lastDigestText = buildFallbackDigest(summary, month);
+          digestStatusEl.textContent = data && data.reason ? `Using your raw numbers (${data.reason})` : '✓ Assembled from your numbers.';
+        }
+      }catch(e){
+        lastDigestText = buildFallbackDigest(summary, month);
+        digestStatusEl.textContent = '✓ Assembled from your numbers (offline or the AI digest endpoint failed).';
+      }
+      digestResultEl.textContent = lastDigestText;
+      digestShareBtn.style.display = '';
+      digestGenerateBtn.disabled = false;
+      localStorage.setItem('shb_digest_generated_' + month, '1');
+    });
+  }
+  if(digestShareBtn){
+    digestShareBtn.addEventListener('click', () => { if(lastDigestText) openWhatsAppShare(lastDigestText); });
+  }
+  // Monthly reminder banner — first 3 days of the month, once per month per device,
+  // same de-dupe key style as the daily notifyForBanners() flags.
+  function checkMonthlyDigestReminder(){
+    const now = new Date();
+    if(now.getDate() > 3) return null;
+    const month = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    if(localStorage.getItem('shb_digest_generated_' + month)) return null;
+    return { key: 'monthly-digest-' + month.replace(/\s/g, ''), type: 'info', emoji: '📮', title: `Your ${month} portfolio digest is ready to generate`, body: 'Open Investment → Screener → Monthly Portfolio Digest to view and share it.' };
+  }
 
   // ---- Stock detail chart: click any stock in the scanner/watchlist/
   // Strong Buy tables (or "View price chart" on a single-stock technical
@@ -8625,6 +8841,8 @@
   renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
   renderBatchResults('custom', 'scrCustomResult');
   renderStrongBuyList();
+    renderPortfolioRebalancing('India');
+    renderPortfolioRebalancing('UAE');
 
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
     const months = years * 12;
@@ -10210,6 +10428,8 @@
     renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
     renderBatchResults('custom', 'scrCustomResult');
     renderStrongBuyList();
+    renderPortfolioRebalancing('India');
+    renderPortfolioRebalancing('UAE');
   }
   const indiaIncludeRemitToggle = document.getElementById('indiaIncludeRemitInDebt');
   if(indiaIncludeRemitToggle) indiaIncludeRemitToggle.addEventListener('change', () => {
@@ -10886,6 +11106,7 @@
         <div class="stat ${pnlClass}"><div class="num">${maskedField('inv_returns_' + countryKey, rawValue(() => (totalPnl >= 0 ? '+' : '−') + fmtCountry(Math.abs(totalPnl), countryKey)))}</div><div class="label">returns (${totalPnl >= 0 ? '+' : '−'}${Math.abs(totalPnlPct).toFixed(2)}%)</div></div>
       `;
     }
+    renderPortfolioRebalancing(countryKey);
   }
 
   INVESTMENT_CATS.forEach(catCfg => {
@@ -10897,6 +11118,56 @@
       if(cancelBtn) cancelBtn.addEventListener('click', () => cancelEditInvestment(countryKey, catCfg));
     });
   });
+
+  // ---- Live gold rate widget (Gold sections, both countries) — fetches
+  // /api/gold-rate and can apply the chosen karat's rate as today's LTP to
+  // every held gold entry in one tap, same update+re-render path as manually
+  // editing the LTP box above (investmentPricesMap + save() + renderInvestmentCountry()). ----
+  const goldRateCache = {};
+  async function fetchGoldRate(){
+    if(goldRateCache._promise) return goldRateCache._promise;
+    goldRateCache._promise = fetch('/api/gold-rate').then(r => r.json()).then(data => {
+      if(data && data.rates){ goldRateCache.rates = data.rates; goldRateCache.asOf = data.asOf; }
+      return data;
+    }).finally(() => { goldRateCache._promise = null; });
+    return goldRateCache._promise;
+  }
+  function wireGoldRateWidget(countryKey){
+    const idBase = countryKey === 'UAE' ? 'uae' : 'india';
+    const currency = countryKey === 'UAE' ? 'AED' : 'INR';
+    const symbol = countryKey === 'UAE' ? 'AED ' : '₹';
+    const refreshBtn = document.getElementById(idBase + 'GoldRateRefresh');
+    const resultEl = document.getElementById(idBase + 'GoldRateResult');
+    const karatSel = document.getElementById(idBase + 'GoldRateKarat');
+    const applyBtn = document.getElementById(idBase + 'GoldRateApply');
+    if(!refreshBtn) return;
+    refreshBtn.addEventListener('click', async () => {
+      resultEl.textContent = 'Fetching live rate…';
+      applyBtn.disabled = true;
+      try{
+        const data = await fetchGoldRate();
+        if(!data || data.error || !data.rates){ resultEl.textContent = (data && data.error) || "Couldn't fetch a live rate right now."; return; }
+        const r = data.rates[currency];
+        resultEl.innerHTML = `24K: ${symbol}${r['24k']}/g &nbsp; 22K: ${symbol}${r['22k']}/g &nbsp; 18K: ${symbol}${r['18k']}/g<br><span style="font-size:10px;">As of ${new Date(data.asOf).toLocaleString()}</span>`;
+        applyBtn.disabled = false;
+      }catch(e){ resultEl.textContent = "Couldn't fetch a live rate right now — check your connection."; }
+    });
+    applyBtn.addEventListener('click', () => {
+      const rates = goldRateCache.rates && goldRateCache.rates[currency];
+      if(!rates){ alert('Fetch the live rate first.'); return; }
+      const karat = karatSel.value;
+      const rate = rates[karat];
+      const prices = investmentPricesMap(countryKey, 'gold');
+      const groups = investmentGroupByName(countryKey, 'gold').filter(g => g.qty > 0.0000001);
+      if(!groups.length){ alert('No gold holdings yet — add an entry first.'); return; }
+      groups.forEach(g => { prices[g.key] = rate; });
+      save();
+      renderInvestmentCountry(countryKey);
+      alert(`Applied ${karat.toUpperCase()} rate (${symbol}${rate}/g) to ${groups.length} gold holding${groups.length === 1 ? '' : 's'}.`);
+    });
+  }
+  wireGoldRateWidget('UAE');
+  wireGoldRateWidget('India');
 
   // ---- Backup & restore (choose where to save) ----
   async function saveBackupNow(){
@@ -11151,6 +11422,12 @@
         body: `${names}${expiringDocs.length > 3 ? ' and others' : ''} — check "Important dates & documents" below.`
       });
     }
+
+    // Monthly portfolio digest reminder (first 3 days of the month, once generated it stops).
+    try{
+      const digestBanner = checkMonthlyDigestReminder();
+      if(digestBanner) banners.push(digestBanner);
+    }catch(e){ /* screener module not initialized yet — skip silently */ }
 
     if(banners.length === 0){ box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = '';
