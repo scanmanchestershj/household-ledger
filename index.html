@@ -9446,10 +9446,37 @@
       dueEl.innerHTML = Object.keys(byBank).map(bank => {
         const info = byBank[bank];
         const dates = [...info.dueDates].sort().join(', ');
-        return `<div class="breakdown-row"><span class="label">Total ${escapeHtml(bank)} — due ${escapeHtml(dates)}</span><span><strong>${curFmt(info.total)}</strong></span></div>`;
+        const bankCards = filteredDue.filter(c => c.bank === bank);
+        const allSettled = bankCards.every(c => c.paid);
+        const settleBtn = allSettled
+          ? `<button type="button" class="link-btn due-unsettle-btn" data-bank="${escapeHtml(bank)}">✓ settled — undo</button>`
+          : `<button type="button" class="link-btn due-settle-btn" data-bank="${escapeHtml(bank)}">mark settled</button>`;
+        return `<div class="breakdown-row"><span class="label">Total ${escapeHtml(bank)} — due ${escapeHtml(dates)}</span><span style="display:flex;align-items:center;gap:8px;"><strong>${curFmt(info.total)}</strong>${settleBtn}</span></div>`;
       }).join('') + `
         <div class="breakdown-row" style="border-top:2px solid var(--line); margin-top:4px;"><span class="label">Total due this period${bankFilter ? ' (' + escapeHtml(bankFilter) + ')' : ''}</span><span><strong>${curFmt(filteredTotal)}</strong></span></div>
+        <div style="font-size:10px;color:var(--ink-soft);margin-top:6px;">Marking a bank settled here pays off that due batch — it's the same 'paid' status Net Worth's combined debt figure reads, so settling reduces it.</div>
       `;
+      dueEl.querySelectorAll('.due-settle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const bank = btn.dataset.bank;
+          const targets = filteredDue.filter(c => c.bank === bank && !c.paid);
+          if(!targets.length) return;
+          const total = targets.reduce((s,c) => s + Number(c.amount), 0);
+          if(!confirm(`Mark ${targets.length} ${bank} due item${targets.length === 1 ? '' : 's'} totaling ${curFmt(total)} as settled?`)) return;
+          const paidDate = todayStr();
+          targets.forEach(c => { c.paid = true; c.paidDate = paidDate; });
+          save(); renderReport(); renderNetWorth();
+        });
+      });
+      dueEl.querySelectorAll('.due-unsettle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const bank = btn.dataset.bank;
+          const targets = filteredDue.filter(c => c.bank === bank && c.paid);
+          if(!targets.length) return;
+          targets.forEach(c => { c.paid = false; c.paidDate = ''; });
+          save(); renderReport(); renderNetWorth();
+        });
+      });
     }
 
     const personEl = document.getElementById('reportPersonBreakdown');
