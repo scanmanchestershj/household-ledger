@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover">
 <title>The Household Ledger</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1F6F63">
+<meta name="theme-color" content="#1B2A4A">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -324,8 +324,11 @@
   footer{ text-align:center; color:var(--ink-soft); font-size:12px; padding:20px 0 6px 0; }
 
   /* Login gate */
-  .gate{ min-height:100vh; background: linear-gradient(135deg, var(--paper) 0%, var(--paper-deep) 100%); display:flex; align-items:center; justify-content:center; padding:24px; }
-  .gate-inner{ max-width:440px; width:100%; }
+  .gate{ position:relative; min-height:100vh; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:24px; overflow:hidden; }
+  .gate-bg-layer{ position:absolute; inset:0; background-size:cover; background-position:center; opacity:0; transition:opacity 2.2s ease; z-index:0; }
+  .gate-bg-layer.visible{ opacity:1; }
+  .gate-scrim{ position:absolute; inset:0; background:linear-gradient(135deg, rgba(245,246,250,0.55) 0%, rgba(233,235,241,0.68) 100%); z-index:1; }
+  .gate-inner{ position:relative; z-index:2; max-width:440px; width:100%; }
   .gate-card{ background:var(--card); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
   .gate-card-header{ background:linear-gradient(135deg, var(--navbar-bg) 0%, color-mix(in srgb, var(--navbar-bg), black 18%) 100%); padding:30px 26px 24px 26px; }
   #loginGate button.add-btn:not(.ghost){ background:var(--navbar-bg); color:var(--navbar-ink); }
@@ -410,6 +413,9 @@
 <script src="config.js"></script>
 
 <div class="gate" id="loginGate">
+  <div class="gate-bg-layer" id="gateBgA"></div>
+  <div class="gate-bg-layer" id="gateBgB"></div>
+  <div class="gate-scrim"></div>
   <div class="gate-inner">
     <div class="gate-card">
       <div class="gate-card-header">
@@ -3763,6 +3769,45 @@
   });
 
   // ---- Login gate ----
+  // Auto-rotating nature photo background: two stacked layers crossfade so
+  // the swap isn't an abrupt jump-cut (background-image itself doesn't
+  // transition smoothly across browsers, but opacity does).
+  const GATE_BG_IMAGES = [
+    'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1600&q=60',
+    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1600&q=60',
+    'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1600&q=60',
+    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1600&q=60',
+    'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1600&q=60',
+    'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=1600&q=60',
+    'https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=1600&q=60',
+    'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=1600&q=60'
+  ];
+  function setupGateBackground(){
+    const layerA = document.getElementById('gateBgA');
+    const layerB = document.getElementById('gateBgB');
+    if(!layerA || !layerB) return;
+    let activeIsA = true;
+    let currentIndex = -1;
+    function nextIndex(){
+      if(GATE_BG_IMAGES.length <= 1) return 0;
+      let idx;
+      do { idx = Math.floor(Math.random() * GATE_BG_IMAGES.length); } while(idx === currentIndex);
+      return idx;
+    }
+    function showNext(){
+      currentIndex = nextIndex();
+      const showEl = activeIsA ? layerB : layerA;
+      const hideEl = activeIsA ? layerA : layerB;
+      showEl.style.backgroundImage = `url('${GATE_BG_IMAGES[currentIndex]}')`;
+      showEl.classList.add('visible');
+      hideEl.classList.remove('visible');
+      activeIsA = !activeIsA;
+    }
+    showNext();
+    setInterval(showNext, 15000);
+  }
+  setupGateBackground();
+
   function setupGate(){
     let qIndex = Math.floor(Math.random() * SAVINGS_QUOTES.length);
     const qEl = document.getElementById('gateQuote');
