@@ -4,7 +4,7 @@
 // and your live household data always go straight to the network so you
 // never see stale or out-of-sync figures.
 
-const CACHE_NAME = 'household-ledger-shell-v1';
+const CACHE_NAME = 'household-ledger-shell-v2';
 const SHELL_FILES = [
   './',
   './index.html',

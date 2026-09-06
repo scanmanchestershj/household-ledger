@@ -329,7 +329,8 @@
   .gate-bg-layer.visible{ opacity:1; }
   .gate-scrim{ position:absolute; inset:0; background:linear-gradient(135deg, rgba(245,246,250,0.55) 0%, rgba(233,235,241,0.68) 100%); z-index:1; }
   .gate-inner{ position:relative; z-index:2; max-width:440px; width:100%; }
-  .gate-card{ background:var(--card); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
+  .gate-card{ background:rgba(255,255,255,0.72); backdrop-filter:blur(14px) saturate(1.4); -webkit-backdrop-filter:blur(14px) saturate(1.4); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; border:1px solid rgba(255,255,255,0.5); }
+  .gate-card-body{ background:transparent; }
   .gate-card-header{ background:linear-gradient(135deg, var(--navbar-bg) 0%, color-mix(in srgb, var(--navbar-bg), black 18%) 100%); padding:30px 26px 24px 26px; }
   #loginGate button.add-btn:not(.ghost){ background:var(--navbar-bg); color:var(--navbar-ink); }
   #loginGate a{ color:var(--navbar-bg); }
