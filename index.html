@@ -23,9 +23,9 @@
 </style>
 <style>
   :root{
-    --paper: #F5F6FA;
-    --paper-deep: #E9EBF1;
-    --card: #FFFFFF;
+    --paper: rgba(245,246,250,0.55);
+    --paper-deep: rgba(233,235,241,0.65);
+    --card: rgba(255,255,255,0.90);
     --ink: #2A2E2D;
     --ink-soft: #7C8681;
     --teal: #D97B3F;
@@ -42,7 +42,7 @@
     --radius: 14px;
   }
   html.dark-mode{
-    --card: #242726;
+    --card: rgba(36,39,38,0.90);
     --ink: #EDEFEE;
     --ink-soft: #9AA39E;
     --heading-ink: #EDEFEE;
@@ -51,17 +51,37 @@
   *{box-sizing:border-box;}
   body{
     margin:0;
-    background:var(--paper);
+    background:transparent;
     color:var(--ink);
     font-family:'Work Sans', sans-serif;
     -webkit-font-smoothing:antialiased;
   }
   .app{
+    position:relative;
+    z-index:2;
     max-width:640px;
     margin:0 auto;
     min-height:100vh;
     background:var(--paper);
     padding-bottom:40px;
+  }
+  /* Frosted-glass blur on the main structural surfaces so the rotating
+     nature background reads clearly through them, not just around them.
+     Grouped rather than added per-selector to keep this maintainable —
+     tier 1 covers primary content cards (kept more opaque via --card for
+     data readability), tier 2 covers secondary/chip surfaces (--paper-deep,
+     free to be more translucent since they hold less critical text). */
+  main, .stat, .accordion, .device-card, .debt-card, .overspend-gauge,
+  .monthly-spend-card, .breakdown-detail, .gate-card{
+    backdrop-filter:blur(16px) saturate(1.3);
+    -webkit-backdrop-filter:blur(16px) saturate(1.3);
+  }
+  .form-grid, .suggestion-card, .market-snapshot-card, .sa-cat-chip,
+  .converter-box, .debt-summary-box, .inv-summary-row, .budget-summary,
+  .inv-ltp-row, .accordion-header, .cards-side, .overspend-gauge-track,
+  .catbudget-track, .spend-analysis-bar-track, .bar-track{
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
   }
   @media (min-width:900px){
     .app{ max-width:1200px; }
@@ -323,11 +343,15 @@
 
   footer{ text-align:center; color:var(--ink-soft); font-size:12px; padding:20px 0 6px 0; }
 
+  /* Global rotating nature background — fixed behind both the login gate
+     and the main app, so the same photo/rotation persists across both
+     screens instead of resetting or being login-only. */
+  .app-bg-layer{ position:fixed; inset:0; background-size:cover; background-position:center; opacity:0; transition:opacity 2.2s ease; z-index:0; }
+  .app-bg-layer.visible{ opacity:1; }
+  .app-bg-scrim{ position:fixed; inset:0; background:rgba(10,20,40,0.22); z-index:1; }
+
   /* Login gate */
-  .gate{ position:relative; min-height:100vh; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:24px; overflow:hidden; }
-  .gate-bg-layer{ position:absolute; inset:0; background-size:cover; background-position:center; opacity:0; transition:opacity 2.2s ease; z-index:0; }
-  .gate-bg-layer.visible{ opacity:1; }
-  .gate-scrim{ position:absolute; inset:0; background:rgba(10,20,40,0.22); z-index:1; }
+  .gate{ position:relative; z-index:2; min-height:100vh; background:transparent; display:flex; align-items:center; justify-content:center; padding:24px; }
   .gate-inner{ position:relative; z-index:2; max-width:440px; width:100%; }
   .gate-card{ background:rgba(255,255,255,0.22); backdrop-filter:blur(24px) saturate(1.6); -webkit-backdrop-filter:blur(24px) saturate(1.6); border-radius:18px; box-shadow:0 8px 32px rgba(0,0,0,0.25); overflow:hidden; border:1px solid rgba(255,255,255,0.35); }
   .gate-card-body{ background:transparent; }
@@ -410,13 +434,13 @@
 </style>
 </head>
 <body>
+<div class="app-bg-layer" id="gateBgA"></div>
+<div class="app-bg-layer" id="gateBgB"></div>
+<div class="app-bg-scrim"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 
 <div class="gate" id="loginGate">
-  <div class="gate-bg-layer" id="gateBgA"></div>
-  <div class="gate-bg-layer" id="gateBgB"></div>
-  <div class="gate-scrim"></div>
   <div class="gate-inner">
     <div class="gate-card">
       <div class="gate-card-header">
@@ -2837,10 +2861,17 @@
     const a = hexToRgb(hex), b = hexToRgb(towardHex);
     return rgbToHex(a.r + (b.r-a.r)*amount, a.g + (b.g-a.g)*amount, a.b + (b.b-a.b)*amount);
   }
+  function toRgba(hex, alpha){
+    const c = hexToRgb(hex);
+    return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+  }
   function applyThemeVars(vars){
     const root = document.documentElement;
-    root.style.setProperty('--paper', vars.paper);
-    root.style.setProperty('--paper-deep', vars.paperDeep);
+    // paper/paper-deep are always applied as translucent rgba (not the raw
+    // opaque hex) so every theme keeps the rotating nature background
+    // visible through the glass, whichever hue is picked.
+    root.style.setProperty('--paper', toRgba(vars.paper, 0.55));
+    root.style.setProperty('--paper-deep', toRgba(vars.paperDeep, 0.65));
     root.style.setProperty('--teal', vars.teal);
     root.style.setProperty('--teal-dark', vars.tealDark);
     root.style.setProperty('--line', vars.line);
@@ -3769,11 +3800,13 @@
     updateHomeCountryVisibility();
   });
 
-  // ---- Login gate ----
-  // Auto-rotating nature photo background: two stacked layers crossfade so
-  // the swap isn't an abrupt jump-cut (background-image itself doesn't
-  // transition smoothly across browsers, but opacity does).
-  const GATE_BG_IMAGES = [
+  // ---- App-wide background ----
+  // Auto-rotating nature photo background, fixed behind both the login gate
+  // and the main app (moved to <body> level so it's shared, not re-created
+  // per screen). Two stacked layers crossfade so the swap isn't an abrupt
+  // jump-cut (background-image itself doesn't transition smoothly across
+  // browsers, but opacity does).
+  const APP_BG_IMAGES = [
     'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1600&q=60',
     'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1600&q=60',
     'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1600&q=60',
@@ -3783,23 +3816,23 @@
     'https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&w=1600&q=60',
     'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=1600&q=60'
   ];
-  function setupGateBackground(){
+  function setupAppBackground(){
     const layerA = document.getElementById('gateBgA');
     const layerB = document.getElementById('gateBgB');
     if(!layerA || !layerB) return;
     let activeIsA = true;
     let currentIndex = -1;
     function nextIndex(){
-      if(GATE_BG_IMAGES.length <= 1) return 0;
+      if(APP_BG_IMAGES.length <= 1) return 0;
       let idx;
-      do { idx = Math.floor(Math.random() * GATE_BG_IMAGES.length); } while(idx === currentIndex);
+      do { idx = Math.floor(Math.random() * APP_BG_IMAGES.length); } while(idx === currentIndex);
       return idx;
     }
     function showNext(){
       currentIndex = nextIndex();
       const showEl = activeIsA ? layerB : layerA;
       const hideEl = activeIsA ? layerA : layerB;
-      showEl.style.backgroundImage = `url('${GATE_BG_IMAGES[currentIndex]}')`;
+      showEl.style.backgroundImage = `url('${APP_BG_IMAGES[currentIndex]}')`;
       showEl.classList.add('visible');
       hideEl.classList.remove('visible');
       activeIsA = !activeIsA;
@@ -3807,8 +3840,9 @@
     showNext();
     setInterval(showNext, 15000);
   }
-  setupGateBackground();
+  setupAppBackground();
 
+  // ---- Login gate ----
   function setupGate(){
     let qIndex = Math.floor(Math.random() * SAVINGS_QUOTES.length);
     const qEl = document.getElementById('gateQuote');
