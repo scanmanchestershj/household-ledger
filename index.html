@@ -541,6 +541,7 @@
     <button class="tab" draggable="true" data-panel="uae">Resident Country</button>
     <button class="tab" draggable="true" data-panel="india" id="homeCountryTabBtn">Home Country</button>
     <button class="tab" draggable="true" data-panel="health">Health</button>
+    <button class="tab" draggable="true" data-panel="travel">Travel</button>
     <button class="tab" draggable="true" data-panel="report">Report</button>
     <button class="tab" draggable="true" data-panel="admin" id="adminTabBtn" style="display:none;">Admin<span id="adminReqBadge" style="display:none;"></span></button>
   </nav>
@@ -2759,6 +2760,54 @@
       </div>
     </section>
 
+    <!-- TRAVEL -->
+    <section class="panel" id="panel-travel">
+      <div class="section-title" style="margin-top:0;">✈️ Travel</div>
+
+      <div class="accordion" data-key="travel-flights">
+        <button type="button" class="accordion-header"><span>🔍 Flight Price Checker</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Searches live fares across airlines for a route and date — type a city name or a 3-letter airport code (e.g. Dubai or DXB).</div>
+          <div class="form-grid" style="margin-bottom:8px;">
+            <div>
+              <label class="field-label">From</label>
+              <input type="text" id="flightFrom" placeholder="e.g. Dubai or DXB">
+            </div>
+            <div>
+              <label class="field-label">To</label>
+              <input type="text" id="flightTo" placeholder="e.g. Mumbai or BOM">
+            </div>
+            <div>
+              <label class="field-label">Depart</label>
+              <input type="date" id="flightDepart">
+            </div>
+            <div>
+              <label class="field-label">Return (optional)</label>
+              <input type="date" id="flightReturn">
+            </div>
+            <div>
+              <label class="field-label">Adults</label>
+              <input type="number" id="flightAdults" value="1" min="1" step="1">
+            </div>
+            <div>
+              <label class="field-label">Currency</label>
+              <select id="flightCurrency">
+                <option value="INR">INR</option>
+                <option value="AED">AED</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" class="add-btn full-width" id="flightSearchBtn">🔍 Search flights</button>
+          <div id="flightSearchStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
+          <div id="flightSearchResults" style="margin-top:10px;"></div>
+          <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Fares shown are indicative, sourced from a live flight-search API — actual price and availability are confirmed only at booking on the airline/OTA site. Not affiliated with Skyscanner.</div>
+        </div>
+      </div>
+    </section>
+
     <section class="panel" id="panel-admin">
       <div class="section-title" style="margin-top:0;">My account</div>
       <div class="form-grid">
@@ -3113,7 +3162,7 @@
   let viewingUserId = null; // which user's data is currently shown — admin can switch this
   let activeCardSlot = 'resident'; // which country's Cards module is currently mounted/filtered
 
-  const ALL_TABS = ['overview','report','uae','india','health'];
+  const ALL_TABS = ['overview','report','uae','india','health','travel'];
   function currentData(){
     const id = viewingUserId || (currentUser && currentUser.id);
     if(!id) return defaultUserData();
@@ -8823,17 +8872,39 @@
     if(btn && btn.dataset.symbol){ openStockChartModal(btn.dataset.symbol, btn.dataset.name); }
   });
 
+  // Curated list of the largest DFM General Index / FTSE ADX General Index
+  // constituents (moved in-line from the old /api/uae-index.js — it was a
+  // pure static list of names, not a live feed, so it doesn't need a round
+  // trip through a serverless function). Neither DFM nor ADX publish a
+  // clean unauthenticated constituent feed, so this needs occasional manual
+  // updates if index composition changes.
+  const UAE_INDEX_LIST = [
+    ['Emirates NBD Bank', 'EMIRATESNBD', 'DFM'],
+    ['Dubai Electricity & Water Authority', 'DEWA', 'DFM'],
+    ['Emaar Properties', 'EMAAR', 'DFM'],
+    ['Mashreqbank', 'MASQ', 'DFM'],
+    ['Dubai Islamic Bank', 'DIB', 'DFM'],
+    ['Emaar Development', 'EMAARDEV', 'DFM'],
+    ['du (Emirates Integrated Telecom)', 'DU', 'DFM'],
+    ['Salik Company', 'SALIK', 'DFM'],
+    ['Commercial Bank of Dubai', 'CBD', 'DFM'],
+    ['Talabat Holding', 'TALABAT', 'DFM'],
+    ['International Holding Company', 'IHC', 'ADX'],
+    ['Abu Dhabi National Energy Co (TAQA)', 'TAQA', 'ADX'],
+    ['ADNOC Gas', 'ADNOCGAS', 'ADX'],
+    ['First Abu Dhabi Bank', 'FAB', 'ADX'],
+    ['e& (Etisalat Group)', 'EAND', 'ADX'],
+    ['Abu Dhabi Commercial Bank', 'ADCB', 'ADX'],
+    ['ADNOC Drilling', 'ADNOCDRILL', 'ADX'],
+    ['Abu Dhabi Islamic Bank', 'ADIB', 'ADX'],
+    ['Alpha Dhabi Holding', 'ALPHADHABI', 'ADX'],
+    ['Borouge', 'BOROUGE', 'ADX']
+  ];
   let uaeIndexListCache = null;
   async function getUaeIndexList(){
     if(uaeIndexListCache) return { list: uaeIndexListCache };
-    try{
-      const res = await fetch('/api/uae-index');
-      const data = await res.json();
-      uaeIndexListCache = data.list || [];
-      return { list: uaeIndexListCache, note: data.note };
-    }catch(e){
-      return { list: [], note: "Couldn't load the UAE index list." };
-    }
+    uaeIndexListCache = UAE_INDEX_LIST.map(([name, symbol, exchange]) => ({ name: `${name} (${exchange})`, symbol: symbol + '.AE' }));
+    return { list: uaeIndexListCache };
   }
   async function ensureUaeIndexScan(force){
     const scan = state.screenerScans && state.screenerScans.uaeindex;
@@ -11761,6 +11832,56 @@
   }
   wireStocksAutoFill('UAE');
   wireStocksAutoFill('India');
+
+  // ---- Travel: Flight Price Checker (calls /api/flights, Amadeus-backed) ----
+  document.getElementById('flightDepart').value = todayStr();
+  document.getElementById('flightSearchBtn').addEventListener('click', async () => {
+    const from = document.getElementById('flightFrom').value.trim();
+    const to = document.getElementById('flightTo').value.trim();
+    const departDate = document.getElementById('flightDepart').value;
+    const returnDate = document.getElementById('flightReturn').value;
+    const adults = document.getElementById('flightAdults').value || '1';
+    const currency = document.getElementById('flightCurrency').value;
+    const statusEl = document.getElementById('flightSearchStatus');
+    const resultsEl = document.getElementById('flightSearchResults');
+    if(!from || !to || !departDate){ statusEl.textContent = 'Fill in From, To, and Depart date first.'; return; }
+    statusEl.textContent = `Searching ${from} → ${to}…`;
+    resultsEl.innerHTML = '';
+    try{
+      const params = new URLSearchParams({ from, to, departDate, adults, currency });
+      if(returnDate) params.set('returnDate', returnDate);
+      const res = await fetch(`/api/flights?${params.toString()}`);
+      const data = await res.json();
+      if(data.reason === 'not_configured'){
+        statusEl.textContent = '';
+        resultsEl.innerHTML = `<div class="empty">Flight search isn't set up yet. ${escapeHtml(data.message)}</div>`;
+        return;
+      }
+      if(!data.offers || !data.offers.length){
+        statusEl.textContent = '';
+        resultsEl.innerHTML = `<div class="empty">${escapeHtml(data.message || 'No flights found for that route/date.')}</div>`;
+        return;
+      }
+      statusEl.textContent = `${data.offers.length} fare${data.offers.length === 1 ? '' : 's'} found, ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}, cheapest first.`;
+      const fmtDuration = (iso) => {
+        if(!iso) return '';
+        const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+        if(!m) return iso;
+        return `${m[1] ? m[1] + 'h ' : ''}${m[2] ? m[2] + 'm' : ''}`.trim();
+      };
+      const fmtTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+      resultsEl.innerHTML = data.offers.map((o, i) => `
+        <div style="padding:10px 12px;margin-bottom:8px;background:var(--paper-deep);border-radius:10px;${i === 0 ? 'border:1px solid var(--teal);' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:600;font-size:13px;">${escapeHtml(o.airline)}${i === 0 ? ' <span style="font-size:10px;color:var(--teal-dark);">CHEAPEST</span>' : ''}</div>
+            <div style="font-size:15px;font-weight:700;">${o.currency} ${Number(o.price).toLocaleString()}</div>
+          </div>
+          <div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">${fmtTime(o.departure)} → ${fmtTime(o.arrival)} · ${fmtDuration(o.duration)} · ${o.stops === 0 ? 'Nonstop' : o.stops + ' stop' + (o.stops === 1 ? '' : 's')}</div>
+        </div>`).join('');
+    }catch(e){
+      statusEl.textContent = "Couldn't reach the flight search service — check your connection and try again.";
+    }
+  });
 
   // ---- All Stocks Overview + Rescan Now: a single consolidated table across
   // every held stock (qty, avg buy price, LTP, current value, return) sitting
