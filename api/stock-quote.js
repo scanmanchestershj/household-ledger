@@ -125,7 +125,7 @@ async function getCookieAndCrumb() {
 }
 async function getFundamentals(symbol) {
   const { cookieHeader, crumb } = await getCookieAndCrumb();
-  const modules = 'defaultKeyStatistics,financialData,summaryDetail';
+  const modules = 'defaultKeyStatistics,financialData,summaryDetail,assetProfile';
   const data = await fetchJson(`${YAHOO_QUOTE_SUMMARY}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`, {
     headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Cookie': cookieHeader }
   });
@@ -134,6 +134,7 @@ async function getFundamentals(symbol) {
   const keyStats = result.defaultKeyStatistics || {};
   const financialData = result.financialData || {};
   const summaryDetail = result.summaryDetail || {};
+  const assetProfile = result.assetProfile || {};
   const pick = (obj) => (obj && typeof obj.raw === 'number' ? obj.raw : null);
   return {
     eps: pick(keyStats.trailingEps),
@@ -146,7 +147,9 @@ async function getFundamentals(symbol) {
     returnOnEquity: pick(financialData.returnOnEquity) != null ? pick(financialData.returnOnEquity) * 100 : null,
     currentRatio: pick(financialData.currentRatio),
     operatingCashflow: pick(financialData.operatingCashflow),
-    freeCashflow: pick(financialData.freeCashflow)
+    freeCashflow: pick(financialData.freeCashflow),
+    sector: assetProfile.sector || null,
+    industry: assetProfile.industry || null
   };
 }
 
@@ -183,8 +186,11 @@ module.exports = async (req, res) => {
 
   let fundamentals = null;
   // Only worth the extra crumb round-trip if the batch quote didn't already
-  // give us EPS/book value.
-  if (!v7 || v7.eps == null || v7.bookValue == null) {
+  // give us EPS/book value — unless the caller explicitly needs sector info
+  // (Sector/Peer Comparison), which only ever comes from this crumb-gated
+  // quoteSummary call, never the fast batch quote.
+  const needSector = req.query && (req.query.need === 'sector' || req.query.includeSector === '1');
+  if (!v7 || v7.eps == null || v7.bookValue == null || needSector) {
     try { fundamentals = await getFundamentals(resolved.symbol); } catch (e) { /* fundamentals optional — degrade gracefully */ }
   }
 
@@ -210,6 +216,8 @@ module.exports = async (req, res) => {
     returnOnEquity: fundamentals ? fundamentals.returnOnEquity : null,
     currentRatio: fundamentals ? fundamentals.currentRatio : null,
     operatingCashflow: fundamentals ? fundamentals.operatingCashflow : null,
-    freeCashflow: fundamentals ? fundamentals.freeCashflow : null
+    freeCashflow: fundamentals ? fundamentals.freeCashflow : null,
+    sector: fundamentals ? fundamentals.sector : null,
+    industry: fundamentals ? fundamentals.industry : null
   });
 };

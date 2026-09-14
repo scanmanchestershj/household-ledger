@@ -2575,6 +2575,42 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-portfolio-tracker" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>📊 Portfolio Tracker</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Every stock you actually hold, tracked against its latest scanned verdict and signal breakdown — not just the watchlist. Uses your existing holdings + the last scan you ran above, so it doesn't need any extra data stored.</div>
+                <div id="indiaPortfolioTrackerResult"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-sector-peer" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🏷️ Sector / Peer Comparison</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Groups your held + watchlist stocks by sector so you can see how each one's verdict compares to its peers. Sector is looked up live per stock (not stored) the first time you tap Refresh in a session.</div>
+                <button type="button" class="add-btn full-width" id="sectorPeerRefresh">🔍 Load sector comparison</button>
+                <div id="sectorPeerStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
+                <div id="sectorPeerResult" style="margin-top:10px;"></div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-custom-weights" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>⚖️ Custom Scoring Weights</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Adjust how much each technical signal counts toward a Personalized Score, shown alongside the official verdict when you open a stock's chart. Only a handful of numbers are saved — everything else recomputes from data already being fetched, nothing extra stored.</div>
+                <div class="form-grid" style="margin-bottom:8px;">
+                  <div><label class="field-label">Price above 50-day SMA</label><input type="number" id="wtSma50" step="1" placeholder="10"></div>
+                  <div><label class="field-label">Golden cross (50 &gt; 200 SMA)</label><input type="number" id="wtGoldenCross" step="1" placeholder="10"></div>
+                  <div><label class="field-label">RSI in healthy zone (40-60)</label><input type="number" id="wtRsiHealthy" step="1" placeholder="10"></div>
+                  <div><label class="field-label">RSI strong (60-70)</label><input type="number" id="wtRsiStrong" step="1" placeholder="5"></div>
+                  <div><label class="field-label">MACD bullish crossover</label><input type="number" id="wtMacdBuy" step="1" placeholder="15"></div>
+                  <div><label class="field-label">MACD positive histogram</label><input type="number" id="wtMacdPositive" step="1" placeholder="5"></div>
+                </div>
+                <button type="button" class="add-btn full-width" id="customWeightsSave">Save weights</button>
+                <button type="button" class="add-btn ghost full-width" id="customWeightsReset" style="margin-top:6px;">Reset to defaults</button>
+                <div id="customWeightsStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;"></div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-ltcg" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>🇮🇳 Tax-Harvesting Helper (LTCG)</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -8214,6 +8250,7 @@
     renderBatchResults(cacheKey, resultElId);
     renderStrongBuyList();
     renderPortfolioRebalancing('India');
+    renderPortfolioTracker('India');
     renderPortfolioRebalancing('UAE');
   }
   // ---- Screener alerts: a stock newly flipping to "Strong Buy" since the previous
@@ -8376,7 +8413,7 @@
         if(r.error) return;
         const n = normStockName(r.name);
         if(!n || map[n]) return; // first (highest-priority list) match wins
-        map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price };
+        map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price, buySignals: r.buySignals, sellSignals: r.sellSignals, totalSignals: r.totalSignals };
       });
     });
     return map;
@@ -8423,6 +8460,157 @@
     html += `<div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Based on your latest scan verdicts — not investment advice. Rescan for up-to-date verdicts before acting.</div>`;
     box.innerHTML = html;
   }
+
+  // ---- Portfolio Tracker: every held stock (not just watchlist) tracked
+  // against its latest scanned verdict + buy/sell signal breakdown. Pure
+  // computed view over data already in memory (holdings + last scan) — no
+  // extra Supabase storage. India-only, same scope as the Rebalancing panel
+  // it sits next to. ----
+  function renderPortfolioTracker(countryKey){
+    const box = document.getElementById(countryKey === 'UAE' ? 'uaePortfolioTrackerResult' : 'indiaPortfolioTrackerResult');
+    if(!box) return;
+    const holdings = investmentGroupByName(countryKey, 'stocks').filter(g => g.qty > 0.0000001);
+    if(!holdings.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No stock holdings yet — add some under Stocks below.</div>'; return; }
+    const verdictMap = collectVerdictsForCountry(countryKey);
+    const totalCurrent = holdings.reduce((s, g) => s + g.current, 0);
+    const rows = holdings.map(g => {
+      const v = verdictMap[normStockName(g.name)];
+      return {
+        name: g.name,
+        weightPct: totalCurrent > 0 ? (g.current / totalCurrent) * 100 : 0,
+        verdict: v ? v.verdict : null,
+        buy: v ? v.buySignals : null, total: v ? v.totalSignals : null,
+        pnlPct: g.pnlPct, current: g.current
+      };
+    }).sort((a, b) => b.current - a.current);
+    box.innerHTML = `<table style="width:100%;font-size:11.5px;border-collapse:collapse;">
+      <thead><tr style="text-align:left;color:var(--ink-soft);font-size:10px;"><th style="padding:4px 4px 4px 0;">Stock</th><th style="text-align:right;padding:4px;">Weight</th><th style="text-align:right;padding:4px;">Verdict</th><th style="text-align:right;padding:4px;">Signals</th><th style="text-align:right;padding:4px 0 4px 4px;">Return</th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr style="border-top:1px solid var(--line);">
+          <td style="padding:5px 4px 5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;">${escapeHtml(r.name)}</td>
+          <td style="text-align:right;padding:5px 4px;">${r.weightPct.toFixed(1)}%</td>
+          <td style="text-align:right;padding:5px 4px;">${r.verdict ? verdictBadge(r.verdict) : '<span style="color:var(--ink-soft);font-size:10.5px;">Not scanned</span>'}</td>
+          <td style="text-align:right;padding:5px 4px;font-size:10.5px;color:var(--ink-soft);">${r.total != null ? r.buy + '/' + r.total + ' buy' : '—'}</td>
+          <td style="text-align:right;padding:5px 0 5px 4px;color:${r.pnlPct >= 0 ? '#1e8449' : '#c0392b'};">${r.pnlPct >= 0 ? '+' : ''}${r.pnlPct.toFixed(1)}%</td>
+        </tr>`).join('')}</tbody>
+    </table>
+    <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Verdict and signals are from your latest scan for each stock — rescan above for the newest read.</div>`;
+  }
+
+  // ---- Sector / Peer Comparison: groups held + watchlist stocks by sector,
+  // fetched live via /api/stock-quote (need=sector) only when Refresh is
+  // tapped — nothing persisted, so the only Supabase cost is the tiny
+  // sector-cache-free footprint of zero extra fields. India-only. ----
+  const sectorCache = {}; // in-memory only, cleared on page reload — not saved
+  async function loadSectorComparison(){
+    const statusEl = document.getElementById('sectorPeerStatus');
+    const resultEl = document.getElementById('sectorPeerResult');
+    const held = investmentGroupByName('India', 'stocks').filter(g => g.qty > 0.0000001).map(g => g.name);
+    const watch = (state.customWatchlist || []).map(w => w.name);
+    const names = [...new Set([...held, ...watch])];
+    if(!names.length){ statusEl.textContent = 'Add a stock holding or watchlist item first.'; return; }
+    const verdictMap = collectVerdictsForCountry('India');
+    statusEl.textContent = `Looking up sectors for ${names.length} stock${names.length === 1 ? '' : 's'}…`;
+    resultEl.innerHTML = '';
+    let done = 0;
+    const results = await Promise.all(names.map(async (name) => {
+      if(sectorCache[name] !== undefined){ done++; return { name, sector: sectorCache[name] }; }
+      try{
+        const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(name)}&market=IN&need=sector`);
+        const data = await res.json();
+        const sector = (!res.ok || data.error) ? null : (data.sector || null);
+        sectorCache[name] = sector;
+        done++;
+        statusEl.textContent = `Looking up sectors… ${done}/${names.length}`;
+        return { name, sector };
+      }catch(e){
+        done++;
+        return { name, sector: null };
+      }
+    }));
+    const bySector = {};
+    results.forEach(r => {
+      const key = r.sector || 'Unknown / unavailable';
+      if(!bySector[key]) bySector[key] = [];
+      const v = verdictMap[normStockName(r.name)];
+      bySector[key].push({ name: r.name, verdict: v ? v.verdict : null, held: held.includes(r.name) });
+    });
+    const sectorNames = Object.keys(bySector).sort((a, b) => a === 'Unknown / unavailable' ? 1 : b === 'Unknown / unavailable' ? -1 : a.localeCompare(b));
+    resultEl.innerHTML = sectorNames.map(sector => `
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11.5px;font-weight:600;margin-bottom:4px;">${escapeHtml(sector)}</div>
+        ${bySector[sector].map(s => `
+          <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;">
+            <span>${escapeHtml(s.name)}${s.held ? ' <span style="font-size:9.5px;color:var(--ink-soft);">(held)</span>' : ''}</span>
+            <span>${s.verdict ? verdictBadge(s.verdict) : '<span style="color:var(--ink-soft);font-size:10.5px;">Not scanned</span>'}</span>
+          </div>`).join('')}
+      </div>`).join('');
+    statusEl.textContent = `✓ ${names.length} stock${names.length === 1 ? '' : 's'} grouped into ${sectorNames.length} sector${sectorNames.length === 1 ? '' : 's'}.`;
+  }
+  const sectorPeerBtn = document.getElementById('sectorPeerRefresh');
+  if(sectorPeerBtn) sectorPeerBtn.addEventListener('click', loadSectorComparison);
+
+  // ---- Custom Scoring Weights: a handful of small numbers saved to
+  // state.settings (negligible storage), used to recompute a Personalized
+  // Score from technicals already fetched for whichever stock's chart is
+  // open — never applied retroactively to bulk scan results, so nothing
+  // extra needs to be cached/stored for those. ----
+  const DEFAULT_SCORE_WEIGHTS = { sma50: 10, goldenCross: 10, rsiHealthy: 10, rsiStrong: 5, macdBuy: 15, macdPositive: 5 };
+  function getScoreWeights(){
+    return Object.assign({}, DEFAULT_SCORE_WEIGHTS, (state.settings && state.settings.customScoringWeights) || {});
+  }
+  function computePersonalizedScore(technicals, weights){
+    let score = 0;
+    const mas = technicals.movingAverages || [];
+    const oscs = technicals.oscillators || [];
+    const ma50 = mas.find(m => m.period === 50);
+    const ma200 = mas.find(m => m.period === 200);
+    if(ma50 && ma50.signal === 'Buy') score += weights.sma50;
+    if(ma50 && ma200 && ma50.value != null && ma200.value != null && ma50.value > ma200.value) score += weights.goldenCross;
+    const rsi = oscs.find(o => o.name === 'RSI (14)');
+    if(rsi && rsi.value != null){
+      if(rsi.value >= 40 && rsi.value <= 60) score += weights.rsiHealthy;
+      else if(rsi.value > 60 && rsi.value <= 70) score += weights.rsiStrong;
+    }
+    const macd = oscs.find(o => o.name === 'MACD (12,26,9)');
+    if(macd){
+      if(macd.signal === 'Buy') score += weights.macdBuy;
+      if(macd.value != null && macd.value > 0) score += weights.macdPositive;
+    }
+    const maxPossible = weights.sma50 + weights.goldenCross + weights.rsiHealthy + weights.macdBuy + weights.macdPositive;
+    return { score, maxPossible: maxPossible > 0 ? maxPossible : 1 };
+  }
+  function loadWeightInputs(){
+    const w = getScoreWeights();
+    document.getElementById('wtSma50').value = w.sma50;
+    document.getElementById('wtGoldenCross').value = w.goldenCross;
+    document.getElementById('wtRsiHealthy').value = w.rsiHealthy;
+    document.getElementById('wtRsiStrong').value = w.rsiStrong;
+    document.getElementById('wtMacdBuy').value = w.macdBuy;
+    document.getElementById('wtMacdPositive').value = w.macdPositive;
+  }
+  loadWeightInputs();
+  const customWeightsSaveBtn = document.getElementById('customWeightsSave');
+  if(customWeightsSaveBtn) customWeightsSaveBtn.addEventListener('click', () => {
+    const num = (id, fallback) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? fallback : v; };
+    state.settings.customScoringWeights = {
+      sma50: num('wtSma50', DEFAULT_SCORE_WEIGHTS.sma50),
+      goldenCross: num('wtGoldenCross', DEFAULT_SCORE_WEIGHTS.goldenCross),
+      rsiHealthy: num('wtRsiHealthy', DEFAULT_SCORE_WEIGHTS.rsiHealthy),
+      rsiStrong: num('wtRsiStrong', DEFAULT_SCORE_WEIGHTS.rsiStrong),
+      macdBuy: num('wtMacdBuy', DEFAULT_SCORE_WEIGHTS.macdBuy),
+      macdPositive: num('wtMacdPositive', DEFAULT_SCORE_WEIGHTS.macdPositive)
+    };
+    save();
+    document.getElementById('customWeightsStatus').textContent = '✓ Saved — will apply next time you open a stock chart.';
+  });
+  const customWeightsResetBtn = document.getElementById('customWeightsReset');
+  if(customWeightsResetBtn) customWeightsResetBtn.addEventListener('click', () => {
+    state.settings.customScoringWeights = null;
+    save();
+    loadWeightInputs();
+    document.getElementById('customWeightsStatus').textContent = '✓ Reset to defaults.';
+  });
 
   // ---- Monthly Portfolio Digest: builds a plain-text summary from real
   // holdings/rebalancing numbers already computed above, sends it to
@@ -8689,8 +8877,12 @@
   // ---- "When did it move to Strong Buy?" history panel + a formula-based
   // buy/hold/sell zone, so a Strong Buy can be caught early instead of
   // after the price has already run up. Both fetched once per chart open,
-  // not on every range-tab switch (they don't depend on the chart range). ----
-  function renderVerdictHistory(symbol){
+  // not on every range-tab switch (they don't depend on the chart range).
+  // currentPrice (when known) adds a lightweight backtest line to each
+  // Buy/Strong Buy entry: what it would have returned from that flag date
+  // to today's live price — no new data stored, just today's already-
+  // fetched price compared against the price already saved in history. ----
+  function renderVerdictHistory(symbol, currentPrice){
     const el = document.getElementById('stockChartHistory');
     if(!el) return;
     const hist = (state.verdictHistory && state.verdictHistory[symbol]) || [];
@@ -8698,14 +8890,55 @@
       el.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);">No verdict history yet for this stock — run a scan (or check it here) on a few different days and this will fill in with the date it moves between Strong Buy/Buy/Hold/Sell/Strong Sell.</div>`;
       return;
     }
-    const rows = [...hist].reverse().map(h =>
-      `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line);font-size:12px;">
-         <span>${escapeHtml(h.date)}</span>
-         <span style="color:${verdictColor(h.verdict)};font-weight:600;">${escapeHtml(h.verdict === 'Neutral' ? 'Hold' : h.verdict)}</span>
-         <span style="color:var(--ink-soft);">${h.price != null ? h.price.toFixed(2) : '—'}</span>
-       </div>`
-    ).join('');
+    const rows = [...hist].reverse().map(h => {
+      const backtest = (currentPrice != null && h.price != null && (h.verdict === 'Strong Buy' || h.verdict === 'Buy'))
+        ? (() => { const pct = ((currentPrice - h.price) / h.price) * 100; return `<div style="font-size:10px;color:${pct >= 0 ? '#1e8449' : '#c0392b'};">Since flagged: ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>`; })()
+        : '';
+      return `<div style="padding:4px 0;border-bottom:1px solid var(--line);font-size:12px;">
+         <div style="display:flex;justify-content:space-between;">
+           <span>${escapeHtml(h.date)}</span>
+           <span style="color:${verdictColor(h.verdict)};font-weight:600;">${escapeHtml(h.verdict === 'Neutral' ? 'Hold' : h.verdict)}</span>
+           <span style="color:var(--ink-soft);">${h.price != null ? h.price.toFixed(2) : '—'}</span>
+         </div>
+         ${backtest}
+       </div>`;
+    }).join('');
     el.innerHTML = `<div class="section-title" style="margin:0 0 4px 0;font-size:13px;">Verdict history</div>${rows}`;
+  }
+
+  // ---- Score breakdown drill-down + Personalized Score: surfaces the
+  // individual moving-average/oscillator signals that make up the official
+  // verdict (already fetched for the chart, just not previously shown in
+  // full), plus a recomputed score using this stock's Custom Scoring
+  // Weights if any are set. No extra fetch, no extra storage. ----
+  function renderScoreBreakdown(data){
+    const el = document.getElementById('stockChartScoreBreakdown');
+    if(!el) return;
+    const mas = data.movingAverages || [];
+    const oscs = data.oscillators || [];
+    const sigRow = (label, signal, value) => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11.5px;">
+        <span>${escapeHtml(label)}</span>
+        <span style="color:var(--ink-soft);">${value != null ? Number(value).toFixed(2) : '—'}</span>
+        <span style="font-weight:600;color:${signal === 'Buy' ? '#1e8449' : signal === 'Sell' ? '#c0392b' : 'var(--ink-soft)'};">${escapeHtml(signal || '—')}</span>
+      </div>`;
+    const maRows = mas.map(m => sigRow(`SMA ${m.period}`, m.signal, m.value)).join('');
+    const oscRows = oscs.map(o => sigRow(o.name, o.signal, o.value)).join('');
+    const weights = getScoreWeights();
+    const personalized = computePersonalizedScore(data, weights);
+    const pct = Math.round((personalized.score / personalized.maxPossible) * 100);
+    el.innerHTML = `
+      <div class="accordion">
+        <button type="button" class="accordion-header" style="font-size:12.5px;padding:8px 10px;"><span>📋 Score breakdown</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body" style="padding:8px 10px;">
+          <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">Official: ${data.buySignals != null ? data.buySignals + '/' + data.totalSignals + ' buy signals' : '—'}</div>
+          ${maRows}
+          ${oscRows}
+          <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:12px;">
+            <span style="font-weight:600;">Personalized Score (your weights)</span>
+            <span style="font-weight:700;color:${pct >= 60 ? '#1e8449' : pct <= 30 ? '#c0392b' : 'var(--ink-soft)'};">${personalized.score}/${personalized.maxPossible} (${pct}%)</span>
+          </div>
+        </div>
+      </div>`;
   }
 
   function buildActionSuggestion(data){
@@ -8744,6 +8977,8 @@
           <div style="font-weight:700;color:${a.color};">${a.icon} ${escapeHtml(a.label)}</div>
           <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">${escapeHtml(a.detail)}</div>
         </div>`;
+      renderScoreBreakdown(data);
+      if(data.price != null) renderVerdictHistory(symbol, data.price);
     }catch(e){
       if(actionEl) actionEl.innerHTML = '';
     }
@@ -8767,6 +9002,7 @@
         <div id="stockChartArea" style="width:100%;min-height:180px;"></div>
         <div id="stockChartStatus" style="font-size:11px;color:var(--ink-soft);margin-top:6px;"></div>
         <div id="stockChartAction" style="margin-top:12px;"></div>
+        <div id="stockChartScoreBreakdown" style="margin-top:12px;"></div>
         <div id="stockChartHistory" style="margin-top:12px;"></div>
       </div>`;
     document.body.appendChild(modal);
@@ -9124,6 +9360,7 @@
   renderBatchResults('custom', 'scrCustomResult');
   renderStrongBuyList();
     renderPortfolioRebalancing('India');
+    renderPortfolioTracker('India');
     renderPortfolioRebalancing('UAE');
 
   function calcRetirementGoal(years, annualReturn, targetCorpus, existing, currencyCode){
@@ -10911,6 +11148,7 @@
     renderBatchResults('custom', 'scrCustomResult');
     renderStrongBuyList();
     renderPortfolioRebalancing('India');
+    renderPortfolioTracker('India');
     renderPortfolioRebalancing('UAE');
   }
   const indiaIncludeRemitToggle = document.getElementById('indiaIncludeRemitInDebt');
