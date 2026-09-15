@@ -2564,6 +2564,14 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-undervalued" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🔻 Highly Undervalued — Dip Buy Candidates</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">On a day the broader market falls, good stocks get sold off along with weak ones. This flags stocks trading well below their own 50-day average with an oversold RSI, while their 200-day average is still holding — a technical read for "recently beaten down, not structurally broken," from today's scans above.</div>
+                <div id="scrUndervaluedResult"></div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-rebalance" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>🧮 Portfolio Rebalancing</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -8219,7 +8227,15 @@
       const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market || 'IN')}`);
       const data = await res.json();
       if(!res.ok || data.error) return { symbol, name: symbol, error: data.error || 'unavailable' };
-      return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict, buySignals: data.buySignals, sellSignals: data.sellSignals, totalSignals: data.totalSignals };
+      // Keep 3 extra small numbers (not the full moving-average/oscillator
+      // arrays) so the Highly Undervalued screen can work off the already-
+      // fetched scan data instead of needing a second pass of API calls —
+      // a modest, deliberate storage increase per scanned stock in exchange
+      // for that.
+      const ma50 = (data.movingAverages || []).find(m => m.period === 50);
+      const ma200 = (data.movingAverages || []).find(m => m.period === 200);
+      const rsi = (data.oscillators || []).find(o => o.name === 'RSI (14)');
+      return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict, buySignals: data.buySignals, sellSignals: data.sellSignals, totalSignals: data.totalSignals, ma50: ma50 ? ma50.value : null, ma200: ma200 ? ma200.value : null, rsi: rsi ? rsi.value : null };
     }catch(e){
       return { symbol, name: symbol, error: 'network error' };
     }
@@ -8246,6 +8262,7 @@
     if(statusEl) statusEl.textContent = `✓ Scanned ${results.length} stocks — last updated ${todayStr()}.`;
     renderBatchResults(cacheKey, resultElId);
     renderStrongBuyList();
+    renderUndervaluedList();
     renderPortfolioRebalancing('India');
     renderPortfolioTracker('India');
     renderPortfolioRebalancing('UAE');
@@ -8313,6 +8330,48 @@
     if(!all.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No Strong Buy signals yet today — run the scans above first.</div>'; return; }
     const rows = all.map(r => `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td></tr>`).join('');
     box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
+  }
+
+  // ---- Highly Undervalued (Dip Buy Candidates): a technical proxy for
+  // "fundamentally sound stock temporarily cheap in a broad pullback" —
+  // NOT a fundamental or promoter-integrity check (this app has no
+  // automated source for ROCE/promoter holding/pledge data across a whole
+  // index; that still needs the manual Fundamentals tool per stock). What
+  // IS automatable and shown here: price well below its 50-day average
+  // (a real recent fall) while the 200-day average is still holding
+  // (long-term trend not structurally broken) and RSI is oversold
+  // (selling looks indiscriminate/panic-driven rather than a slow bleed).
+  // Reuses the ma50/ma200/rsi already captured per scan above — no extra
+  // API calls, no extra storage beyond those 3 numbers per stock. ----
+  function renderUndervaluedList(){
+    const box = document.getElementById('scrUndervaluedResult');
+    if(!box) return;
+    const scans = state.screenerScans || {};
+    const all = [];
+    [['nifty50', 'Nifty 50'], ['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+      const scan = scans[key];
+      if(scan && scan.results) scan.results.forEach(r => {
+        if(r.error || r.price == null || r.ma50 == null || r.rsi == null) return;
+        if(r.verdict === 'Strong Sell') return; // uniformly bad across every signal — more likely a real problem, not just a dip
+        const belowMa50Pct = ((r.ma50 - r.price) / r.ma50) * 100;
+        const nearMa200 = r.ma200 == null || r.price > r.ma200 * 0.85;
+        if(belowMa50Pct >= 7 && r.rsi < 40 && nearMa200){
+          all.push(Object.assign({ source: label, belowMa50Pct }, r));
+        }
+      });
+    });
+    if(!all.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Nothing matches right now — run the scans above first, or the market hasn\'t pulled back enough today for this filter to trigger.</div>'; return; }
+    all.sort((a, b) => b.belowMa50Pct - a.belowMa50Pct);
+    const rows = all.map(r => `
+      <tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}">
+        <td>${escapeHtml(r.name)}</td>
+        <td>${r.price.toFixed(2)}</td>
+        <td style="color:#c0392b;">−${r.belowMa50Pct.toFixed(1)}% vs 50-SMA</td>
+        <td>RSI ${r.rsi.toFixed(0)}</td>
+        <td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td>
+      </tr>`).join('');
+    box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>
+      <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">This is a technical read only (price vs its own averages + RSI) — it does not check fundamentals, promoter holding/pledge, or whether the fall is company-specific news rather than a broad market move. Cross-check today's index move and run each one through the Fundamentals tool before acting.</div>`;
   }
 
   // ---- Screener export: CSV download + WhatsApp share, same pattern used
@@ -9356,6 +9415,7 @@
   renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
   renderBatchResults('custom', 'scrCustomResult');
   renderStrongBuyList();
+    renderUndervaluedList();
     renderPortfolioRebalancing('India');
     renderPortfolioTracker('India');
     renderPortfolioRebalancing('UAE');
@@ -11144,6 +11204,7 @@
     renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
     renderBatchResults('custom', 'scrCustomResult');
     renderStrongBuyList();
+    renderUndervaluedList();
     renderPortfolioRebalancing('India');
     renderPortfolioTracker('India');
     renderPortfolioRebalancing('UAE');
