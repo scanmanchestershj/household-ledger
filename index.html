@@ -8300,6 +8300,25 @@
     }
     return banners;
   }
+  // ---- Entry/Exit price suggestion: a formula-based buy zone and target,
+  // shown next to every scanned stock in every index list — not a promise,
+  // a transparent rule so it's clear exactly what drove the number:
+  //  - Entry: if price is running >3% above its own 50-day average, the
+  //    entry is that average (wait for a pullback to it); otherwise the
+  //    entry is today's price (already in/near a reasonable buy zone).
+  //  - Exit/target: entry + a percentage that scales with how strong the
+  //    verdict is (Strong Buy gets the widest target, Sell/Strong Sell the
+  //    narrowest, since those aren't really being suggested as buys).
+  // Uses only price/ma50/verdict already captured per scan result — no
+  // extra fetch, no extra storage. ----
+  function computeEntryExitPrice(r){
+    if(r.price == null) return null;
+    const ma50 = r.ma50;
+    const entry = (ma50 != null && r.price > ma50 * 1.03) ? ma50 : r.price;
+    const targetPct = r.verdict === 'Strong Buy' ? 0.20 : r.verdict === 'Buy' ? 0.12 : (r.verdict === 'Sell' || r.verdict === 'Strong Sell') ? 0.05 : 0.08;
+    const exit = entry * (1 + targetPct);
+    return { entry, exit, canBuyNow: r.price <= entry * 1.02 };
+  }
   function renderBatchResults(cacheKey, resultElId){
     const box = document.getElementById(resultElId);
     if(!box) return;
@@ -8312,10 +8331,12 @@
       return av - bv;
     });
     const rows = sorted.map(r => {
-      if(r.error) return `<tr><td>${escapeHtml(r.name)}</td><td colspan="2" style="color:var(--ink-soft);font-size:11px;">${escapeHtml(r.error)}</td></tr>`;
-      return `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td>${verdictBadge(r.verdict)}</td></tr>`;
+      if(r.error) return `<tr><td>${escapeHtml(r.name)}</td><td colspan="3" style="color:var(--ink-soft);font-size:11px;">${escapeHtml(r.error)}</td></tr>`;
+      const ee = computeEntryExitPrice(r);
+      const eeCell = ee ? `<span style="font-size:10.5px;">E ${ee.entry.toFixed(2)} · X ${ee.exit.toFixed(2)}</span><br><span style="font-size:9.5px;font-weight:600;color:${ee.canBuyNow ? '#1e8449' : '#b8860b'};">${ee.canBuyNow ? 'Buy zone' : 'Wait for dip'}</span>` : '—';
+      return `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="text-align:right;">${eeCell}</td><td>${verdictBadge(r.verdict)}</td></tr>`;
     }).join('');
-    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date}</div><table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} · E = suggested entry price, X = target exit price</div><table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table><div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Entry/exit are a formula-based buy zone and target (price vs its own 50-day average, target width scaled to the verdict) — not a guarantee. "Buy zone" means today's price is already at or near the suggested entry; "Wait for dip" means it's running above it.</div>`;
   }
   function renderStrongBuyList(){
     const box = document.getElementById('scrStrongBuyResult');
@@ -8505,7 +8526,7 @@
     let html = rows.length ? `<table style="width:100%;font-size:12px;border-collapse:collapse;">` +
       sorted.map(r => `
         <tr>
-          <td style="padding:5px 0;">${escapeHtml(r.name)}<div style="font-size:10px;color:var(--ink-soft);">${r.weightPct.toFixed(1)}% of stocks${r.verdict ? ' · ' + escapeHtml(r.verdict) : ''} · Entry ${fmtCountry(r.invested, countryKey)} · Exit ${fmtCountry(r.current, countryKey)}</div></td>
+          <td style="padding:5px 0;">${escapeHtml(r.name)}<div style="font-size:10px;color:var(--ink-soft);">${r.weightPct.toFixed(1)}% of stocks${r.verdict ? ' · ' + escapeHtml(r.verdict) : ''}</div></td>
           <td style="text-align:right;padding:5px 0;white-space:nowrap;"><span style="color:${REBALANCE_ACTION_COLOR[r.action] || 'inherit'};font-weight:600;">${escapeHtml(r.action)}</span></td>
         </tr>`).join('') + `</table>` : '';
     if(opportunities.length){
@@ -8539,15 +8560,13 @@
       };
     }).sort((a, b) => b.current - a.current);
     box.innerHTML = `<table style="width:100%;font-size:11.5px;border-collapse:collapse;">
-      <thead><tr style="text-align:left;color:var(--ink-soft);font-size:10px;"><th style="padding:4px 4px 4px 0;">Stock</th><th style="text-align:right;padding:4px;">Weight</th><th style="text-align:right;padding:4px;">Verdict</th><th style="text-align:right;padding:4px;">Signals</th><th style="text-align:right;padding:4px;">Entry Value</th><th style="text-align:right;padding:4px;">Exit Value</th><th style="text-align:right;padding:4px 0 4px 4px;">Return</th></tr></thead>
+      <thead><tr style="text-align:left;color:var(--ink-soft);font-size:10px;"><th style="padding:4px 4px 4px 0;">Stock</th><th style="text-align:right;padding:4px;">Weight</th><th style="text-align:right;padding:4px;">Verdict</th><th style="text-align:right;padding:4px;">Signals</th><th style="text-align:right;padding:4px 0 4px 4px;">Return</th></tr></thead>
       <tbody>${rows.map(r => `
         <tr style="border-top:1px solid var(--line);">
           <td style="padding:5px 4px 5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;">${escapeHtml(r.name)}</td>
           <td style="text-align:right;padding:5px 4px;">${r.weightPct.toFixed(1)}%</td>
           <td style="text-align:right;padding:5px 4px;">${r.verdict ? verdictBadge(r.verdict) : '<span style="color:var(--ink-soft);font-size:10.5px;">Not scanned</span>'}</td>
           <td style="text-align:right;padding:5px 4px;font-size:10.5px;color:var(--ink-soft);">${r.total != null ? r.buy + '/' + r.total + ' buy' : '—'}</td>
-          <td style="text-align:right;padding:5px 4px;">${fmtCountry(r.invested, countryKey)}</td>
-          <td style="text-align:right;padding:5px 4px;">${fmtCountry(r.current, countryKey)}</td>
           <td style="text-align:right;padding:5px 0 5px 4px;color:${r.pnlPct >= 0 ? '#1e8449' : '#c0392b'};">${r.pnlPct >= 0 ? '+' : ''}${r.pnlPct.toFixed(1)}%</td>
         </tr>`).join('')}</tbody>
     </table>
@@ -12098,15 +12117,14 @@
     const sorted = held.slice().sort((a, b) => b.current - a.current);
     const entries = investmentEntriesList(countryKey, 'stocks');
     box.innerHTML = `
-      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:620px;">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:520px;">
         <thead>
           <tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;">
             <th style="padding:4px 6px 4px 0;">Stock</th>
             <th style="padding:4px 6px;text-align:right;">Qty</th>
             <th style="padding:4px 6px;text-align:right;">Avg</th>
             <th style="padding:4px 6px;text-align:right;">LTP</th>
-            <th style="padding:4px 6px;text-align:right;">Entry Value</th>
-            <th style="padding:4px 6px;text-align:right;">Exit Value</th>
+            <th style="padding:4px 6px;text-align:right;">Current</th>
             <th style="padding:4px 6px;text-align:right;">Return</th>
             <th style="padding:4px 0 4px 6px;text-align:right;"></th>
           </tr>
@@ -12118,7 +12136,6 @@
               <td style="padding:5px 6px;text-align:right;">${g.qty}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.avgPrice, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.curPrice, countryKey)}</td>
-              <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.invested, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.current, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;color:${g.pnl >= 0 ? '#1e8449' : '#c0392b'};">${g.pnl >= 0 ? '+' : '−'}${Math.abs(g.pnlPct).toFixed(1)}%</td>
               <td style="padding:5px 0 5px 6px;text-align:right;white-space:nowrap;">
