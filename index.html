@@ -8489,7 +8489,7 @@
         if(r.error) return;
         const n = normStockName(r.name);
         if(!n || map[n]) return; // first (highest-priority list) match wins
-        map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price, buySignals: r.buySignals, sellSignals: r.sellSignals, totalSignals: r.totalSignals };
+        map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price, buySignals: r.buySignals, sellSignals: r.sellSignals, totalSignals: r.totalSignals, ma50: r.ma50 };
       });
     });
     return map;
@@ -12116,8 +12116,9 @@
     if(panel) panel.style.display = '';
     const sorted = held.slice().sort((a, b) => b.current - a.current);
     const entries = investmentEntriesList(countryKey, 'stocks');
+    const verdictMap = collectVerdictsForCountry(countryKey);
     box.innerHTML = `
-      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:520px;">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:620px;">
         <thead>
           <tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;">
             <th style="padding:4px 6px 4px 0;">Stock</th>
@@ -12126,11 +12127,18 @@
             <th style="padding:4px 6px;text-align:right;">LTP</th>
             <th style="padding:4px 6px;text-align:right;">Current</th>
             <th style="padding:4px 6px;text-align:right;">Return</th>
+            <th style="padding:4px 6px;text-align:right;">Entry/Exit</th>
             <th style="padding:4px 0 4px 6px;text-align:right;"></th>
           </tr>
         </thead>
         <tbody>
-          ${sorted.map(g => `
+          ${sorted.map(g => {
+            const v = verdictMap[normStockName(g.name)];
+            const ee = v ? computeEntryExitPrice({ price: g.curPrice, ma50: v.ma50, verdict: v.verdict }) : null;
+            const eeCell = ee
+              ? `<span style="font-size:10px;">E ${ee.entry.toFixed(2)} · X ${ee.exit.toFixed(2)}</span><br><span style="font-size:9.5px;font-weight:600;color:${ee.canBuyNow ? '#1e8449' : '#b8860b'};">${ee.canBuyNow ? 'Buy zone' : 'Wait for dip'}</span>`
+              : '<span style="font-size:9.5px;color:var(--ink-soft);">Not scanned</span>';
+            return `
             <tr style="border-top:1px solid var(--hairline, #eee);" data-stock-key="${escapeHtml(g.key)}">
               <td style="padding:5px 6px 5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${escapeHtml(g.name)}</td>
               <td style="padding:5px 6px;text-align:right;">${g.qty}</td>
@@ -12138,13 +12146,16 @@
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.curPrice, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.current, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;color:${g.pnl >= 0 ? '#1e8449' : '#c0392b'};">${g.pnl >= 0 ? '+' : '−'}${Math.abs(g.pnlPct).toFixed(1)}%</td>
+              <td style="padding:5px 6px;text-align:right;">${eeCell}</td>
               <td style="padding:5px 0 5px 6px;text-align:right;white-space:nowrap;">
                 <button type="button" class="edit-btn stock-row-edit" data-key="${escapeHtml(g.key)}" aria-label="Edit ${escapeHtml(g.name)}">✎</button>
                 <button type="button" class="del-btn stock-row-del" data-key="${escapeHtml(g.key)}" aria-label="Delete ${escapeHtml(g.name)}">×</button>
               </td>
-            </tr>`).join('')}
+            </tr>`;
+          }).join('')}
         </tbody>
-      </table>`;
+      </table>
+      <div style="font-size:10px;color:var(--ink-soft);margin-top:6px;">Entry/Exit uses your latest scan for each stock (Screener above) — rescan there if a holding shows "Not scanned" or looks stale.</div>`;
     const catCfg = INVESTMENT_CATS.find(c => c.key === 'stocks');
     function latestEntryFor(key){
       return entries.filter(e => invKeyName(e.name) === key)
