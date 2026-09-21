@@ -847,6 +847,12 @@
               </div>
               <button class="add-btn full-width" id="iouInAdd" style="margin-top:8px;">Add entry</button>
               <button class="add-btn ghost full-width" id="iouInCancelEdit" style="margin-top:8px;display:none;">Cancel edit</button>
+              <div class="month-nav-row" style="display:flex; align-items:center; gap:8px; margin:12px 0 4px;">
+                <label class="field-label" style="margin:0; white-space:nowrap;">Viewing month</label>
+                <button type="button" class="add-btn ghost" id="iouInMonthPrev" style="padding:8px 12px;">‹</button>
+                <select class="who-select" id="iouInMonth" style="flex:1;"></select>
+                <button type="button" class="add-btn ghost" id="iouInMonthNext" style="padding:8px 12px;">›</button>
+              </div>
               <div id="iouInList" style="margin-top:12px;"></div>
               <div id="iouInGrandTotal" class="spend-analysis-total" style="display:none;"></div>
             </div>
@@ -1205,6 +1211,14 @@
         <button type="button" class="accordion-header"><span>Spent for each person (splits)</span><span class="accordion-arrow">▸</span></button>
         <div class="accordion-body">
           <div id="reportPersonBreakdown"></div>
+        </div>
+      </div>
+
+      <div class="accordion" data-key="owed-to-you-report">
+        <button type="button" class="accordion-header"><span>Owed to you — others' spend split with you</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">From the Cards tab's IOU tracker, for this same period (e.g. "how much did Vignesh spend for me"). Not counted in income/expense above.</div>
+          <div id="reportIouInBreakdown"></div>
         </div>
       </div>
 
@@ -6803,13 +6817,55 @@
     document.getElementById('iouInCancelEdit').style.display = 'none';
   }
   document.getElementById('iouInCancelEdit').addEventListener('click', cancelEditIouIn);
+  // Month filter for "Owed to you" — same pattern as the "All card expenses"
+  // month nav, so it defaults to the CURRENT month instead of showing every
+  // entry ever logged (including previous months).
+  function populateIouInMonthOptions(ensureKey){
+    const sel = document.getElementById('iouInMonth');
+    if(!sel) return;
+    const dates = (currentData().iouIn || []).filter(e => (e.slot || 'resident') === activeCardSlot).map(e => e.date).filter(Boolean);
+    const curMonth = monthKey(todayStr());
+    const monthSet = new Set([curMonth, ...dates.map(d => d.slice(0,7))]);
+    if(ensureKey) monthSet.add(ensureKey);
+    const months = [...monthSet].sort().reverse();
+    const prevVal = sel.value;
+    sel.innerHTML = '<option value="all">All time</option>' + months.map(m => `<option value="${m}">${monthLabel(m)}</option>`).join('');
+    const want = ensureKey || prevVal;
+    sel.value = (want && (want === 'all' || months.includes(want))) ? want : curMonth;
+  }
+  function iouInMonthFilter(){
+    const sel = document.getElementById('iouInMonth');
+    if(!sel || sel.value === 'all') return null;
+    return sel.value;
+  }
+  function shiftIouInMonth(delta){
+    const sel = document.getElementById('iouInMonth');
+    if(!sel) return;
+    const base = (sel.value === 'all' || !sel.value) ? monthKey(todayStr()) : sel.value;
+    const [y, m] = base.split('-').map(Number);
+    const d = new Date(y, (m - 1) + delta, 1);
+    const newKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    populateIouInMonthOptions(newKey);
+    renderIouIn();
+  }
+  (function wireIouInMonth(){
+    const sel = document.getElementById('iouInMonth');
+    if(!sel) return;
+    sel.addEventListener('change', renderIouIn);
+    document.getElementById('iouInMonthPrev').addEventListener('click', () => shiftIouInMonth(-1));
+    document.getElementById('iouInMonthNext').addEventListener('click', () => shiftIouInMonth(1));
+  })();
   function renderIouIn(){
     const listEl = document.getElementById('iouInList');
     const totalEl = document.getElementById('iouInGrandTotal');
     if(!listEl) return;
-    const entries = (currentData().iouIn || []).filter(e => (e.slot || 'resident') === activeCardSlot).sort((a,b) => b.date.localeCompare(a.date));
+    populateIouInMonthOptions();
+    const filterMonth = iouInMonthFilter();
+    let entries = (currentData().iouIn || []).filter(e => (e.slot || 'resident') === activeCardSlot);
+    if(filterMonth) entries = entries.filter(e => (e.date || '').slice(0,7) === filterMonth);
+    entries = entries.sort((a,b) => b.date.localeCompare(a.date));
     if(entries.length === 0){
-      listEl.innerHTML = '<div class="empty">No entries yet.</div>';
+      listEl.innerHTML = `<div class="empty">No entries ${filterMonth ? 'for this month' : 'yet'}.</div>`;
       totalEl.style.display = 'none';
       return;
     }
@@ -9915,7 +9971,37 @@
       `;
     }
 
+    renderIouInReport(period, scope, curFmt);
     renderReturnableStatement();
+  }
+
+  // ---- "Owed to you" report — same iouIn entries as the Cards tab's IOU
+  // tracker, filtered to the report's current period/scope instead of the
+  // Cards tab's own month selector. Purely informational: never folded into
+  // income/expense above. ----
+  function renderIouInReport(period, scope, curFmt){
+    const el = document.getElementById('reportIouInBreakdown');
+    if(!el) return;
+    const slots = scope === 'UAE' ? ['resident'] : scope === 'India' ? ['home'] : ['resident','home'];
+    const entries = (currentData().iouIn || []).filter(e => slots.includes(e.slot || 'resident') && inPeriod(e.date, period));
+    if(entries.length === 0){
+      el.innerHTML = `<div class="empty">No entries for others' spend split with you in this period.</div>`;
+      return;
+    }
+    const byPerson = {};
+    entries.forEach(e => { byPerson[e.person] = (byPerson[e.person] || 0) + Number(e.share); });
+    const grandTotal = entries.reduce((s,e) => s + Number(e.share), 0);
+    el.innerHTML = `
+      <div class="report-table-wrap">
+      <table class="report-table">
+        <thead><tr><th>Person</th><th>Owed to you</th></tr></thead>
+        <tbody>
+          ${Object.entries(byPerson).map(([name, sum]) => `<tr><td>${escapeHtml(name)}</td><td><strong>${curFmt(sum)}</strong></td></tr>`).join('')}
+        </tbody>
+        <tfoot><tr><td>Total</td><td><strong>${curFmt(grandTotal)}</strong></td></tr></tfoot>
+      </table>
+      </div>
+    `;
   }
 
   // ---- Returnable statement: pick a person + date range, see it itemized by
