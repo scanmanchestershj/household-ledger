@@ -7777,9 +7777,7 @@
     const dueDebtsSum = dueDebts.reduce((s,d) => s + Number(d.amount), 0);
 
     const dueSum = dueCardsSum + dueDebtsSum;
-    document.getElementById('glanceUpcomingBills').textContent = curFmt(dueSum);
     const totalDueCount = dueCards.length + dueDebts.length;
-    document.getElementById('glanceUpcomingSub').textContent = totalDueCount ? `${totalDueCount} ${win.label}` : `None ${win.label}`;
 
     // Individual due items, split out one per row (per date), shown when the
     // stat card is clicked — e.g. Sept 5 payment and Sept 15 payment listed
@@ -7788,6 +7786,27 @@
       ...dueCards.map(c => ({ label: (c.desc || c.bank || 'Card due'), amount: Number(c.amount), dueDate: c.dueDate, country: c.country || state.countryConfig.country1.name, currency: (c.country || state.countryConfig.country1.name) === state.countryConfig.country1.name ? state.countryConfig.country1.currency : state.countryConfig.country2.currency })),
       ...dueDebts.map(d => ({ label: d.label, amount: Number(d.amount), dueDate: d.dueDate, country: d.country, currency: d.country === state.countryConfig.country1.name ? state.countryConfig.country1.currency : state.countryConfig.country2.currency }))
     ].sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+
+    // The header figure used to sum raw AED + INR amounts together and label
+    // the result with one currency — meaningless once both countries have
+    // upcoming bills in the window. In the combined (no country filter) view,
+    // show each currency's own total side by side instead of a fake merged
+    // number; a single-country filtered view still shows just that one total.
+    const glanceBillsEl = document.getElementById('glanceUpcomingBills');
+    if(!scopeCountryName){
+      const byCurrency = {};
+      dueItems.forEach(it => { byCurrency[it.currency] = (byCurrency[it.currency] || 0) + it.amount; });
+      const currencies = Object.keys(byCurrency);
+      if(currencies.length > 1){
+        glanceBillsEl.innerHTML = currencies.map(cur => `${escapeHtml(String(CURRENCIES[cur] || cur))} ${privacyMode ? PRIVACY_MASK : byCurrency[cur].toFixed(2)}`).join(' <span style="opacity:0.5;">+</span> ');
+      } else {
+        glanceBillsEl.textContent = curFmt(dueSum);
+      }
+    } else {
+      glanceBillsEl.textContent = curFmt(dueSum);
+    }
+    document.getElementById('glanceUpcomingSub').textContent = totalDueCount ? `${totalDueCount} ${win.label}` : `None ${win.label}`;
+
     const detailEl = document.getElementById('glanceUpcomingDetail');
     if(detailEl){
       detailEl.innerHTML = dueItems.length ? dueItems.map(it => `
