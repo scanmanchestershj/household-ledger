@@ -8292,10 +8292,73 @@
     });
   }
 
-  function verdictBadge(v){
+  function verdictBadge(v, info){
     const label = v === 'Neutral' ? 'Hold' : v;
-    return `<span style="color:${verdictColor(v)};font-weight:700;">${label}</span>`;
+    const icon = (info && info.total != null)
+      ? ` <span class="verdict-info-icon" data-verdict="${escapeHtml(v || '')}" data-buy="${info.buy ?? ''}" data-sell="${info.sell ?? ''}" data-total="${info.total ?? ''}" title="Why this verdict?" style="cursor:pointer;font-size:10px;line-height:14px;color:var(--ink-soft);border:1px solid var(--line);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;">ⓘ</span>`
+      : '';
+    return `<span style="color:${verdictColor(v)};font-weight:700;">${label}</span>${icon}`;
   }
+  // ---- Verdict info popover: explains, in plain language, why a stock got
+  // its Strong Buy / Buy / Hold / Sell / Strong Sell verdict (from the
+  // buy/sell signal counts already captured per scan) and how the paired
+  // Entry/Exit "Buy zone" / "Not a buy" label relates to it. One shared
+  // popover element, positioned next to whichever ⓘ icon was tapped. ----
+  function verdictExplanationHtml(v, buy, sell, total){
+    const n = total !== '' ? Number(total) : null;
+    const b = buy !== '' ? Number(buy) : null;
+    const s = sell !== '' ? Number(sell) : null;
+    const signalLine = (n != null && b != null) ? `<div style="margin-bottom:6px;"><b>${b}/${n}</b> technical signals (moving averages, RSI, MACD) are bullish${s != null ? `, ${s}/${n} bearish` : ''}.</div>` : '';
+    const templates = {
+      'Strong Buy': 'Most signals are bullish and price trend is firmly positive — the strongest buy read this screener gives.',
+      'Buy': 'More signals are bullish than bearish — a moderately favourable trend, one notch below Strong Buy.',
+      'Neutral': 'Signals are mixed — no clear trend either up or down right now.',
+      'Hold': 'Signals are mixed — no clear trend either up or down right now.',
+      'Sell': 'More signals are bearish than bullish — the trend has turned weak.',
+      'Strong Sell': 'Most signals are bearish and price trend is firmly negative — the strongest sell read this screener gives.'
+    };
+    const bearish = v === 'Sell' || v === 'Strong Sell';
+    return `<div style="font-size:12px;line-height:1.5;">
+      <div style="font-weight:700;margin-bottom:4px;color:${verdictColor(v)};">${v === 'Neutral' ? 'Hold' : v}</div>
+      ${signalLine}
+      <div style="margin-bottom:8px;">${templates[v] || 'No verdict data available.'}</div>
+      <div style="border-top:1px solid var(--line);padding-top:6px;font-size:11px;color:var(--ink-soft);">
+        <b>Entry/Exit (E · X):</b> E is a suggested entry — today's price, or its 50-day average if price is running &gt;3% above that. X is a target exit, with the gap scaled to how strong the verdict is.
+        ${bearish
+          ? '<br>Because this is a <b>' + escapeHtml(v) + '</b> verdict, the label always reads "Not a buy" here — it will never show "Buy zone" alongside a bearish verdict, even if price happens to be sitting right at its own average.'
+          : '<br>"Buy zone" means price is already at/near that suggested entry; "Wait for dip" means it is running above it.'}
+      </div>
+    </div>`;
+  }
+  (function setupVerdictInfoPopover(){
+    let pop = null;
+    function closePopover(){ if(pop){ pop.remove(); pop = null; } }
+    document.addEventListener('click', (e) => {
+      const icon = e.target.closest('.verdict-info-icon');
+      if(!icon){
+        if(pop && !e.target.closest('.verdict-info-popover')) closePopover();
+        return;
+      }
+      e.stopPropagation();
+      const wasOpenForThisIcon = pop && pop._forIcon === icon;
+      closePopover();
+      if(wasOpenForThisIcon) return;
+      const { verdict, buy, sell, total } = icon.dataset;
+      pop = document.createElement('div');
+      pop._forIcon = icon;
+      pop.className = 'verdict-info-popover';
+      pop.style.cssText = 'position:fixed;z-index:9999;max-width:280px;background:var(--card,#fff);border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,0.18);padding:10px 12px;';
+      pop.innerHTML = verdictExplanationHtml(verdict, buy, sell, total);
+      document.body.appendChild(pop);
+      const r = icon.getBoundingClientRect();
+      const popW = pop.offsetWidth, popH = pop.offsetHeight;
+      let left = Math.min(r.left, window.innerWidth - popW - 10);
+      let top = r.bottom + 6;
+      if(top + popH > window.innerHeight - 10) top = Math.max(10, r.top - popH - 6);
+      pop.style.left = Math.max(10, left) + 'px';
+      pop.style.top = top + 'px';
+    });
+  })();
   async function fetchOneVerdict(symbol, market){
     try{
       const res = await fetch(`/api/technical-analysis?q=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market || 'IN')}`);
@@ -8392,7 +8455,22 @@
     const entry = (ma50 != null && r.price > ma50 * 1.03) ? ma50 : r.price;
     const targetPct = r.verdict === 'Strong Buy' ? 0.20 : r.verdict === 'Buy' ? 0.12 : (r.verdict === 'Sell' || r.verdict === 'Strong Sell') ? 0.05 : 0.08;
     const exit = entry * (1 + targetPct);
-    return { entry, exit, canBuyNow: r.price <= entry * 1.02 };
+    // A Sell/Strong Sell verdict must never be paired with a "Buy zone" label —
+    // the price-vs-50-day-average check below is a short-term technicality and
+    // used to be computed with no awareness of the verdict at all, which is why
+    // a Strong Sell stock could still show "Buy zone" (whenever its price wasn't
+    // running >3% above its own average, entry defaulted to today's price, and
+    // price <= price*1.02 is almost always true). Bearish verdicts are now
+    // force-flagged so the label always agrees with the verdict.
+    const bearish = r.verdict === 'Sell' || r.verdict === 'Strong Sell';
+    const canBuyNow = !bearish && r.price <= entry * 1.02;
+    return { entry, exit, canBuyNow, bearish };
+  }
+  function renderEntryExitCell(ee){
+    if(!ee) return '—';
+    const label = ee.bearish ? 'Not a buy' : (ee.canBuyNow ? 'Buy zone' : 'Wait for dip');
+    const color = ee.bearish ? '#c0392b' : (ee.canBuyNow ? '#1e8449' : '#b8860b');
+    return `<span style="font-size:10.5px;">E ${ee.entry.toFixed(2)} · X ${ee.exit.toFixed(2)}</span><br><span style="font-size:9.5px;font-weight:600;color:${color};">${label}</span>`;
   }
   function renderBatchResults(cacheKey, resultElId){
     const box = document.getElementById(resultElId);
@@ -8408,8 +8486,8 @@
     const rows = sorted.map(r => {
       if(r.error) return `<tr><td>${escapeHtml(r.name)}</td><td colspan="3" style="color:var(--ink-soft);font-size:11px;">${escapeHtml(r.error)}</td></tr>`;
       const ee = computeEntryExitPrice(r);
-      const eeCell = ee ? `<span style="font-size:10.5px;">E ${ee.entry.toFixed(2)} · X ${ee.exit.toFixed(2)}</span><br><span style="font-size:9.5px;font-weight:600;color:${ee.canBuyNow ? '#1e8449' : '#b8860b'};">${ee.canBuyNow ? 'Buy zone' : 'Wait for dip'}</span>` : '—';
-      return `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="text-align:right;">${eeCell}</td><td>${verdictBadge(r.verdict)}</td></tr>`;
+      const eeCell = renderEntryExitCell(ee);
+      return `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="text-align:right;">${eeCell}</td><td>${verdictBadge(r.verdict, { buy: r.buySignals, sell: r.sellSignals, total: r.totalSignals })}</td></tr>`;
     }).join('');
     box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} · E = suggested entry price, X = target exit price</div><table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table><div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Entry/exit are a formula-based buy zone and target (price vs its own 50-day average, target width scaled to the verdict) — not a guarantee. "Buy zone" means today's price is already at or near the suggested entry; "Wait for dip" means it's running above it.</div>`;
   }
@@ -12240,9 +12318,7 @@
           ${sorted.map(g => {
             const v = verdictMap[normStockName(g.name)];
             const ee = v ? computeEntryExitPrice({ price: g.curPrice, ma50: v.ma50, verdict: v.verdict }) : null;
-            const eeCell = ee
-              ? `<span style="font-size:10px;">E ${ee.entry.toFixed(2)} · X ${ee.exit.toFixed(2)}</span><br><span style="font-size:9.5px;font-weight:600;color:${ee.canBuyNow ? '#1e8449' : '#b8860b'};">${ee.canBuyNow ? 'Buy zone' : 'Wait for dip'}</span>`
-              : '<span style="font-size:9.5px;color:var(--ink-soft);">Not scanned</span>';
+            const eeCell = ee ? renderEntryExitCell(ee) : '<span style="font-size:9.5px;color:var(--ink-soft);">Not scanned</span>';
             return `
             <tr style="border-top:1px solid var(--hairline, #eee);" data-stock-key="${escapeHtml(g.key)}">
               <td style="padding:5px 6px 5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${escapeHtml(g.name)}</td>
