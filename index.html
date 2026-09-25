@@ -2828,6 +2828,14 @@
           <label class="field-label">New password (leave blank to keep current)</label>
           <input type="password" id="myAccountPassword" placeholder="New password" autocomplete="new-password">
         </div>
+        <div class="full">
+          <label class="field-label">Quick-unlock PIN (4 digits) — used to resume the app after auto-lock, instead of re-entering your email and password. Closing the browser/tab still requires full sign-in.</label>
+          <div style="display:flex; gap:8px;">
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="myAccountPin" placeholder="New 4-digit PIN" autocomplete="off" style="flex:1;">
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="myAccountPinConfirm" placeholder="Confirm PIN" autocomplete="off" style="flex:1;">
+          </div>
+          <div id="myAccountPinStatus" style="font-size:11px;color:var(--ink-soft);margin-top:4px;"></div>
+        </div>
         <button class="add-btn full-width" id="myAccountSave">Save my account</button>
         <div id="myAccountMsg" style="grid-column:1/-1; font-size:12px; color:var(--teal-dark); display:none;">Saved.</div>
       </div>
@@ -4191,6 +4199,7 @@
   // fire and the old session would silently auto-log back in.
   const SESSION_TIMEOUT_MS = 1 * 60 * 1000;
   let idleTimer = null;
+  let isLocked = false;
   function touchActivity(){
     sessionStorage.setItem('lastActivityAt', String(Date.now()));
   }
@@ -4198,13 +4207,91 @@
     const last = parseInt(sessionStorage.getItem('lastActivityAt') || '0', 10);
     return last ? Date.now() - last : Infinity;
   }
+  // If the current user has set a quick-unlock PIN, auto-lock shows a PIN
+  // pad over the still-open app instead of fully signing out — the Supabase
+  // session (kept in sessionStorage) stays alive, so no email/password is
+  // needed to resume. Users without a PIN set fall back to the original
+  // full-logout behaviour. Actually closing the browser tab/window still
+  // requires full sign-in either way, since the Supabase session itself
+  // lives in sessionStorage and is cleared automatically when the tab closes.
   function forceIdleLogout(){
-    stopIdleWatch();
-    logout();
-    alert('You were signed out automatically after 1 minute of inactivity.');
+    if(currentUser && currentUser.quickPinHash){
+      showLockScreen();
+    } else {
+      stopIdleWatch();
+      logout();
+      alert('You were signed out automatically after 1 minute of inactivity. Set a quick-unlock PIN in My Account to avoid this next time.');
+    }
+  }
+  function ensureLockScreenEl(){
+    let el = document.getElementById('quickLockOverlay');
+    if(el) return el;
+    el = document.createElement('div');
+    el.id = 'quickLockOverlay';
+    el.style.cssText = 'position:fixed;inset:0;z-index:5000;background:rgba(10,14,20,0.92);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;flex-direction:column;padding:24px;';
+    el.innerHTML = `
+      <div style="background:var(--card,#fff);border-radius:16px;padding:28px 24px;max-width:300px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+        <div style="font-size:28px;margin-bottom:6px;">🔒</div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:2px;" id="quickLockName"></div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:16px;">Enter your PIN to continue</div>
+        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="quickLockInput" autocomplete="off" style="width:100%;box-sizing:border-box;font-size:22px;letter-spacing:10px;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;">
+        <div id="quickLockError" style="font-size:12px;color:var(--coral);min-height:16px;margin-bottom:10px;"></div>
+        <button type="button" id="quickLockUnlockBtn" class="add-btn full-width" style="margin-bottom:10px;">Unlock</button>
+        <button type="button" id="quickLockSignOutBtn" style="background:none;border:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;cursor:pointer;">Not you? Sign out</button>
+      </div>
+    `;
+    document.body.appendChild(el);
+    let attempts = 0;
+    async function tryUnlock(){
+      const inputEl = document.getElementById('quickLockInput');
+      const errEl = document.getElementById('quickLockError');
+      const pin = inputEl.value.trim();
+      if(!/^\d{4}$/.test(pin)){ errEl.textContent = 'Enter your 4-digit PIN.'; return; }
+      const hash = await hashPin(pin, currentUser.id);
+      if(hash === currentUser.quickPinHash){
+        attempts = 0;
+        hideLockScreen();
+      } else {
+        attempts++;
+        inputEl.value = '';
+        if(attempts >= 5){
+          hideLockScreen();
+          stopIdleWatch();
+          logout();
+          alert('Too many incorrect PIN attempts — signed out for security. Please sign in with your email and password.');
+          return;
+        }
+        errEl.textContent = `Incorrect PIN (${5 - attempts} attempt${5 - attempts === 1 ? '' : 's'} left).`;
+      }
+    }
+    el.querySelector('#quickLockUnlockBtn').addEventListener('click', tryUnlock);
+    el.querySelector('#quickLockInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') tryUnlock(); });
+    el.querySelector('#quickLockSignOutBtn').addEventListener('click', () => {
+      hideLockScreen();
+      stopIdleWatch();
+      logout();
+    });
+    return el;
+  }
+  function showLockScreen(){
+    if(isLocked || !currentUser) return;
+    isLocked = true;
+    stopIdleWatch(); // nothing left to time out further while locked
+    const el = ensureLockScreenEl();
+    document.getElementById('quickLockName').textContent = currentUser.name || currentUser.username;
+    document.getElementById('quickLockError').textContent = '';
+    document.getElementById('quickLockInput').value = '';
+    el.style.display = 'flex';
+    setTimeout(() => { const i = document.getElementById('quickLockInput'); if(i) i.focus(); }, 50);
+  }
+  function hideLockScreen(){
+    isLocked = false;
+    const el = document.getElementById('quickLockOverlay');
+    if(el) el.style.display = 'none';
+    resetIdleTimer(); // touches activity and restarts the countdown; listeners are already attached from the initial startIdleWatch() at login
   }
   function resetIdleTimer(){
-    if(!currentUser) return;
+    if(!currentUser || isLocked) return;
     touchActivity();
     if(idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
@@ -10935,11 +11022,22 @@
 
 
   // ---- Admin ----
+  async function hashPin(pin, salt){
+    const enc = new TextEncoder().encode('qpin:' + salt + ':' + pin);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
   function populateMyAccount(){
     if(!currentUser) return;
     document.getElementById('myAccountName').value = currentUser.name || currentUser.username;
     document.getElementById('myAccountUsername').value = currentUser.email || currentUser.username;
     document.getElementById('myAccountPassword').value = '';
+    document.getElementById('myAccountPin').value = '';
+    document.getElementById('myAccountPinConfirm').value = '';
+    const pinStatus = document.getElementById('myAccountPinStatus');
+    if(pinStatus) pinStatus.textContent = currentUser.quickPinHash
+      ? 'A quick-unlock PIN is set. Enter a new one above to change it.'
+      : 'No quick-unlock PIN set yet — without one, auto-lock will require your full email and password each time.';
     const inviteBox = document.getElementById('inviteCodeBox');
     if(inviteBox){
       if(currentUser.role === 'admin' && myProfile){
@@ -10956,21 +11054,30 @@
     if(!currentUser) return;
     const newName = document.getElementById('myAccountName').value.trim();
     const newPassword = document.getElementById('myAccountPassword').value;
+    const newPin = document.getElementById('myAccountPin').value.trim();
+    const newPinConfirm = document.getElementById('myAccountPinConfirm').value.trim();
     if(newPassword && newPassword.length < 6){ alert('New password must be at least 6 characters.'); return; }
+    if(newPin || newPinConfirm){
+      if(!/^\d{4}$/.test(newPin)){ alert('Quick-unlock PIN must be exactly 4 digits.'); return; }
+      if(newPin !== newPinConfirm){ alert('PIN and confirmation don\'t match.'); return; }
+    }
     if(newPassword){
       const { error } = await sb.auth.updateUser({ password: newPassword });
       if(error){ alert('Could not update password: ' + error.message); return; }
     }
     const u = state.users.find(x => x.id === currentUser.id);
     u.name = newName || u.username;
+    if(newPin) u.quickPinHash = await hashPin(newPin, u.id);
     currentUser = u;
     await sb.from('profiles').update({ name: u.name }).eq('id', currentUser.id);
     document.getElementById('sessionInfo').textContent = `Logged in as ${u.name} (${u.role})`;
     document.getElementById('myAccountPassword').value = '';
+    document.getElementById('myAccountPin').value = '';
+    document.getElementById('myAccountPinConfirm').value = '';
     const msg = document.getElementById('myAccountMsg');
     msg.style.display = '';
     setTimeout(() => { msg.style.display = 'none'; }, 2000);
-    save(); renderAdmin();
+    save(); renderAdmin(); populateMyAccount();
   });
 
 
@@ -11145,6 +11252,7 @@
             <div>
               ${!isSelf ? `<button class="edit-btn" data-action="togglerole" data-id="${u.id}" title="${u.role === 'admin' ? 'Make member' : 'Make admin'}">${u.role === 'admin' ? '⬇︎ admin' : '⬆︎ admin'}</button>` : ''}
               <button class="edit-btn" data-action="resetpw" data-id="${u.id}" title="Send password reset email">🔑</button>
+              ${u.quickPinHash ? `<button class="edit-btn" data-action="clearpin" data-id="${u.id}" title="Clear this user's quick-unlock PIN — they'll need to set a new one in My Account">🔓</button>` : ''}
               ${!isSelf ? `<button class="del-btn" data-action="deluser" data-id="${u.id}" title="Remove from household">×</button>` : ''}
             </div>
           </div>
@@ -11197,6 +11305,15 @@
       const { error } = await sb.auth.resetPasswordForEmail(target.email);
       if(error){ alert('Could not send reset email: ' + error.message); }
       else { alert(`Password reset email sent to ${target.email}.`); }
+    }));
+    list.querySelectorAll('[data-action="clearpin"]').forEach(el => el.addEventListener('click', () => {
+      const id = el.dataset.id;
+      const target = state.users.find(u => u.id === id);
+      if(!target) return;
+      if(!confirm(`Clear ${target.name || target.username}'s quick-unlock PIN? Auto-lock will require their full email and password until they set a new one.`)) return;
+      delete target.quickPinHash;
+      if(currentUser && currentUser.id === id) populateMyAccount();
+      save(); renderAdmin();
     }));
     list.querySelectorAll('.perm-chip').forEach(el => el.addEventListener('click', () => {
       const uidVal = el.dataset.user, tab = el.dataset.tab;
