@@ -4305,18 +4305,33 @@
     // Switching to another browser tab or app doesn't fire any of the events
     // above, and browsers throttle/suspend setTimeout in a hidden tab — so
     // the timer above can't be trusted to fire on time while you're away.
-    // Instead, the moment you switch back (tab becomes visible again), check
-    // real elapsed time since the last recorded activity and log out
-    // immediately if it's over the limit, same as a fresh app launch.
-    document.addEventListener('visibilitychange', () => {
-      if(document.visibilityState !== 'visible') return;
-      if(!currentUser) return;
+    // Instead, the moment you switch back, check real elapsed time since the
+    // last recorded activity and lock/log out immediately if it's over the
+    // limit, same as a fresh app launch.
+    //
+    // Mobile note: 'visibilitychange' alone is unreliable across mobile
+    // browsers and, especially, "Add to Home Screen" standalone PWAs — some
+    // mobile WebViews don't fire it consistently when you switch apps and
+    // come back, which is why the lock/logout was never triggering on
+    // mobile. 'pageshow' (fired when the page becomes the active page again,
+    // including from the mobile back-forward/app-switcher cache) and
+    // 'focus' on window are added as redundant checks so at least one of
+    // the three reliably catches the resume on any given mobile browser.
+    // Calling this more than once on the same resume is harmless — it's
+    // guarded by isLocked / currentUser checks.
+    function checkResumeIdle(){
+      if(!currentUser || isLocked) return;
       if(msSinceLastActivity() > SESSION_TIMEOUT_MS){
         forceIdleLogout();
       } else {
         resetIdleTimer();
       }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState === 'visible') checkResumeIdle();
     });
+    window.addEventListener('pageshow', checkResumeIdle);
+    window.addEventListener('focus', checkResumeIdle);
     resetIdleTimer();
   }
   function stopIdleWatch(){
