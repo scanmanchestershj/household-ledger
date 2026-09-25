@@ -11856,6 +11856,31 @@
     });
   }
 
+  // Same moving-average costing as investmentGroupByName above, but keeps the
+  // running average price *after each individual transaction* (keyed by entry
+  // id) instead of only the final figure — so each Buy/Sell row in the
+  // expanded transaction list can show what the average price was at that
+  // point in time, not just today's overall average.
+  function investmentRunningAvgById(entries){
+    const sorted = entries.slice().sort((a,b) => (a.date||'').localeCompare(b.date||'') || String(a.id).localeCompare(String(b.id)));
+    const map = {};
+    let qty = 0, invested = 0;
+    sorted.forEach(e => {
+      const eq = Number(e.qty) || 0, ep = Number(e.price) || 0;
+      if(e.type === 'sell'){
+        const sellQty = Math.min(eq, qty);
+        const avg = qty > 0 ? invested / qty : 0;
+        invested -= sellQty * avg;
+        qty -= sellQty;
+      } else {
+        invested += eq * ep;
+        qty += eq;
+      }
+      map[e.id] = qty > 0 ? invested / qty : 0;
+    });
+    return map;
+  }
+
   function renderInvestmentCategory(countryKey, catCfg){
     const idBase = invPrefix(countryKey) + 'Inv' + catCfg.idPart;
     const list = document.getElementById(idBase + 'List');
@@ -11968,15 +11993,17 @@
           <div class="inv-holding-txn-list"></div>
         </div>`;
       const txnList = card.querySelector('.inv-holding-txn-list');
+      const runningAvg = investmentRunningAvgById(groupEntries);
       groupEntries.forEach(h => {
         const typeLabel = h.type === 'sell' ? 'Sell' : 'Buy';
         const typeClass = h.type === 'sell' ? 'sell' : 'buy';
+        const avgAtTime = runningAvg[h.id];
         const row = document.createElement('div');
         row.className = 'inv-holding-row';
         row.innerHTML = `
           <div class="inv-holding-main">
             <div class="inv-holding-name"><span class="inv-holding-txn ${typeClass}">${typeLabel}</span>${escapeHtml(h.name)}</div>
-            <div class="inv-holding-meta">${h.qty} ${catCfg.qtyLabel} @ ${fmtCountry(h.price, countryKey)}${h.date ? ' · ' + escapeHtml(h.date) : ''}</div>
+            <div class="inv-holding-meta">${h.qty} ${catCfg.qtyLabel} @ ${fmtCountry(h.price, countryKey)}${h.date ? ' · ' + escapeHtml(h.date) : ''}${avgAtTime != null ? ' · Avg ' + fmtCountry(avgAtTime, countryKey) : ''}</div>
           </div>
           <button class="edit-btn" data-id="${h.id}" aria-label="Edit entry">✎</button>
           <button class="del-btn" data-id="${h.id}" aria-label="Delete entry">×</button>
