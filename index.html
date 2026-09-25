@@ -11037,6 +11037,85 @@
 
 
   // ---- Admin ----
+  // ---- Email OTP confirmation for sensitive account actions (changing your
+  // password/PIN, deleting a user). Reuses Supabase Auth's own email-OTP
+  // delivery (signInWithOtp/verifyOtp) rather than standing up a separate
+  // mail service — no new backend or API key needed. Note: for the code to
+  // arrive as a typeable 6-digit number rather than only a clickable link,
+  // the Supabase project's Auth → Email Templates → "Magic Link" template
+  // needs to include the {{ .Token }} placeholder (Supabase includes this
+  // by default in current projects). ----
+  function ensureOtpModalEl(){
+    let el = document.getElementById('emailOtpModal');
+    if(el) return el;
+    el = document.createElement('div');
+    el.id = 'emailOtpModal';
+    el.style.cssText = 'position:fixed;inset:0;z-index:6000;background:rgba(10,14,20,0.6);display:none;align-items:center;justify-content:center;padding:24px;';
+    el.innerHTML = `
+      <div style="background:var(--card,#fff);border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.35);">
+        <div style="font-weight:700;font-size:15px;margin-bottom:6px;">Confirm with email code</div>
+        <div id="emailOtpMessage" style="font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;"></div>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="emailOtpInput" placeholder="6-digit code" autocomplete="one-time-code" style="width:100%;box-sizing:border-box;font-size:20px;letter-spacing:6px;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--line);margin-bottom:8px;">
+        <div id="emailOtpError" style="font-size:12px;color:var(--coral);min-height:16px;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="emailOtpCancelBtn" class="add-btn ghost" style="flex:1;">Cancel</button>
+          <button type="button" id="emailOtpConfirmBtn" class="add-btn" style="flex:1;">Confirm</button>
+        </div>
+        <button type="button" id="emailOtpResendBtn" style="margin-top:10px;background:none;border:none;color:var(--ink-soft);font-size:11.5px;text-decoration:underline;cursor:pointer;width:100%;">Resend code</button>
+      </div>
+    `;
+    document.body.appendChild(el);
+    return el;
+  }
+  function confirmWithEmailOtp(email, message){
+    const el = ensureOtpModalEl();
+    const msgEl = document.getElementById('emailOtpMessage');
+    const errEl = document.getElementById('emailOtpError');
+    const input = document.getElementById('emailOtpInput');
+    const confirmBtn = document.getElementById('emailOtpConfirmBtn');
+    const cancelBtn = document.getElementById('emailOtpCancelBtn');
+    const resendBtn = document.getElementById('emailOtpResendBtn');
+    return new Promise((resolve) => {
+      let attempts = 0, resolved = false;
+      function cleanup(result){
+        if(resolved) return;
+        resolved = true;
+        el.style.display = 'none';
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        resendBtn.removeEventListener('click', onResend);
+        input.removeEventListener('keydown', onKeydown);
+        resolve(result);
+      }
+      async function sendCode(){
+        errEl.textContent = 'Sending code…';
+        const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+        errEl.textContent = error ? ('Could not send code: ' + error.message) : `Code sent to ${email} — enter it above.`;
+      }
+      async function onConfirm(){
+        const token = input.value.trim();
+        if(!/^\d{6}$/.test(token)){ errEl.textContent = 'Enter the 6-digit code.'; return; }
+        const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+        if(!error){ cleanup(true); return; }
+        attempts++;
+        input.value = '';
+        if(attempts >= 5){ errEl.textContent = 'Too many incorrect attempts.'; cleanup(false); return; }
+        errEl.textContent = `Incorrect or expired code (${5 - attempts} attempt${5 - attempts === 1 ? '' : 's'} left).`;
+      }
+      function onCancel(){ cleanup(false); }
+      function onResend(){ sendCode(); }
+      function onKeydown(e){ if(e.key === 'Enter') onConfirm(); }
+      msgEl.textContent = message;
+      input.value = '';
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+      resendBtn.addEventListener('click', onResend);
+      input.addEventListener('keydown', onKeydown);
+      el.style.display = 'flex';
+      sendCode();
+      setTimeout(() => input.focus(), 50);
+    });
+  }
   async function hashPin(pin, salt){
     const enc = new TextEncoder().encode('qpin:' + salt + ':' + pin);
     const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -11075,6 +11154,14 @@
     if(newPin || newPinConfirm){
       if(!/^\d{4}$/.test(newPin)){ alert('Quick-unlock PIN must be exactly 4 digits.'); return; }
       if(newPin !== newPinConfirm){ alert('PIN and confirmation don\'t match.'); return; }
+    }
+    // Changing the password or the quick-unlock PIN needs an emailed OTP
+    // confirmed first — these are exactly the credentials someone could use
+    // to take over the account, so a plain in-app click isn't enough on its
+    // own. A name-only save skips this and saves immediately.
+    if(newPassword || newPin){
+      const ok = await confirmWithEmailOtp(currentUser.email, 'Enter the code sent to your email to confirm this password/PIN change.');
+      if(!ok){ return; }
     }
     if(newPassword){
       const { error } = await sb.auth.updateUser({ password: newPassword });
@@ -11307,6 +11394,11 @@
         return;
       }
       if(!confirm(`Remove "${target.name || target.username}" from this household? They keep their login but lose access to this household's data. (Their own Supabase account is not deleted.)`)) return;
+      // Deleting a user (especially a "Full access — all tabs" admin) is
+      // hard to undo, so the acting admin must confirm with a code emailed
+      // to their own address before it actually runs.
+      const ok = await confirmWithEmailOtp(currentUser.email, `Enter the code sent to your email to approve removing "${target.name || target.username}".`);
+      if(!ok) return;
       const { error } = await sb.from('profiles').delete().eq('id', id);
       if(error){ alert('Could not remove user: ' + error.message); return; }
       state.users = state.users.filter(u => u.id !== id);
