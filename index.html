@@ -12733,7 +12733,11 @@
     const data = currentData().countries[countryKey];
     const period = monthFilter ? { type: 'monthly', key: monthFilter } : null;
     const tx = (data.transactions || []).filter(t => !period || inPeriod(t.date, period));
-    const balance = tx.reduce((sum, t) => {
+    // Same fix as balanceFor() in renderOverview(): carry forward every prior
+    // month's opening balance when a specific month is selected, matching
+    // renderBudgetCountry's calculation exactly.
+    const opening = period ? computeOpeningBalance(periodStartDate(period), countryKey) : 0;
+    const balance = opening + tx.reduce((sum, t) => {
       if(t.type === 'income') return sum + Number(t.amount);
       if(t.type === 'borrowing') return sum;
       return sum - Number(t.amount);
@@ -13035,7 +13039,12 @@
 
     function balanceFor(countryKey){
       const period = monthFilter ? { type: 'monthly', key: monthFilter } : null;
-      return (currentData().countries[countryKey].transactions || []).filter(t => !period || inPeriod(t.date, period)).reduce((sum, t) => {
+      // Mirrors renderBudgetCountry's balance exactly: for a specific month,
+      // start from every prior month's carried-forward opening balance, not
+      // just this month's own transactions — otherwise Overview undercounts
+      // by whatever was left over before this month started.
+      const opening = period ? computeOpeningBalance(periodStartDate(period), countryKey) : 0;
+      return opening + (currentData().countries[countryKey].transactions || []).filter(t => !period || inPeriod(t.date, period)).reduce((sum, t) => {
         if(t.type === 'income') return sum + Number(t.amount);
         if(t.type === 'borrowing') return sum;
         return sum - Number(t.amount);
