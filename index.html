@@ -431,6 +431,19 @@
   .subtab.active{ background:var(--heading-ink); color:#fff; }
   .subpanel{ display:none; }
   .subpanel.active{ display:block; animation: fadeIn 0.2s ease; }
+
+  /* Accounting (Zoho Books-style) status badges + helpers */
+  .acct-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; text-transform:uppercase; padding:2px 8px; border-radius:10px; display:inline-block; }
+  .acct-badge-draft{ background:var(--paper-deep); color:var(--ink-soft); }
+  .acct-badge-sent{ background:#DDEBF7; color:#1B5E8A; }
+  .acct-badge-partial{ background:#FCEED9; color:#9A6400; }
+  .acct-badge-paid{ background:#DCEAE6; color:var(--teal-dark); }
+  .acct-badge-overdue{ background:#FBDCDC; color:#B3261E; }
+  .acct-search{ width:100%; box-sizing:border-box; padding:8px 10px; border-radius:10px; border:1px solid var(--line); font-family:inherit; font-size:13px; margin-bottom:10px; }
+  .acct-mini-list{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 12px 0; }
+  .acct-mini-chip{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:4px 10px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink-soft); display:inline-flex; align-items:center; gap:6px; }
+  .acct-mini-chip button{ border:none; background:none; color:var(--coral); cursor:pointer; font-size:11px; padding:0; line-height:1; }
+  .acct-export-row{ display:flex; gap:8px; margin:8px 0 14px 0; }
 </style>
 </head>
 <body>
@@ -1000,6 +1013,7 @@
         <button class="subtab active" draggable="true" data-acct-sub="home">Home</button>
         <button class="subtab" draggable="true" data-acct-sub="items">Items</button>
         <button class="subtab" draggable="true" data-acct-sub="sales">Sales</button>
+        <button class="subtab" draggable="true" data-acct-sub="purchases">Purchases</button>
         <button class="subtab" draggable="true" data-acct-sub="accountant">Accountant</button>
         <button class="subtab" draggable="true" data-acct-sub="reports">Reports</button>
       </div>
@@ -1008,7 +1022,6 @@
       <div class="subpanel active" data-acct-sub="home">
         <div class="section-title" style="margin-top:0;">Overview</div>
         <div class="stat-grid" id="acctHomeStats"></div>
-        <div style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Payables reflects whatever's posted to Accounts Payable in the Accountant tab — there's no Purchases/Bills queue yet, so bills are entered as manual journal entries for now.</div>
       </div>
 
       <!-- ITEMS -->
@@ -1028,14 +1041,26 @@
           <input type="number" id="acctItemQty" placeholder="Opening qty" step="1" style="max-width:110px;">
         </div>
         <button class="add-btn full-width" id="acctItemAdd" style="margin-bottom:10px;">Add item</button>
+        <input type="text" class="acct-search" id="acctItemSearch" placeholder="Search items…">
         <ul class="item-list" id="acctItemList"></ul>
       </div>
 
       <!-- SALES -->
       <div class="subpanel" data-acct-sub="sales">
-        <div class="section-title" style="margin-top:0;">Invoices</div>
+        <div class="section-title" style="margin-top:0;">Customers</div>
         <div class="add-row">
-          <input type="text" id="acctInvCustomer" placeholder="Customer name">
+          <input type="text" id="acctCustName" placeholder="Customer name">
+          <input type="text" id="acctCustEmail" placeholder="Email (optional)">
+          <input type="text" id="acctCustPhone" placeholder="Phone (optional)" style="max-width:130px;">
+        </div>
+        <button class="add-btn full-width" id="acctCustAdd" style="margin-bottom:6px;">Add customer</button>
+        <div class="acct-mini-list" id="acctCustList"></div>
+
+        <div class="section-title">Invoices</div>
+        <div id="acctInvEditingNote" style="display:none;font-size:11.5px;color:#9A6400;margin-bottom:6px;">Editing an existing invoice — saving will replace it.</div>
+        <div class="add-row">
+          <input type="text" id="acctInvCustomer" placeholder="Customer name" list="acctCustomerDatalist">
+          <datalist id="acctCustomerDatalist"></datalist>
         </div>
         <div class="add-row">
           <input type="date" id="acctInvDate" placeholder="Invoice date">
@@ -1051,9 +1076,73 @@
             <option value="Paid">Paid</option>
           </select>
         </div>
-        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px 0;">Saving as "Sent" or "Paid" books the sale automatically (Dr Accounts Receivable / Cr Sales Revenue), plus cost of goods for stocked items. "Paid" also books the collection (Dr Cash / Cr Accounts Receivable) right away — or mark it paid later from the list below.</div>
-        <button type="button" class="add-btn full-width" id="acctInvSave" style="margin-bottom:12px;">Save invoice</button>
+        <div class="add-row">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="acctInvRecurring"> Repeat this invoice</label>
+          <select class="who-select" id="acctInvRecurFreq" style="max-width:120px;display:none;">
+            <option value="weekly">Weekly</option>
+            <option value="monthly" selected>Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+          <input type="date" id="acctInvRecurEnd" placeholder="Ends (optional)" style="display:none;">
+        </div>
+        <textarea id="acctInvNotes" placeholder="Notes (optional)" style="width:100%;box-sizing:border-box;min-height:44px;border-radius:10px;border:1px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;margin-bottom:8px;"></textarea>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px 0;">Saving as "Sent" or "Paid" books the sale automatically (Dr Accounts Receivable / Cr Sales Revenue), plus cost of goods for stocked items. "Paid" also books the collection right away — or record payments (partial or full) later from the list below.</div>
+        <div class="add-row">
+          <button type="button" class="add-btn full-width" id="acctInvSave">Save invoice</button>
+          <button type="button" class="add-btn ghost full-width" id="acctInvCancelEdit" style="display:none;">Cancel edit</button>
+        </div>
+        <input type="text" class="acct-search" id="acctInvSearch" placeholder="Search invoices by customer or number…" style="margin-top:12px;">
         <ul class="item-list" id="acctInvList"></ul>
+      </div>
+
+      <!-- PURCHASES -->
+      <div class="subpanel" data-acct-sub="purchases">
+        <div class="section-title" style="margin-top:0;">Vendors</div>
+        <div class="add-row">
+          <input type="text" id="acctVendName" placeholder="Vendor name">
+          <input type="text" id="acctVendEmail" placeholder="Email (optional)">
+          <input type="text" id="acctVendPhone" placeholder="Phone (optional)" style="max-width:130px;">
+        </div>
+        <button class="add-btn full-width" id="acctVendAdd" style="margin-bottom:6px;">Add vendor</button>
+        <div class="acct-mini-list" id="acctVendList"></div>
+
+        <div class="section-title">Bills</div>
+        <div id="acctBillEditingNote" style="display:none;font-size:11.5px;color:#9A6400;margin-bottom:6px;">Editing an existing bill — saving will replace it.</div>
+        <div class="add-row">
+          <input type="text" id="acctBillVendor" placeholder="Vendor name" list="acctVendorDatalist">
+          <datalist id="acctVendorDatalist"></datalist>
+        </div>
+        <div class="add-row">
+          <input type="date" id="acctBillDate" placeholder="Bill date">
+          <input type="date" id="acctBillDueDate" placeholder="Due date">
+        </div>
+        <div id="acctBillLines"></div>
+        <button type="button" class="add-btn ghost" id="acctBillAddLine" style="margin-bottom:8px;">+ Add line</button>
+        <div class="add-row">
+          <label class="field-label" style="align-self:center;margin:0;">Status</label>
+          <select class="who-select" id="acctBillStatus" style="max-width:120px;">
+            <option value="Draft">Draft</option>
+            <option value="Open">Open</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </div>
+        <div class="add-row">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="acctBillRecurring"> Repeat this bill</label>
+          <select class="who-select" id="acctBillRecurFreq" style="max-width:120px;display:none;">
+            <option value="weekly">Weekly</option>
+            <option value="monthly" selected>Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+          <input type="date" id="acctBillRecurEnd" placeholder="Ends (optional)" style="display:none;">
+        </div>
+        <textarea id="acctBillNotes" placeholder="Notes (optional)" style="width:100%;box-sizing:border-box;min-height:44px;border-radius:10px;border:1px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;margin-bottom:8px;"></textarea>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px 0;">Saving as "Open" or "Paid" books it automatically (Dr the expense account per line / Cr Accounts Payable). "Paid" also books the payment right away — or record payments (partial or full) later from the list below.</div>
+        <div class="add-row">
+          <button type="button" class="add-btn full-width" id="acctBillSave">Save bill</button>
+          <button type="button" class="add-btn ghost full-width" id="acctBillCancelEdit" style="display:none;">Cancel edit</button>
+        </div>
+        <input type="text" class="acct-search" id="acctBillSearch" placeholder="Search bills by vendor or number…" style="margin-top:12px;">
+        <ul class="item-list" id="acctBillList"></ul>
       </div>
 
       <!-- ACCOUNTANT -->
@@ -1095,11 +1184,23 @@
           <input type="date" id="acctReportFrom">
           <input type="date" id="acctReportTo">
         </div>
+        <div class="acct-export-row">
+          <button type="button" class="add-btn ghost" id="acctExportPdf">Export PDF</button>
+          <button type="button" class="add-btn ghost" id="acctExportExcel">Export Excel</button>
+        </div>
         <div id="acctPnl"></div>
 
         <div class="section-title">Balance Sheet</div>
         <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">As of the "To" date above.</div>
         <div id="acctBalanceSheet"></div>
+
+        <div class="section-title">Aged Receivables</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Unpaid/partially paid invoices, grouped by how overdue they are.</div>
+        <div id="acctAgedReceivables"></div>
+
+        <div class="section-title">Aged Payables</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Unpaid/partially paid bills, grouped by how overdue they are.</div>
+        <div id="acctAgedPayables"></div>
       </div>
     </section>
 
@@ -3307,7 +3408,10 @@
       ],
       journalEntries: [],
       items: [],
-      invoices: []
+      invoices: [],
+      customers: [],
+      vendors: [],
+      bills: []
     };
   }
   let editingCardId = null;
@@ -3695,6 +3799,17 @@
     if(!Array.isArray(ud.accounting.journalEntries)) ud.accounting.journalEntries = [];
     if(!Array.isArray(ud.accounting.items)) ud.accounting.items = [];
     if(!Array.isArray(ud.accounting.invoices)) ud.accounting.invoices = [];
+    if(!Array.isArray(ud.accounting.customers)) ud.accounting.customers = [];
+    if(!Array.isArray(ud.accounting.vendors)) ud.accounting.vendors = [];
+    if(!Array.isArray(ud.accounting.bills)) ud.accounting.bills = [];
+    // Invoices created before partial payments/recurring/notes existed —
+    // backfill each one so older invoices behave the same as new ones.
+    ud.accounting.invoices.forEach(inv => {
+      if(!Array.isArray(inv.payments)) inv.payments = [];
+      if(typeof inv.amountPaid !== 'number') inv.amountPaid = inv.status === 'Paid' ? Number(inv.total) || 0 : 0;
+      if(typeof inv.notes !== 'string') inv.notes = '';
+      if(inv.recurring === undefined) inv.recurring = null;
+    });
   }
 
   function seedDefaults(){
@@ -4512,6 +4627,7 @@
     if(darkMode) applyDarkMode(true); // household theme sets teal/accent; re-apply dark backdrop on top
     generateRecurringTransactions();
     generateRecurringChoresCheck();
+    generateRecurringAccountingDocs();
     applyDeepLinkFromUrl();
   }
 
@@ -13229,14 +13345,15 @@
   }
 
   // ============================================================
-  // ACCOUNTING (Zoho Books-style: Home / Items / Sales / Accountant / Reports)
+  // ACCOUNTING (Zoho Books-style: Home / Items / Sales / Purchases / Accountant / Reports)
   // A single set of household "books" using real double-entry bookkeeping —
   // separate from the personal Resident/Home Country budget tracking
   // elsewhere in the app. Creating/sending an invoice books Dr Accounts
   // Receivable / Cr Sales Revenue automatically (plus Dr COGS / Cr Inventory
-  // for stocked items); marking it Paid books Dr Cash / Cr Accounts
-  // Receivable. Manual journal entries in the Accountant tab cover
-  // everything else and must balance (debits = credits) to save.
+  // for stocked items); a bill books Dr Expense(s) / Cr Accounts Payable.
+  // Recording a payment (partial or full) books Dr Cash / Cr Accounts
+  // Receivable (or the reverse for bills). Manual journal entries in the
+  // Accountant tab cover everything else and must balance to save.
   // ============================================================
   function acctData(){
     const ud = currentData();
@@ -13256,12 +13373,12 @@
     const a = acctData().accounts.find(x => x.id === id);
     return a ? a.name : '(deleted account)';
   }
-  function postJournalEntry(date, memo, lines, sourceInvoiceId){
-    acctData().journalEntries.push({ id: uid(), date, memo, lines, sourceInvoiceId: sourceInvoiceId || null, auto: !!sourceInvoiceId });
+  function postJournalEntry(date, memo, lines, sourceId){
+    acctData().journalEntries.push({ id: uid(), date, memo, lines, sourceInvoiceId: sourceId || null, auto: !!sourceId });
   }
-  function reverseInvoiceEntries(invoiceId){
+  function reverseEntriesForSource(sourceId){
     const acc = acctData();
-    acc.journalEntries = acc.journalEntries.filter(je => je.sourceInvoiceId !== invoiceId);
+    acc.journalEntries = acc.journalEntries.filter(je => je.sourceInvoiceId !== sourceId);
   }
   function acctAccountBalance(accountId, uptoDate){
     const acc = acctData();
@@ -13307,12 +13424,68 @@
     const totalAssets = assets.reduce((s,r) => s + r.balance, 0);
     const totalLiabilities = liabilities.reduce((s,r) => s + r.balance, 0);
     const totalEquityBooked = equity.reduce((s,r) => s + r.balance, 0);
-    // Net income to date rolls into Equity as "Retained earnings" (it isn't
-    // its own ledger account here) so the sheet balances — same approach
-    // most books use before a formal period-close.
     const pnl = computePnl(null, asOf);
     const totalEquity = totalEquityBooked + pnl.netIncome;
     return { assets, liabilities, equity, retainedEarnings: pnl.netIncome, totalAssets, totalLiabilities, totalEquity };
+  }
+  function addDaysToDate(dateStr, days){
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0,10);
+  }
+  function acctAddByFreq(dateStr, freq){
+    if(freq === 'weekly') return addDaysToDate(dateStr, 7);
+    if(freq === 'yearly') return addMonthsToDate(dateStr, 12);
+    return addMonthsToDate(dateStr, 1);
+  }
+  // Draft/Sent-or-Open/Paid is what's actually stored; Partial and Overdue
+  // are derived at display time from amountPaid vs total and dueDate vs
+  // today, so there's only ever one source of truth for "is this paid".
+  function acctEffectiveStatus(doc, postedLabel, asOf){
+    const today = asOf || todayStr();
+    if(doc.status === 'Draft') return 'Draft';
+    const total = Number(doc.total) || 0, paid = Number(doc.amountPaid) || 0;
+    const isPaid = paid >= total - 0.005;
+    if(isPaid) return 'Paid';
+    const overdue = !!(doc.dueDate && doc.dueDate < today);
+    if(paid > 0) return overdue ? 'Overdue' : 'Partial';
+    return overdue ? 'Overdue' : postedLabel;
+  }
+  function acctBadgeHtml(effectiveStatus){
+    const map = { Draft: 'draft', Sent: 'sent', Open: 'sent', Partial: 'partial', Paid: 'paid', Overdue: 'overdue' };
+    const cls = map[effectiveStatus] || 'draft';
+    return `<span class="acct-badge acct-badge-${cls}">${escapeHtml(effectiveStatus)}</span>`;
+  }
+  function computeAgedBuckets(docs, asOf){
+    const today = asOf || todayStr();
+    const order = ['Current','1-30','31-60','61-90','90+'];
+    const buckets = { Current: [], '1-30': [], '31-60': [], '61-90': [], '90+': [] };
+    docs.filter(d => d.status !== 'Draft' && (Number(d.amountPaid)||0) < Number(d.total) - 0.005).forEach(d => {
+      const outstanding = Number(d.total) - (Number(d.amountPaid)||0);
+      const due = d.dueDate || d.date;
+      const daysOverdue = due ? Math.floor((new Date(today + 'T00:00:00') - new Date(due + 'T00:00:00')) / 86400000) : 0;
+      let bucket = 'Current';
+      if(daysOverdue > 90) bucket = '90+';
+      else if(daysOverdue > 60) bucket = '61-90';
+      else if(daysOverdue > 30) bucket = '31-60';
+      else if(daysOverdue > 0) bucket = '1-30';
+      buckets[bucket].push({ doc: d, outstanding });
+    });
+    const totals = {};
+    order.forEach(k => { totals[k] = buckets[k].reduce((s,r) => s + r.outstanding, 0); });
+    return { buckets, totals, order };
+  }
+  function renderAgedTable(containerEl, docs, nameField, numberField){
+    if(!containerEl) return;
+    const { buckets, totals, order } = computeAgedBuckets(docs, todayStr());
+    const rows = [];
+    order.forEach(k => { buckets[k].forEach(r => rows.push({ bucket: k, name: r.doc[nameField], number: r.doc[numberField], due: r.doc.dueDate || r.doc.date, outstanding: r.outstanding })); });
+    containerEl.innerHTML = rows.length ? `
+      ${rows.map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.number)} · ${escapeHtml(r.name)} <span style="color:var(--ink-soft);">(${r.bucket}, due ${escapeHtml(r.due || '—')})</span></span><span>${fmt(r.outstanding)}</span></div>`).join('')}
+      <div class="breakdown-row" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px;">
+        ${order.filter(k => totals[k] > 0.005).map(k => `<span style="margin-right:12px;font-size:11px;color:var(--ink-soft);">${k}: <strong style="color:var(--ink);">${fmt(totals[k])}</strong></span>`).join('')}
+      </div>
+    ` : '<div class="empty">Nothing outstanding.</div>';
   }
 
   function activateAcctSubtab(sub){
@@ -13321,6 +13494,7 @@
     if(sub === 'home') renderAcctHome();
     if(sub === 'items') renderAcctItems();
     if(sub === 'sales') renderAcctSales();
+    if(sub === 'purchases') renderAcctPurchases();
     if(sub === 'accountant') renderAcctAccountant();
     if(sub === 'reports') renderAcctReports();
   }
@@ -13340,13 +13514,19 @@
     const box = document.getElementById('acctHomeStats');
     if(!box) return;
     const acc = acctData();
-    const receivables = acc.invoices.filter(i => i.status === 'Sent' || i.status === 'Overdue').reduce((s,i) => s + Number(i.total), 0);
-    const apAccount = acc.accounts.find(a => a.systemKind === 'AP');
-    const payables = apAccount ? acctAccountBalance(apAccount.id) : 0;
-    const pnl = computePnl(null, todayStr());
+    const today = todayStr();
+    const outstandingInvoices = acc.invoices.filter(i => i.status !== 'Draft' && (Number(i.amountPaid)||0) < Number(i.total) - 0.005);
+    const outstandingBills = acc.bills.filter(b => b.status !== 'Draft' && (Number(b.amountPaid)||0) < Number(b.total) - 0.005);
+    const receivables = outstandingInvoices.reduce((s,i) => s + (Number(i.total) - (Number(i.amountPaid)||0)), 0);
+    const payables = outstandingBills.reduce((s,b) => s + (Number(b.total) - (Number(b.amountPaid)||0)), 0);
+    const overdueReceivables = outstandingInvoices.filter(i => i.dueDate && i.dueDate < today).reduce((s,i) => s + (Number(i.total) - (Number(i.amountPaid)||0)), 0);
+    const overduePayables = outstandingBills.filter(b => b.dueDate && b.dueDate < today).reduce((s,b) => s + (Number(b.total) - (Number(b.amountPaid)||0)), 0);
+    const pnl = computePnl(null, today);
     box.innerHTML = `
-      <div class="stat gold"><div class="num">${fmt(receivables)}</div><div class="label">Receivables (unpaid invoices)</div></div>
+      <div class="stat gold"><div class="num">${fmt(receivables)}</div><div class="label">Receivables</div></div>
+      <div class="stat gold"><div class="num">${fmt(overdueReceivables)}</div><div class="label">Overdue receivables</div></div>
       <div class="stat teal"><div class="num">${fmt(payables)}</div><div class="label">Payables</div></div>
+      <div class="stat teal"><div class="num">${fmt(overduePayables)}</div><div class="label">Overdue payables</div></div>
       <div class="stat teal"><div class="num">${acc.items.length}</div><div class="label">Items</div></div>
       <div class="stat ${pnl.netIncome >= 0 ? 'teal' : 'gold'}"><div class="num">${fmt(pnl.netIncome)}</div><div class="label">Net income (all time)</div></div>
     `;
@@ -13357,8 +13537,10 @@
     const list = document.getElementById('acctItemList');
     if(!list) return;
     const acc = acctData();
-    list.innerHTML = acc.items.length ? '' : '<li class="empty">No items yet.</li>';
-    acc.items.forEach(it => {
+    const q = (document.getElementById('acctItemSearch')?.value || '').trim().toLowerCase();
+    const items = q ? acc.items.filter(it => it.name.toLowerCase().includes(q) || (it.sku||'').toLowerCase().includes(q)) : acc.items;
+    list.innerHTML = items.length ? '' : '<li class="empty">No items match.</li>';
+    items.forEach(it => {
       const li = document.createElement('li');
       li.innerHTML = `
         <div style="width:100%;">
@@ -13379,6 +13561,8 @@
       save(); renderAcctItems();
     }));
   }
+  const acctItemSearchEl = document.getElementById('acctItemSearch');
+  if(acctItemSearchEl) acctItemSearchEl.addEventListener('input', renderAcctItems);
   const acctItemAddBtn = document.getElementById('acctItemAdd');
   if(acctItemAddBtn) acctItemAddBtn.addEventListener('click', () => {
     const name = document.getElementById('acctItemName').value.trim();
@@ -13396,8 +13580,59 @@
     save(); renderAcctItems();
   });
 
+  // ---- CUSTOMERS (Sales) ----
+  function renderAcctCustomers(){
+    const wrap = document.getElementById('acctCustList');
+    const datalist = document.getElementById('acctCustomerDatalist');
+    if(!wrap) return;
+    const acc = acctData();
+    wrap.innerHTML = acc.customers.map(c => `
+      <span class="acct-mini-chip">${escapeHtml(c.name)}${c.phone ? ' · ' + escapeHtml(c.phone) : ''}<button type="button" data-id="${c.id}">×</button></span>
+    `).join('') || '<span style="font-size:11.5px;color:var(--ink-soft);">No customers saved yet — type a name in the invoice form below, or add one here for quick reuse.</span>';
+    wrap.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', () => {
+      acc.customers = acc.customers.filter(c => c.id !== btn.dataset.id);
+      save(); renderAcctCustomers();
+    }));
+    if(datalist) datalist.innerHTML = acc.customers.map(c => `<option value="${escapeHtml(c.name)}"></option>`).join('');
+  }
+  const acctCustAddBtn = document.getElementById('acctCustAdd');
+  if(acctCustAddBtn) acctCustAddBtn.addEventListener('click', () => {
+    const name = document.getElementById('acctCustName').value.trim();
+    if(!name){ alert('Enter a customer name.'); return; }
+    acctData().customers.push({ id: uid(), name, email: document.getElementById('acctCustEmail').value.trim(), phone: document.getElementById('acctCustPhone').value.trim() });
+    ['acctCustName','acctCustEmail','acctCustPhone'].forEach(id => { document.getElementById(id).value = ''; });
+    save(); renderAcctCustomers();
+  });
+
+  // ---- VENDORS (Purchases) ----
+  function renderAcctVendors(){
+    const wrap = document.getElementById('acctVendList');
+    const datalist = document.getElementById('acctVendorDatalist');
+    if(!wrap) return;
+    const acc = acctData();
+    wrap.innerHTML = acc.vendors.map(v => `
+      <span class="acct-mini-chip">${escapeHtml(v.name)}${v.phone ? ' · ' + escapeHtml(v.phone) : ''}<button type="button" data-id="${v.id}">×</button></span>
+    `).join('') || '<span style="font-size:11.5px;color:var(--ink-soft);">No vendors saved yet — type a name in the bill form below, or add one here for quick reuse.</span>';
+    wrap.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', () => {
+      acc.vendors = acc.vendors.filter(v => v.id !== btn.dataset.id);
+      save(); renderAcctVendors();
+    }));
+    if(datalist) datalist.innerHTML = acc.vendors.map(v => `<option value="${escapeHtml(v.name)}"></option>`).join('');
+  }
+  const acctVendAddBtn = document.getElementById('acctVendAdd');
+  if(acctVendAddBtn) acctVendAddBtn.addEventListener('click', () => {
+    const name = document.getElementById('acctVendName').value.trim();
+    if(!name){ alert('Enter a vendor name.'); return; }
+    acctData().vendors.push({ id: uid(), name, email: document.getElementById('acctVendEmail').value.trim(), phone: document.getElementById('acctVendPhone').value.trim() });
+    ['acctVendName','acctVendEmail','acctVendPhone'].forEach(id => { document.getElementById(id).value = ''; });
+    save(); renderAcctVendors();
+  });
+
   // ---- SALES (Invoices) ----
   let acctInvDraftLines = [];
+  let editingInvoiceId = null;
+  let editingInvoiceNo = null;
+  let editingInvoiceRecurringGroupId = null;
   function renderAcctInvLines(){
     const wrap = document.getElementById('acctInvLines');
     if(!wrap) return;
@@ -13426,6 +13661,12 @@
   }
   const acctInvAddLineBtn = document.getElementById('acctInvAddLine');
   if(acctInvAddLineBtn) acctInvAddLineBtn.addEventListener('click', () => { acctInvDraftLines.push({ itemId: '', qty: 1, rate: 0 }); renderAcctInvLines(); });
+  const acctInvRecurringCb = document.getElementById('acctInvRecurring');
+  if(acctInvRecurringCb) acctInvRecurringCb.addEventListener('change', () => {
+    const on = acctInvRecurringCb.checked;
+    document.getElementById('acctInvRecurFreq').style.display = on ? '' : 'none';
+    document.getElementById('acctInvRecurEnd').style.display = on ? '' : 'none';
+  });
 
   function postInvoiceSaleEntry(invoice){
     const ar = getSystemAccount('AR', 'Accounts Receivable', 'Asset');
@@ -13435,12 +13676,12 @@
       { accountId: sales.id, debit: 0, credit: invoice.total }
     ], invoice.id);
   }
-  function postInvoicePaymentEntry(invoice){
+  function postInvoicePayment(invoice, amount){
     const ar = getSystemAccount('AR', 'Accounts Receivable', 'Asset');
     const cash = getSystemAccount('CASH', 'Cash', 'Asset');
-    postJournalEntry(invoice.date, `Payment received — ${invoice.invoiceNo}`, [
-      { accountId: cash.id, debit: invoice.total, credit: 0 },
-      { accountId: ar.id, debit: 0, credit: invoice.total }
+    postJournalEntry(todayStr(), `Payment received — ${invoice.invoiceNo}`, [
+      { accountId: cash.id, debit: amount, credit: 0 },
+      { accountId: ar.id, debit: 0, credit: amount }
     ], invoice.id);
   }
   function postInventoryForInvoice(invoice){
@@ -13461,26 +13702,112 @@
       ], invoice.id);
     }
   }
+  function restoreStockForLines(lines){
+    const acc = acctData();
+    lines.forEach(l => {
+      const it = acc.items.find(x => x.id === l.itemId);
+      if(it && it.type === 'Goods') it.qtyOnHand = (Number(it.qtyOnHand) || 0) + l.qty;
+    });
+  }
+  function recordInvoicePayment(inv){
+    const remaining = Math.max(0, Number(inv.total) - Number(inv.amountPaid || 0));
+    const input = prompt(`Record payment for ${inv.invoiceNo} (${inv.customer}). Remaining balance: ${fmt(remaining)}. Enter amount:`, remaining.toFixed(2));
+    if(input === null) return;
+    const amount = Number(input);
+    if(!(amount > 0)){ alert('Enter a positive amount.'); return; }
+    const acc = acctData();
+    if(inv.status === 'Draft'){ postInvoiceSaleEntry(inv); postInventoryForInvoice(inv); inv.status = 'Sent'; }
+    const applied = Math.min(amount, remaining || amount);
+    postInvoicePayment(inv, applied);
+    inv.amountPaid = (Number(inv.amountPaid) || 0) + applied;
+    inv.payments.push({ id: uid(), date: todayStr(), amount: applied });
+    if(inv.amountPaid >= Number(inv.total) - 0.005){ inv.status = 'Paid'; inv.paidDate = todayStr(); }
+    save(); renderAcctSales(); renderAcctHome();
+  }
+  function resetInvoiceForm(){
+    editingInvoiceId = null;
+    editingInvoiceNo = null;
+    editingInvoiceRecurringGroupId = null;
+    acctInvDraftLines = [];
+    document.getElementById('acctInvCustomer').value = '';
+    document.getElementById('acctInvDate').value = '';
+    document.getElementById('acctInvDueDate').value = '';
+    document.getElementById('acctInvStatus').value = 'Draft';
+    document.getElementById('acctInvNotes').value = '';
+    document.getElementById('acctInvRecurring').checked = false;
+    document.getElementById('acctInvRecurFreq').style.display = 'none';
+    document.getElementById('acctInvRecurEnd').style.display = 'none';
+    document.getElementById('acctInvRecurEnd').value = '';
+    document.getElementById('acctInvEditingNote').style.display = 'none';
+    document.getElementById('acctInvCancelEdit').style.display = 'none';
+    renderAcctInvLines();
+  }
+  function startEditInvoice(id){
+    const acc = acctData();
+    const inv = acc.invoices.find(i => i.id === id);
+    if(!inv) return;
+    if((inv.payments || []).length > 0){
+      if(!confirm('This invoice already has payment(s) recorded. Editing it will reverse its posted entries and reset it to unpaid — you\'ll need to re-record any payments after saving. Continue?')) return;
+    }
+    if(inv.status !== 'Draft'){
+      reverseEntriesForSource(inv.id);
+      restoreStockForLines(inv.lines);
+    }
+    acc.invoices = acc.invoices.filter(i => i.id !== id);
+    editingInvoiceId = id;
+    editingInvoiceNo = inv.invoiceNo;
+    editingInvoiceRecurringGroupId = inv.recurringGroupId || null;
+    acctInvDraftLines = inv.lines.map(l => ({ itemId: l.itemId, qty: l.qty, rate: l.rate }));
+    document.getElementById('acctInvCustomer').value = inv.customer;
+    document.getElementById('acctInvDate').value = inv.date;
+    document.getElementById('acctInvDueDate').value = inv.dueDate || '';
+    document.getElementById('acctInvStatus').value = inv.status === 'Paid' ? 'Sent' : inv.status;
+    document.getElementById('acctInvNotes').value = inv.notes || '';
+    const isRecurring = !!(inv.recurring && inv.recurring.frequency);
+    document.getElementById('acctInvRecurring').checked = isRecurring;
+    document.getElementById('acctInvRecurFreq').style.display = isRecurring ? '' : 'none';
+    document.getElementById('acctInvRecurEnd').style.display = isRecurring ? '' : 'none';
+    if(isRecurring){
+      document.getElementById('acctInvRecurFreq').value = inv.recurring.frequency;
+      document.getElementById('acctInvRecurEnd').value = inv.recurring.endDate || '';
+    }
+    document.getElementById('acctInvEditingNote').style.display = '';
+    document.getElementById('acctInvCancelEdit').style.display = '';
+    renderAcctInvLines();
+    save(); renderAcctSales(); renderAcctHome();
+  }
+  const acctInvCancelEditBtn = document.getElementById('acctInvCancelEdit');
+  if(acctInvCancelEditBtn) acctInvCancelEditBtn.addEventListener('click', () => {
+    alert('Editing cancelled — note the original invoice\'s posted entries were already reversed and won\'t be restored automatically. Re-create it if needed.');
+    resetInvoiceForm();
+    renderAcctSales();
+  });
   function renderAcctSales(){
+    renderAcctCustomers();
     const list = document.getElementById('acctInvList');
     renderAcctInvLines();
     if(!list) return;
     const acc = acctData();
-    list.innerHTML = acc.invoices.length ? '' : '<li class="empty">No invoices yet.</li>';
-    [...acc.invoices].reverse().forEach(inv => {
+    const q = (document.getElementById('acctInvSearch')?.value || '').trim().toLowerCase();
+    const invoices = q ? acc.invoices.filter(i => i.customer.toLowerCase().includes(q) || i.invoiceNo.toLowerCase().includes(q)) : acc.invoices;
+    list.innerHTML = invoices.length ? '' : '<li class="empty">No invoices match.</li>';
+    [...invoices].reverse().forEach(inv => {
       const li = document.createElement('li');
-      const statusColor = inv.status === 'Paid' ? '#1e8449' : (inv.status === 'Draft' ? 'var(--ink-soft)' : '#b8860b');
+      const effective = acctEffectiveStatus(inv, 'Sent');
+      const remaining = Math.max(0, Number(inv.total) - Number(inv.amountPaid || 0));
       li.innerHTML = `
         <div style="width:100%;">
           <div class="card-row-top">
             <div class="card-bank">${escapeHtml(inv.invoiceNo)} · ${escapeHtml(inv.customer)}</div>
             <div class="tx-amount">${fmt(inv.total)}</div>
           </div>
-          <div class="card-desc" style="margin-top:2px;">${escapeHtml(inv.date)}${inv.dueDate ? ' · due ' + escapeHtml(inv.dueDate) : ''} · <span style="color:${statusColor};font-weight:600;">${escapeHtml(inv.status)}</span></div>
+          <div class="card-desc" style="margin-top:2px;">${escapeHtml(inv.date)}${inv.dueDate ? ' · due ' + escapeHtml(inv.dueDate) : ''} · ${acctBadgeHtml(effective)}${inv.recurring && inv.recurring.frequency ? ' <span style="font-size:10px;color:var(--ink-soft);">↻ ' + escapeHtml(inv.recurring.frequency) + '</span>' : ''}</div>
           <div class="card-desc" style="margin-top:2px;">${inv.lines.map(l => escapeHtml(l.name) + ' × ' + l.qty).join(', ')}</div>
+          ${(Number(inv.amountPaid)||0) > 0 && effective !== 'Paid' ? `<div class="card-desc" style="margin-top:2px;">Paid ${fmt(inv.amountPaid)} of ${fmt(inv.total)} — ${fmt(remaining)} remaining</div>` : ''}
           <div style="text-align:right; margin-top:6px;">
             ${inv.status === 'Draft' ? `<button class="edit-btn acct-inv-mark-sent" data-id="${inv.id}">Mark Sent</button>` : ''}
-            ${inv.status !== 'Paid' ? `<button class="edit-btn acct-inv-mark-paid" data-id="${inv.id}">Mark Paid</button>` : ''}
+            ${effective !== 'Paid' ? `<button class="edit-btn acct-inv-record-payment" data-id="${inv.id}">Record Payment</button>` : ''}
+            <button class="edit-btn acct-inv-edit" data-id="${inv.id}">Edit</button>
             <button class="del-btn acct-inv-del" data-id="${inv.id}">×</button>
           </div>
         </div>
@@ -13495,18 +13822,18 @@
       postInventoryForInvoice(inv);
       save(); renderAcctSales(); renderAcctHome();
     }));
-    list.querySelectorAll('.acct-inv-mark-paid').forEach(el => el.addEventListener('click', () => {
+    list.querySelectorAll('.acct-inv-record-payment').forEach(el => el.addEventListener('click', () => {
       const inv = acc.invoices.find(i => i.id === el.dataset.id);
-      if(!inv || inv.status === 'Paid') return;
-      if(inv.status === 'Draft'){ postInvoiceSaleEntry(inv); postInventoryForInvoice(inv); }
-      inv.status = 'Paid';
-      inv.paidDate = todayStr();
-      postInvoicePaymentEntry(inv);
-      save(); renderAcctSales(); renderAcctHome();
+      if(inv) recordInvoicePayment(inv);
     }));
+    list.querySelectorAll('.acct-inv-edit').forEach(el => el.addEventListener('click', () => startEditInvoice(el.dataset.id)));
     list.querySelectorAll('.acct-inv-del').forEach(el => el.addEventListener('click', () => {
-      if(!confirm('Delete this invoice? Any journal entries it created will also be removed (stock already deducted for it is not restored automatically).')) return;
-      reverseInvoiceEntries(el.dataset.id);
+      const inv = acc.invoices.find(i => i.id === el.dataset.id);
+      if(!confirm('Delete this invoice? Any journal entries and stock changes it caused will be reversed.')) return;
+      if(inv && inv.status !== 'Draft'){
+        reverseEntriesForSource(inv.id);
+        restoreStockForLines(inv.lines);
+      }
       acc.invoices = acc.invoices.filter(i => i.id !== el.dataset.id);
       save(); renderAcctSales(); renderAcctHome();
     }));
@@ -13520,25 +13847,308 @@
     const date = document.getElementById('acctInvDate').value || todayStr();
     const dueDate = document.getElementById('acctInvDueDate').value || '';
     const status = document.getElementById('acctInvStatus').value;
+    const notes = document.getElementById('acctInvNotes').value.trim();
+    const isRecurring = document.getElementById('acctInvRecurring').checked;
+    const recurFreq = document.getElementById('acctInvRecurFreq').value;
+    const recurEnd = document.getElementById('acctInvRecurEnd').value || null;
     const acc = acctData();
     const lines = validLines.map(l => {
       const it = acc.items.find(x => x.id === l.itemId);
       return { itemId: l.itemId, name: it ? it.name : '(deleted item)', qty: l.qty, rate: l.rate, amount: l.qty * l.rate };
     });
     const total = lines.reduce((s, l) => s + l.amount, 0);
-    const invoice = { id: uid(), invoiceNo: 'INV-' + (1001 + acc.invoices.length), customer, date, dueDate, lines, total, status, paidDate: '' };
+    const id = editingInvoiceId || uid();
+    const invoiceNo = editingInvoiceId && editingInvoiceNo ? editingInvoiceNo : ('INV-' + (1001 + acc.invoices.length));
+    const invoice = {
+      id, invoiceNo, customer, date, dueDate, lines, total, status,
+      amountPaid: 0, payments: [], notes,
+      recurring: isRecurring ? { frequency: recurFreq, endDate: recurEnd } : null,
+      recurringGroupId: isRecurring ? (editingInvoiceRecurringGroupId || uid()) : null,
+      paidDate: ''
+    };
     acc.invoices.push(invoice);
     if(status === 'Sent' || status === 'Paid'){
       postInvoiceSaleEntry(invoice);
       postInventoryForInvoice(invoice);
     }
-    if(status === 'Paid') postInvoicePaymentEntry(invoice);
-    acctInvDraftLines = [];
-    document.getElementById('acctInvCustomer').value = '';
-    document.getElementById('acctInvDate').value = '';
-    document.getElementById('acctInvDueDate').value = '';
+    if(status === 'Paid'){
+      postInvoicePayment(invoice, total);
+      invoice.amountPaid = total;
+      invoice.payments.push({ id: uid(), date, amount: total });
+      invoice.paidDate = date;
+    }
+    resetInvoiceForm();
     save(); renderAcctSales(); renderAcctHome();
   });
+
+  // ---- PURCHASES (Bills) ----
+  let acctBillDraftLines = [];
+  let editingBillId = null;
+  let editingBillNo = null;
+  let editingBillRecurringGroupId = null;
+  function renderAcctBillLines(){
+    const wrap = document.getElementById('acctBillLines');
+    if(!wrap) return;
+    const accounts = acctData().accounts.filter(a => a.type !== 'Income');
+    wrap.innerHTML = acctBillDraftLines.length ? acctBillDraftLines.map((ln, idx) => `
+      <div class="add-row" data-idx="${idx}">
+        <input type="text" class="acct-bill-line-desc" value="${escapeHtml(ln.description || '')}" placeholder="Description" style="flex:2;">
+        <select class="who-select acct-bill-line-account" style="flex:2;">
+          <option value="">Select account…</option>
+          ${accounts.map(a => `<option value="${a.id}" ${a.id === ln.accountId ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}
+        </select>
+        <input type="number" class="acct-bill-line-amount" value="${ln.amount || ''}" min="0" step="0.01" style="max-width:100px;" placeholder="Amount">
+        <button type="button" class="del-btn acct-bill-line-del" style="align-self:center;">×</button>
+      </div>
+    `).join('') : '<div class="empty" style="margin-bottom:8px;">No lines yet — add one below.</div>';
+    wrap.querySelectorAll('.acct-bill-line-desc').forEach((el, i) => el.addEventListener('input', () => { acctBillDraftLines[i].description = el.value; }));
+    wrap.querySelectorAll('.acct-bill-line-account').forEach((el, i) => el.addEventListener('change', () => { acctBillDraftLines[i].accountId = el.value; }));
+    wrap.querySelectorAll('.acct-bill-line-amount').forEach((el, i) => el.addEventListener('input', () => { acctBillDraftLines[i].amount = Number(el.value) || 0; }));
+    wrap.querySelectorAll('.acct-bill-line-del').forEach((el, i) => el.addEventListener('click', () => { acctBillDraftLines.splice(i, 1); renderAcctBillLines(); }));
+  }
+  const acctBillAddLineBtn = document.getElementById('acctBillAddLine');
+  if(acctBillAddLineBtn) acctBillAddLineBtn.addEventListener('click', () => { acctBillDraftLines.push({ description: '', accountId: '', amount: 0 }); renderAcctBillLines(); });
+  const acctBillRecurringCb = document.getElementById('acctBillRecurring');
+  if(acctBillRecurringCb) acctBillRecurringCb.addEventListener('change', () => {
+    const on = acctBillRecurringCb.checked;
+    document.getElementById('acctBillRecurFreq').style.display = on ? '' : 'none';
+    document.getElementById('acctBillRecurEnd').style.display = on ? '' : 'none';
+  });
+
+  function postBillEntry(bill){
+    const ap = getSystemAccount('AP', 'Accounts Payable', 'Liability');
+    const lines = bill.lines.map(l => ({ accountId: l.accountId, debit: l.amount, credit: 0 }));
+    lines.push({ accountId: ap.id, debit: 0, credit: bill.total });
+    postJournalEntry(bill.date, `Bill ${bill.billNo} — ${bill.vendor}`, lines, bill.id);
+  }
+  function postBillPayment(bill, amount){
+    const ap = getSystemAccount('AP', 'Accounts Payable', 'Liability');
+    const cash = getSystemAccount('CASH', 'Cash', 'Asset');
+    postJournalEntry(todayStr(), `Payment made — ${bill.billNo}`, [
+      { accountId: ap.id, debit: amount, credit: 0 },
+      { accountId: cash.id, debit: 0, credit: amount }
+    ], bill.id);
+  }
+  function recordBillPayment(bill){
+    const remaining = Math.max(0, Number(bill.total) - Number(bill.amountPaid || 0));
+    const input = prompt(`Record payment for ${bill.billNo} (${bill.vendor}). Remaining balance: ${fmt(remaining)}. Enter amount:`, remaining.toFixed(2));
+    if(input === null) return;
+    const amount = Number(input);
+    if(!(amount > 0)){ alert('Enter a positive amount.'); return; }
+    if(bill.status === 'Draft'){ postBillEntry(bill); bill.status = 'Open'; }
+    const applied = Math.min(amount, remaining || amount);
+    postBillPayment(bill, applied);
+    bill.amountPaid = (Number(bill.amountPaid) || 0) + applied;
+    bill.payments.push({ id: uid(), date: todayStr(), amount: applied });
+    if(bill.amountPaid >= Number(bill.total) - 0.005){ bill.status = 'Paid'; bill.paidDate = todayStr(); }
+    save(); renderAcctPurchases(); renderAcctHome();
+  }
+  function resetBillForm(){
+    editingBillId = null;
+    editingBillNo = null;
+    editingBillRecurringGroupId = null;
+    acctBillDraftLines = [];
+    document.getElementById('acctBillVendor').value = '';
+    document.getElementById('acctBillDate').value = '';
+    document.getElementById('acctBillDueDate').value = '';
+    document.getElementById('acctBillStatus').value = 'Draft';
+    document.getElementById('acctBillNotes').value = '';
+    document.getElementById('acctBillRecurring').checked = false;
+    document.getElementById('acctBillRecurFreq').style.display = 'none';
+    document.getElementById('acctBillRecurEnd').style.display = 'none';
+    document.getElementById('acctBillRecurEnd').value = '';
+    document.getElementById('acctBillEditingNote').style.display = 'none';
+    document.getElementById('acctBillCancelEdit').style.display = 'none';
+    renderAcctBillLines();
+  }
+  function startEditBill(id){
+    const acc = acctData();
+    const bill = acc.bills.find(b => b.id === id);
+    if(!bill) return;
+    if((bill.payments || []).length > 0){
+      if(!confirm('This bill already has payment(s) recorded. Editing it will reverse its posted entries and reset it to unpaid — you\'ll need to re-record any payments after saving. Continue?')) return;
+    }
+    if(bill.status !== 'Draft') reverseEntriesForSource(bill.id);
+    acc.bills = acc.bills.filter(b => b.id !== id);
+    editingBillId = id;
+    editingBillNo = bill.billNo;
+    editingBillRecurringGroupId = bill.recurringGroupId || null;
+    acctBillDraftLines = bill.lines.map(l => ({ description: l.description, accountId: l.accountId, amount: l.amount }));
+    document.getElementById('acctBillVendor').value = bill.vendor;
+    document.getElementById('acctBillDate').value = bill.date;
+    document.getElementById('acctBillDueDate').value = bill.dueDate || '';
+    document.getElementById('acctBillStatus').value = bill.status === 'Paid' ? 'Open' : bill.status;
+    document.getElementById('acctBillNotes').value = bill.notes || '';
+    const isRecurring = !!(bill.recurring && bill.recurring.frequency);
+    document.getElementById('acctBillRecurring').checked = isRecurring;
+    document.getElementById('acctBillRecurFreq').style.display = isRecurring ? '' : 'none';
+    document.getElementById('acctBillRecurEnd').style.display = isRecurring ? '' : 'none';
+    if(isRecurring){
+      document.getElementById('acctBillRecurFreq').value = bill.recurring.frequency;
+      document.getElementById('acctBillRecurEnd').value = bill.recurring.endDate || '';
+    }
+    document.getElementById('acctBillEditingNote').style.display = '';
+    document.getElementById('acctBillCancelEdit').style.display = '';
+    renderAcctBillLines();
+    save(); renderAcctPurchases(); renderAcctHome();
+  }
+  const acctBillCancelEditBtn = document.getElementById('acctBillCancelEdit');
+  if(acctBillCancelEditBtn) acctBillCancelEditBtn.addEventListener('click', () => {
+    alert('Editing cancelled — note the original bill\'s posted entries were already reversed and won\'t be restored automatically. Re-create it if needed.');
+    resetBillForm();
+    renderAcctPurchases();
+  });
+  function renderAcctPurchases(){
+    renderAcctVendors();
+    const list = document.getElementById('acctBillList');
+    renderAcctBillLines();
+    if(!list) return;
+    const acc = acctData();
+    const q = (document.getElementById('acctBillSearch')?.value || '').trim().toLowerCase();
+    const bills = q ? acc.bills.filter(b => b.vendor.toLowerCase().includes(q) || b.billNo.toLowerCase().includes(q)) : acc.bills;
+    list.innerHTML = bills.length ? '' : '<li class="empty">No bills match.</li>';
+    [...bills].reverse().forEach(bill => {
+      const li = document.createElement('li');
+      const effective = acctEffectiveStatus(bill, 'Open');
+      const remaining = Math.max(0, Number(bill.total) - Number(bill.amountPaid || 0));
+      li.innerHTML = `
+        <div style="width:100%;">
+          <div class="card-row-top">
+            <div class="card-bank">${escapeHtml(bill.billNo)} · ${escapeHtml(bill.vendor)}</div>
+            <div class="tx-amount">${fmt(bill.total)}</div>
+          </div>
+          <div class="card-desc" style="margin-top:2px;">${escapeHtml(bill.date)}${bill.dueDate ? ' · due ' + escapeHtml(bill.dueDate) : ''} · ${acctBadgeHtml(effective)}${bill.recurring && bill.recurring.frequency ? ' <span style="font-size:10px;color:var(--ink-soft);">↻ ' + escapeHtml(bill.recurring.frequency) + '</span>' : ''}</div>
+          <div class="card-desc" style="margin-top:2px;">${bill.lines.map(l => escapeHtml(l.description || acctAccountName(l.accountId)) + ': ' + fmt(l.amount)).join(', ')}</div>
+          ${(Number(bill.amountPaid)||0) > 0 && effective !== 'Paid' ? `<div class="card-desc" style="margin-top:2px;">Paid ${fmt(bill.amountPaid)} of ${fmt(bill.total)} — ${fmt(remaining)} remaining</div>` : ''}
+          <div style="text-align:right; margin-top:6px;">
+            ${bill.status === 'Draft' ? `<button class="edit-btn acct-bill-mark-open" data-id="${bill.id}">Mark Open</button>` : ''}
+            ${effective !== 'Paid' ? `<button class="edit-btn acct-bill-record-payment" data-id="${bill.id}">Record Payment</button>` : ''}
+            <button class="edit-btn acct-bill-edit" data-id="${bill.id}">Edit</button>
+            <button class="del-btn acct-bill-del" data-id="${bill.id}">×</button>
+          </div>
+        </div>
+      `;
+      list.appendChild(li);
+    });
+    list.querySelectorAll('.acct-bill-mark-open').forEach(el => el.addEventListener('click', () => {
+      const bill = acc.bills.find(b => b.id === el.dataset.id);
+      if(!bill || bill.status !== 'Draft') return;
+      bill.status = 'Open';
+      postBillEntry(bill);
+      save(); renderAcctPurchases(); renderAcctHome();
+    }));
+    list.querySelectorAll('.acct-bill-record-payment').forEach(el => el.addEventListener('click', () => {
+      const bill = acc.bills.find(b => b.id === el.dataset.id);
+      if(bill) recordBillPayment(bill);
+    }));
+    list.querySelectorAll('.acct-bill-edit').forEach(el => el.addEventListener('click', () => startEditBill(el.dataset.id)));
+    list.querySelectorAll('.acct-bill-del').forEach(el => el.addEventListener('click', () => {
+      const bill = acc.bills.find(b => b.id === el.dataset.id);
+      if(!confirm('Delete this bill? Any journal entries it caused will be reversed.')) return;
+      if(bill && bill.status !== 'Draft') reverseEntriesForSource(bill.id);
+      acc.bills = acc.bills.filter(b => b.id !== el.dataset.id);
+      save(); renderAcctPurchases(); renderAcctHome();
+    }));
+  }
+  const acctBillSaveBtn = document.getElementById('acctBillSave');
+  if(acctBillSaveBtn) acctBillSaveBtn.addEventListener('click', () => {
+    const vendor = document.getElementById('acctBillVendor').value.trim();
+    if(!vendor){ alert('Enter a vendor name.'); return; }
+    const validLines = acctBillDraftLines.filter(l => l.accountId && l.amount > 0);
+    if(!validLines.length){ alert('Add at least one line with an account and amount.'); return; }
+    const date = document.getElementById('acctBillDate').value || todayStr();
+    const dueDate = document.getElementById('acctBillDueDate').value || '';
+    const status = document.getElementById('acctBillStatus').value;
+    const notes = document.getElementById('acctBillNotes').value.trim();
+    const isRecurring = document.getElementById('acctBillRecurring').checked;
+    const recurFreq = document.getElementById('acctBillRecurFreq').value;
+    const recurEnd = document.getElementById('acctBillRecurEnd').value || null;
+    const acc = acctData();
+    const lines = validLines.map(l => ({ description: l.description, accountId: l.accountId, amount: l.amount }));
+    const total = lines.reduce((s, l) => s + l.amount, 0);
+    const id = editingBillId || uid();
+    const billNo = editingBillId && editingBillNo ? editingBillNo : ('BILL-' + (1001 + acc.bills.length));
+    const bill = {
+      id, billNo, vendor, date, dueDate, lines, total, status,
+      amountPaid: 0, payments: [], notes,
+      recurring: isRecurring ? { frequency: recurFreq, endDate: recurEnd } : null,
+      recurringGroupId: isRecurring ? (editingBillRecurringGroupId || uid()) : null,
+      paidDate: ''
+    };
+    acc.bills.push(bill);
+    if(status === 'Open' || status === 'Paid') postBillEntry(bill);
+    if(status === 'Paid'){
+      postBillPayment(bill, total);
+      bill.amountPaid = total;
+      bill.payments.push({ id: uid(), date, amount: total });
+      bill.paidDate = date;
+    }
+    resetBillForm();
+    save(); renderAcctPurchases(); renderAcctHome();
+  });
+
+  // ---- Recurring invoices/bills — generated once per login, mirroring
+  // generateRecurringTransactions()'s pattern elsewhere in the app. ----
+  function generateRecurringAccountingDocs(){
+    const acc = acctData();
+    let changed = false;
+    const invGroups = {};
+    acc.invoices.filter(i => i.recurring && i.recurring.frequency && i.recurringGroupId).forEach(i => {
+      if(!invGroups[i.recurringGroupId] || i.date > invGroups[i.recurringGroupId].date) invGroups[i.recurringGroupId] = i;
+    });
+    Object.values(invGroups).forEach(latest => {
+      const freq = latest.recurring.frequency, endDate = latest.recurring.endDate;
+      let nextDate = acctAddByFreq(latest.date, freq);
+      let guard = 0;
+      while(nextDate <= todayStr() && (!endDate || nextDate <= endDate) && guard < 36){
+        const dup = acc.invoices.find(x => x.recurringGroupId === latest.recurringGroupId && x.date === nextDate);
+        if(!dup){
+          const dueShift = latest.dueDate ? (new Date(latest.dueDate) - new Date(latest.date)) : null;
+          const newDue = dueShift !== null ? addDaysToDate(nextDate, Math.round(dueShift / 86400000)) : '';
+          const clone = {
+            id: uid(), invoiceNo: 'INV-' + (1001 + acc.invoices.length), customer: latest.customer,
+            date: nextDate, dueDate: newDue, lines: latest.lines.map(l => Object.assign({}, l)), total: latest.total,
+            status: 'Sent', amountPaid: 0, payments: [], notes: latest.notes,
+            recurring: { frequency: freq, endDate }, recurringGroupId: latest.recurringGroupId, paidDate: ''
+          };
+          acc.invoices.push(clone);
+          postInvoiceSaleEntry(clone);
+          postInventoryForInvoice(clone);
+          changed = true;
+        }
+        nextDate = acctAddByFreq(nextDate, freq);
+        guard++;
+      }
+    });
+    const billGroups = {};
+    acc.bills.filter(b => b.recurring && b.recurring.frequency && b.recurringGroupId).forEach(b => {
+      if(!billGroups[b.recurringGroupId] || b.date > billGroups[b.recurringGroupId].date) billGroups[b.recurringGroupId] = b;
+    });
+    Object.values(billGroups).forEach(latest => {
+      const freq = latest.recurring.frequency, endDate = latest.recurring.endDate;
+      let nextDate = acctAddByFreq(latest.date, freq);
+      let guard = 0;
+      while(nextDate <= todayStr() && (!endDate || nextDate <= endDate) && guard < 36){
+        const dup = acc.bills.find(x => x.recurringGroupId === latest.recurringGroupId && x.date === nextDate);
+        if(!dup){
+          const dueShift = latest.dueDate ? (new Date(latest.dueDate) - new Date(latest.date)) : null;
+          const newDue = dueShift !== null ? addDaysToDate(nextDate, Math.round(dueShift / 86400000)) : '';
+          const clone = {
+            id: uid(), billNo: 'BILL-' + (1001 + acc.bills.length), vendor: latest.vendor,
+            date: nextDate, dueDate: newDue, lines: latest.lines.map(l => Object.assign({}, l)), total: latest.total,
+            status: 'Open', amountPaid: 0, payments: [], notes: latest.notes,
+            recurring: { frequency: freq, endDate }, recurringGroupId: latest.recurringGroupId, paidDate: ''
+          };
+          acc.bills.push(clone);
+          postBillEntry(clone);
+          changed = true;
+        }
+        nextDate = acctAddByFreq(nextDate, freq);
+        guard++;
+      }
+    });
+    if(changed){ save(); renderAccounting(); }
+  }
 
   // ---- ACCOUNTANT (Chart of Accounts + Journal Entries + Trial Balance) ----
   function renderAcctAccountant(){
@@ -13671,7 +14281,7 @@
     ` : '<div class="empty">No activity yet.</div>';
   }
 
-  // ---- REPORTS (P&L + Balance Sheet) ----
+  // ---- REPORTS (P&L + Balance Sheet + Aged Receivables/Payables + export) ----
   function renderAcctReports(){
     const fromEl = document.getElementById('acctReportFrom');
     const toEl = document.getElementById('acctReportTo');
@@ -13705,11 +14315,77 @@
       <div class="breakdown-row" style="border-top:1px solid var(--line);padding-top:4px;"><span class="label"><strong>Total equity</strong></span><span><strong>${fmt(bs.totalEquity)}</strong></span></div>
       <div class="breakdown-row" style="margin-top:8px;"><span class="label"><strong>Liabilities + Equity</strong></span><span><strong>${fmt(bs.totalLiabilities + bs.totalEquity)}</strong></span></div>
     `;
+    const acc = acctData();
+    renderAgedTable(document.getElementById('acctAgedReceivables'), acc.invoices, 'customer', 'invoiceNo');
+    renderAgedTable(document.getElementById('acctAgedPayables'), acc.bills, 'vendor', 'billNo');
   }
   const acctReportFromEl = document.getElementById('acctReportFrom');
   const acctReportToEl = document.getElementById('acctReportTo');
   if(acctReportFromEl) acctReportFromEl.addEventListener('input', renderAcctReports);
   if(acctReportToEl) acctReportToEl.addEventListener('input', renderAcctReports);
+  const acctExportPdfBtn = document.getElementById('acctExportPdf');
+  if(acctExportPdfBtn) acctExportPdfBtn.addEventListener('click', () => {
+    const from = document.getElementById('acctReportFrom').value, to = document.getElementById('acctReportTo').value || todayStr();
+    const pnl = computePnl(from, to);
+    const bs = computeBalanceSheet(to);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFillColor(31, 111, 99);
+    doc.rect(0, 0, 210, 24, 'F');
+    doc.setFontSize(16); doc.setTextColor(255,255,255);
+    doc.text(state.appTitle || 'Household Ledger', 14, 15);
+    doc.setFontSize(10); doc.text('Accounting Report', 196, 15, { align: 'right' });
+    doc.setFontSize(11); doc.setTextColor(0);
+    doc.text(`Period: ${from || 'start'} to ${to}`, 14, 34);
+    let y = 44;
+    const fields = [{key:'Account',label:'Account'},{key:'Type',label:'Type'},{key:'Amount',label:'Amount'}];
+    doc.setFontSize(12); doc.text('Profit & Loss', 14, y); y += 2;
+    const pnlRecords = [
+      ...pnl.incomeAccounts.filter(r => r.amount !== 0).map(r => ({ Account: r.account.name, Type: 'Income', Amount: fmt(r.amount) })),
+      ...pnl.expenseAccounts.filter(r => r.amount !== 0).map(r => ({ Account: r.account.name, Type: 'Expense', Amount: fmt(r.amount) })),
+      { Account: 'Net income', Type: '', Amount: fmt(pnl.netIncome) }
+    ];
+    let table = rowsPdfTable(pnlRecords, fields);
+    doc.autoTable({ startY: y + 2, head: table.head, body: table.body, styles: { fontSize: 8.5 }, headStyles: { fillColor: [31,111,99], textColor: [255,255,255] } });
+    y = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(12); doc.text('Balance Sheet', 14, y); y += 2;
+    const bsRecords = [
+      ...bs.assets.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Asset', Amount: fmt(r.balance) })),
+      ...bs.liabilities.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Liability', Amount: fmt(r.balance) })),
+      ...bs.equity.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Equity', Amount: fmt(r.balance) })),
+      { Account: 'Retained earnings', Type: 'Equity', Amount: fmt(bs.retainedEarnings) }
+    ];
+    table = rowsPdfTable(bsRecords, fields);
+    doc.autoTable({ startY: y + 2, head: table.head, body: table.body, styles: { fontSize: 8.5 }, headStyles: { fillColor: [31,111,99], textColor: [255,255,255] } });
+    doc.save(`Accounting_Report_${to}.pdf`);
+  });
+  const acctExportExcelBtn = document.getElementById('acctExportExcel');
+  if(acctExportExcelBtn) acctExportExcelBtn.addEventListener('click', () => {
+    const from = document.getElementById('acctReportFrom').value, to = document.getElementById('acctReportTo').value || todayStr();
+    const pnl = computePnl(from, to);
+    const bs = computeBalanceSheet(to);
+    const acc = acctData();
+    const wb = XLSX.utils.book_new();
+    const pnlAoa = [['Account','Type','Amount'],
+      ...pnl.incomeAccounts.filter(r => r.amount !== 0).map(r => [r.account.name, 'Income', r.amount]),
+      ...pnl.expenseAccounts.filter(r => r.amount !== 0).map(r => [r.account.name, 'Expense', r.amount]),
+      ['Net income', '', pnl.netIncome]];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pnlAoa), 'P&L');
+    const bsAoa = [['Account','Type','Amount'],
+      ...bs.assets.filter(r => Math.abs(r.balance) > 0.005).map(r => [r.account.name, 'Asset', r.balance]),
+      ...bs.liabilities.filter(r => Math.abs(r.balance) > 0.005).map(r => [r.account.name, 'Liability', r.balance]),
+      ...bs.equity.filter(r => Math.abs(r.balance) > 0.005).map(r => [r.account.name, 'Equity', r.balance]),
+      ['Retained earnings', 'Equity', bs.retainedEarnings]];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bsAoa), 'Balance Sheet');
+    const arAoa = [['Invoice','Customer','Due','Outstanding'],
+      ...acc.invoices.filter(i => i.status !== 'Draft' && (Number(i.amountPaid)||0) < Number(i.total) - 0.005).map(i => [i.invoiceNo, i.customer, i.dueDate || i.date, Number(i.total) - (Number(i.amountPaid)||0)])];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(arAoa), 'Aged Receivables');
+    const apAoa = [['Bill','Vendor','Due','Outstanding'],
+      ...acc.bills.filter(b => b.status !== 'Draft' && (Number(b.amountPaid)||0) < Number(b.total) - 0.005).map(b => [b.billNo, b.vendor, b.dueDate || b.date, Number(b.total) - (Number(b.amountPaid)||0)])];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(apAoa), 'Aged Payables');
+    XLSX.writeFile(wb, `Accounting_Report_${to}.xlsx`);
+  });
+
 
   function renderAll(){
     updateTxPersonVisibilityCountry('UAE');
