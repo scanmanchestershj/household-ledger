@@ -444,6 +444,11 @@
   .acct-mini-chip{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:4px 10px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink-soft); display:inline-flex; align-items:center; gap:6px; }
   .acct-mini-chip button{ border:none; background:none; color:var(--coral); cursor:pointer; font-size:11px; padding:0; line-height:1; }
   .acct-export-row{ display:flex; gap:8px; margin:8px 0 14px 0; }
+  .acct-details{ margin:14px 0 4px 0; border-top:1px solid var(--line); padding-top:6px; }
+  .acct-details summary{ cursor:pointer; list-style:none; }
+  .acct-details summary::-webkit-details-marker{ display:none; }
+  .acct-details summary::before{ content:"▸ "; }
+  .acct-details[open] summary::before{ content:"▾ "; }
 </style>
 </head>
 <body>
@@ -1014,6 +1019,7 @@
         <button class="subtab" draggable="true" data-acct-sub="items">Items</button>
         <button class="subtab" draggable="true" data-acct-sub="sales">Sales</button>
         <button class="subtab" draggable="true" data-acct-sub="purchases">Purchases</button>
+        <button class="subtab" draggable="true" data-acct-sub="banking">Banking</button>
         <button class="subtab" draggable="true" data-acct-sub="accountant">Accountant</button>
         <button class="subtab" draggable="true" data-acct-sub="reports">Reports</button>
       </div>
@@ -1022,6 +1028,7 @@
       <div class="subpanel active" data-acct-sub="home">
         <div class="section-title" style="margin-top:0;">Overview</div>
         <div class="stat-grid" id="acctHomeStats"></div>
+        <div id="acctHomeNotes" style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;line-height:1.6;"></div>
       </div>
 
       <!-- ITEMS -->
@@ -1051,7 +1058,7 @@
         <div class="add-row">
           <input type="text" id="acctCustName" placeholder="Customer name">
           <input type="text" id="acctCustEmail" placeholder="Email (optional)">
-          <input type="text" id="acctCustPhone" placeholder="Phone (optional)" style="max-width:130px;">
+          <input type="text" id="acctCustPhone" placeholder="WhatsApp / phone (optional)" style="max-width:150px;">
         </div>
         <button class="add-btn full-width" id="acctCustAdd" style="margin-bottom:6px;">Add customer</button>
         <div class="acct-mini-list" id="acctCustList"></div>
@@ -1067,7 +1074,8 @@
           <input type="date" id="acctInvDueDate" placeholder="Due date">
         </div>
         <div id="acctInvLines"></div>
-        <button type="button" class="add-btn ghost" id="acctInvAddLine" style="margin-bottom:8px;">+ Add line</button>
+        <button type="button" class="add-btn ghost" id="acctInvAddLine" style="margin-bottom:6px;">+ Add line</button>
+        <div id="acctInvTotals" style="font-size:12px;margin-bottom:8px;"></div>
         <div class="add-row">
           <label class="field-label" style="align-self:center;margin:0;">Status</label>
           <select class="who-select" id="acctInvStatus" style="max-width:120px;">
@@ -1076,6 +1084,14 @@
             <option value="Paid">Paid</option>
           </select>
         </div>
+        <div class="add-row">
+          <label class="field-label" style="align-self:flex-start;margin:6px 0 0 0;">Tags</label>
+          <select multiple size="3" id="acctInvTags" style="flex:1;border-radius:10px;border:1px solid var(--line);padding:4px;font-size:12.5px;"></select>
+        </div>
+        <div class="add-row">
+          <input type="file" id="acctInvAttach" accept="image/*" style="font-size:12px;">
+        </div>
+        <div id="acctInvAttachList" class="acct-mini-list"></div>
         <div class="add-row">
           <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="acctInvRecurring"> Repeat this invoice</label>
           <select class="who-select" id="acctInvRecurFreq" style="max-width:120px;display:none;">
@@ -1086,13 +1102,30 @@
           <input type="date" id="acctInvRecurEnd" placeholder="Ends (optional)" style="display:none;">
         </div>
         <textarea id="acctInvNotes" placeholder="Notes (optional)" style="width:100%;box-sizing:border-box;min-height:44px;border-radius:10px;border:1px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;margin-bottom:8px;"></textarea>
-        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px 0;">Saving as "Sent" or "Paid" books the sale automatically (Dr Accounts Receivable / Cr Sales Revenue), plus cost of goods for stocked items. "Paid" also books the collection right away — or record payments (partial or full) later from the list below.</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px 0;">Saving as "Sent" or "Paid" books the sale (Dr Accounts Receivable / Cr Sales Revenue and Tax Payable), plus cost of goods for stocked items. Record payments (partial or full) from the list below.</div>
         <div class="add-row">
           <button type="button" class="add-btn full-width" id="acctInvSave">Save invoice</button>
           <button type="button" class="add-btn ghost full-width" id="acctInvCancelEdit" style="display:none;">Cancel edit</button>
         </div>
         <input type="text" class="acct-search" id="acctInvSearch" placeholder="Search invoices by customer or number…" style="margin-top:12px;">
         <ul class="item-list" id="acctInvList"></ul>
+
+        <div class="section-title">Credit Notes</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Credit part or all of a sent invoice (returns, discounts, corrections). If the invoice was already paid, the excess shows as a refund due on the invoice.</div>
+        <div class="add-row">
+          <select class="who-select" id="acctCnInvoice" style="flex:2;"></select>
+          <input type="date" id="acctCnDate">
+        </div>
+        <button type="button" class="add-btn ghost" id="acctCnFill" style="margin-bottom:6px;">Fill lines from invoice</button>
+        <div id="acctCnLines"></div>
+        <button type="button" class="add-btn ghost" id="acctCnAddLine" style="margin-bottom:6px;">+ Add line</button>
+        <div id="acctCnTotals" style="font-size:12px;margin-bottom:8px;"></div>
+        <div class="add-row">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="acctCnRestock"> Return goods to stock</label>
+        </div>
+        <textarea id="acctCnNotes" placeholder="Reason / notes (optional)" style="width:100%;box-sizing:border-box;min-height:40px;border-radius:10px;border:1px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;margin-bottom:8px;"></textarea>
+        <button type="button" class="add-btn full-width" id="acctCnSave" style="margin-bottom:10px;">Save credit note</button>
+        <ul class="item-list" id="acctCnList"></ul>
       </div>
 
       <!-- PURCHASES -->
@@ -1106,6 +1139,13 @@
         <button class="add-btn full-width" id="acctVendAdd" style="margin-bottom:6px;">Add vendor</button>
         <div class="acct-mini-list" id="acctVendList"></div>
 
+        <div class="section-title">Bill approval</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Bills above this amount created by a household member (not an admin) wait for an admin's approval before they post. Leave 0 to turn approval off. Each person's books have their own setting — to require approval on a member's bills, an admin switches to viewing that member's data (top of the app), sets it here, and later approves their pending bills the same way.</div>
+        <div class="add-row">
+          <input type="number" id="acctApprovalThreshold" placeholder="Approval threshold" step="0.01" min="0">
+          <button type="button" class="add-btn" id="acctApprovalSave">Save</button>
+        </div>
+
         <div class="section-title">Bills</div>
         <div id="acctBillEditingNote" style="display:none;font-size:11.5px;color:#9A6400;margin-bottom:6px;">Editing an existing bill — saving will replace it.</div>
         <div class="add-row">
@@ -1117,7 +1157,8 @@
           <input type="date" id="acctBillDueDate" placeholder="Due date">
         </div>
         <div id="acctBillLines"></div>
-        <button type="button" class="add-btn ghost" id="acctBillAddLine" style="margin-bottom:8px;">+ Add line</button>
+        <button type="button" class="add-btn ghost" id="acctBillAddLine" style="margin-bottom:6px;">+ Add line</button>
+        <div id="acctBillTotals" style="font-size:12px;margin-bottom:8px;"></div>
         <div class="add-row">
           <label class="field-label" style="align-self:center;margin:0;">Status</label>
           <select class="who-select" id="acctBillStatus" style="max-width:120px;">
@@ -1126,6 +1167,14 @@
             <option value="Paid">Paid</option>
           </select>
         </div>
+        <div class="add-row">
+          <label class="field-label" style="align-self:flex-start;margin:6px 0 0 0;">Tags</label>
+          <select multiple size="3" id="acctBillTags" style="flex:1;border-radius:10px;border:1px solid var(--line);padding:4px;font-size:12.5px;"></select>
+        </div>
+        <div class="add-row">
+          <input type="file" id="acctBillAttach" accept="image/*" style="font-size:12px;">
+        </div>
+        <div id="acctBillAttachList" class="acct-mini-list"></div>
         <div class="add-row">
           <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="acctBillRecurring"> Repeat this bill</label>
           <select class="who-select" id="acctBillRecurFreq" style="max-width:120px;display:none;">
@@ -1136,13 +1185,44 @@
           <input type="date" id="acctBillRecurEnd" placeholder="Ends (optional)" style="display:none;">
         </div>
         <textarea id="acctBillNotes" placeholder="Notes (optional)" style="width:100%;box-sizing:border-box;min-height:44px;border-radius:10px;border:1px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;margin-bottom:8px;"></textarea>
-        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px 0;">Saving as "Open" or "Paid" books it automatically (Dr the expense account per line / Cr Accounts Payable). "Paid" also books the payment right away — or record payments (partial or full) later from the list below.</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin:2px 0 8px 0;">Saving as "Open" or "Paid" books it (Dr the account per line and input tax / Cr Accounts Payable). Record payments (partial or full) from the list below.</div>
         <div class="add-row">
           <button type="button" class="add-btn full-width" id="acctBillSave">Save bill</button>
           <button type="button" class="add-btn ghost full-width" id="acctBillCancelEdit" style="display:none;">Cancel edit</button>
         </div>
         <input type="text" class="acct-search" id="acctBillSearch" placeholder="Search bills by vendor or number…" style="margin-top:12px;">
         <ul class="item-list" id="acctBillList"></ul>
+
+        <div class="section-title">Vendor Credits</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Record a credit from a vendor against an open or paid bill. If the bill was already paid, the excess shows as a refund due from the vendor.</div>
+        <div class="add-row">
+          <select class="who-select" id="acctVcBill" style="flex:2;"></select>
+          <input type="date" id="acctVcDate">
+        </div>
+        <button type="button" class="add-btn ghost" id="acctVcFill" style="margin-bottom:6px;">Fill lines from bill</button>
+        <div id="acctVcLines"></div>
+        <button type="button" class="add-btn ghost" id="acctVcAddLine" style="margin-bottom:6px;">+ Add line</button>
+        <div id="acctVcTotals" style="font-size:12px;margin-bottom:8px;"></div>
+        <textarea id="acctVcNotes" placeholder="Reason / notes (optional)" style="width:100%;box-sizing:border-box;min-height:40px;border-radius:10px;border:1px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;margin-bottom:8px;"></textarea>
+        <button type="button" class="add-btn full-width" id="acctVcSave" style="margin-bottom:10px;">Save vendor credit</button>
+        <ul class="item-list" id="acctVcList"></ul>
+      </div>
+
+      <!-- BANKING -->
+      <div class="subpanel" data-acct-sub="banking">
+        <div class="section-title" style="margin-top:0;">Bank reconciliation</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Choose the account to reconcile, then upload or paste your bank statement as CSV (columns: date, description, amount — or date, description, debit, credit). Deposits are positive, withdrawals negative. Dates like 25/09/2026 are read as day/month/year.</div>
+        <div class="add-row">
+          <select class="who-select" id="acctReconAccount" style="flex:1;"></select>
+        </div>
+        <div class="add-row">
+          <input type="file" id="acctStmtFile" accept=".csv,text/csv,text/plain" style="font-size:12px;">
+        </div>
+        <textarea id="acctStmtText" placeholder="…or paste CSV rows here" style="width:100%;box-sizing:border-box;min-height:90px;border-radius:10px;border:1px solid var(--line);padding:8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;margin-bottom:8px;"></textarea>
+        <button type="button" class="add-btn full-width" id="acctStmtParse" style="margin-bottom:10px;">Read statement &amp; match</button>
+        <div id="acctReconSummary" style="font-size:12px;margin-bottom:8px;"></div>
+        <div id="acctReconRows"></div>
+        <button type="button" class="add-btn full-width" id="acctReconApply" style="margin:10px 0;display:none;">Mark matched lines as reconciled</button>
       </div>
 
       <!-- ACCOUNTANT -->
@@ -1170,11 +1250,74 @@
         <div id="acctJeLines"></div>
         <button type="button" class="add-btn ghost" id="acctJeAddLine" style="margin-bottom:8px;">+ Add line</button>
         <div id="acctJeBalanceNote" style="font-size:11.5px;margin-bottom:8px;"></div>
+        <div class="add-row">
+          <label class="field-label" style="align-self:flex-start;margin:6px 0 0 0;">Tags</label>
+          <select multiple size="3" id="acctJeTags" style="flex:1;border-radius:10px;border:1px solid var(--line);padding:4px;font-size:12.5px;"></select>
+        </div>
         <button type="button" class="add-btn full-width" id="acctJeSave" style="margin-bottom:12px;">Save journal entry</button>
         <ul class="item-list" id="acctJeList" style="margin-bottom:12px;"></ul>
 
         <div class="section-title">Trial Balance</div>
         <div id="acctTrialBalance"></div>
+
+        <details class="acct-details">
+          <summary class="section-title">Fixed assets &amp; depreciation</summary>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Straight-line depreciation, posted monthly (Dr Depreciation Expense / Cr Accumulated Depreciation) automatically each time you sign in, or on demand.</div>
+          <div class="add-row">
+            <input type="text" id="acctFaName" placeholder="Asset name">
+            <input type="number" id="acctFaCost" placeholder="Cost" step="0.01" style="max-width:100px;">
+          </div>
+          <div class="add-row">
+            <input type="number" id="acctFaSalvage" placeholder="Salvage value" step="0.01" style="max-width:120px;">
+            <input type="number" id="acctFaLife" placeholder="Life (years)" step="0.5" style="max-width:110px;">
+            <input type="date" id="acctFaDate">
+          </div>
+          <div class="add-row">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="acctFaBook" checked> Also record the purchase (Dr Fixed Assets / Cr Cash)</label>
+          </div>
+          <div class="add-row">
+            <button type="button" class="add-btn full-width" id="acctFaAdd">Add asset</button>
+            <button type="button" class="add-btn ghost full-width" id="acctFaRunDep">Post depreciation now</button>
+          </div>
+          <ul class="item-list" id="acctFaList" style="margin-top:10px;"></ul>
+        </details>
+
+        <details class="acct-details">
+          <summary class="section-title">Tax rates (VAT / GST)</summary>
+          <div class="add-row">
+            <input type="text" id="acctTaxName" placeholder="Name, e.g. VAT 5%">
+            <input type="number" id="acctTaxRate" placeholder="Rate %" step="0.01" min="0" style="max-width:100px;">
+          </div>
+          <button type="button" class="add-btn full-width" id="acctTaxAdd" style="margin-bottom:8px;">Add tax rate</button>
+          <div class="acct-mini-list" id="acctTaxList"></div>
+        </details>
+
+        <details class="acct-details">
+          <summary class="section-title">Reporting tags</summary>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Tag invoices, bills and journal entries (e.g. by household member or project), optionally in a parent → child hierarchy, then filter the P&amp;L and Profit by Item by tag.</div>
+          <div class="add-row">
+            <input type="text" id="acctTagName" placeholder="Tag name">
+            <select class="who-select" id="acctTagParent" style="max-width:160px;"></select>
+          </div>
+          <button type="button" class="add-btn full-width" id="acctTagAdd" style="margin-bottom:8px;">Add tag</button>
+          <div class="acct-mini-list" id="acctTagList"></div>
+        </details>
+
+        <details class="acct-details">
+          <summary class="section-title">Period lock</summary>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Locking a period blocks adding, editing or deleting anything dated on or before the lock date, so closed months can't change. Only admins can lock or unlock.</div>
+          <div class="add-row">
+            <input type="date" id="acctLockDate">
+            <button type="button" class="add-btn" id="acctLockBtn">Lock through this date</button>
+            <button type="button" class="add-btn ghost" id="acctUnlockBtn">Unlock</button>
+          </div>
+          <div id="acctLockStatus" style="font-size:12px;margin-top:6px;"></div>
+        </details>
+
+        <details class="acct-details">
+          <summary class="section-title">Audit trail</summary>
+          <ul class="item-list" id="acctAuditList"></ul>
+        </details>
       </div>
 
       <!-- REPORTS -->
@@ -1184,11 +1327,19 @@
           <input type="date" id="acctReportFrom">
           <input type="date" id="acctReportTo">
         </div>
+        <div class="add-row">
+          <label class="field-label" style="align-self:center;margin:0;">Tag</label>
+          <select class="who-select" id="acctReportTag" style="flex:1;"></select>
+        </div>
         <div class="acct-export-row">
           <button type="button" class="add-btn ghost" id="acctExportPdf">Export PDF</button>
           <button type="button" class="add-btn ghost" id="acctExportExcel">Export Excel</button>
         </div>
         <div id="acctPnl"></div>
+
+        <div class="section-title">Profit by Item</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Net of credit notes, for the period and tag above.</div>
+        <div id="acctProfitByItem"></div>
 
         <div class="section-title">Balance Sheet</div>
         <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">As of the "To" date above.</div>
@@ -3400,18 +3551,21 @@
         { id: uid(), code: '1000', name: 'Cash', type: 'Asset', systemKind: 'CASH' },
         { id: uid(), code: '1100', name: 'Accounts Receivable', type: 'Asset', systemKind: 'AR' },
         { id: uid(), code: '1200', name: 'Inventory Asset', type: 'Asset', systemKind: 'INVENTORY' },
+        { id: uid(), code: '1300', name: 'Tax Receivable', type: 'Asset', systemKind: 'TAXREC' },
+        { id: uid(), code: '1500', name: 'Fixed Assets', type: 'Asset', systemKind: 'FIXEDASSET' },
+        { id: uid(), code: '1590', name: 'Accumulated Depreciation', type: 'Asset', systemKind: 'ACCDEP' },
         { id: uid(), code: '2000', name: 'Accounts Payable', type: 'Liability', systemKind: 'AP' },
+        { id: uid(), code: '2100', name: 'Tax Payable', type: 'Liability', systemKind: 'TAXPAY' },
         { id: uid(), code: '3000', name: "Owner's Equity", type: 'Equity' },
         { id: uid(), code: '4000', name: 'Sales Revenue', type: 'Income', systemKind: 'SALES' },
         { id: uid(), code: '5000', name: 'Cost of Goods Sold', type: 'Expense', systemKind: 'COGS' },
-        { id: uid(), code: '5100', name: 'General Expenses', type: 'Expense' }
+        { id: uid(), code: '5100', name: 'General Expenses', type: 'Expense' },
+        { id: uid(), code: '5200', name: 'Depreciation Expense', type: 'Expense', systemKind: 'DEPEXP' }
       ],
-      journalEntries: [],
-      items: [],
-      invoices: [],
-      customers: [],
-      vendors: [],
-      bills: []
+      journalEntries: [], items: [], invoices: [], customers: [], vendors: [], bills: [],
+      creditNotes: [], vendorCredits: [], taxRates: defaultTaxRates(), tags: [], fixedAssets: [], activity: [],
+      counters: { invoice: 1000, bill: 1000, creditNote: 1000, vendorCredit: 1000 },
+      settings: { lockedThrough: '', approvalThreshold: 0 }
     };
   }
   let editingCardId = null;
@@ -3792,24 +3946,11 @@
       });
     }
 
-    // Accounting (Zoho Books-style module) — added later, so backfill the whole
-    // shape for any account created before this existed.
+    // Accounting (Zoho Books-style module) — added and extended over time, so
+    // backfill the whole shape (and per-document fields) for older accounts.
     if(!ud.accounting || typeof ud.accounting !== 'object') ud.accounting = defaultAccountingData();
     if(!Array.isArray(ud.accounting.accounts)) ud.accounting.accounts = defaultAccountingData().accounts;
-    if(!Array.isArray(ud.accounting.journalEntries)) ud.accounting.journalEntries = [];
-    if(!Array.isArray(ud.accounting.items)) ud.accounting.items = [];
-    if(!Array.isArray(ud.accounting.invoices)) ud.accounting.invoices = [];
-    if(!Array.isArray(ud.accounting.customers)) ud.accounting.customers = [];
-    if(!Array.isArray(ud.accounting.vendors)) ud.accounting.vendors = [];
-    if(!Array.isArray(ud.accounting.bills)) ud.accounting.bills = [];
-    // Invoices created before partial payments/recurring/notes existed —
-    // backfill each one so older invoices behave the same as new ones.
-    ud.accounting.invoices.forEach(inv => {
-      if(!Array.isArray(inv.payments)) inv.payments = [];
-      if(typeof inv.amountPaid !== 'number') inv.amountPaid = inv.status === 'Paid' ? Number(inv.total) || 0 : 0;
-      if(typeof inv.notes !== 'string') inv.notes = '';
-      if(inv.recurring === undefined) inv.recurring = null;
-    });
+    acctMigrateDocs(ud.accounting);
   }
 
   function seedDefaults(){
@@ -13345,21 +13486,109 @@
   }
 
   // ============================================================
-  // ACCOUNTING (Zoho Books-style: Home / Items / Sales / Purchases / Accountant / Reports)
-  // A single set of household "books" using real double-entry bookkeeping —
-  // separate from the personal Resident/Home Country budget tracking
-  // elsewhere in the app. Creating/sending an invoice books Dr Accounts
-  // Receivable / Cr Sales Revenue automatically (plus Dr COGS / Cr Inventory
-  // for stocked items); a bill books Dr Expense(s) / Cr Accounts Payable.
-  // Recording a payment (partial or full) books Dr Cash / Cr Accounts
-  // Receivable (or the reverse for bills). Manual journal entries in the
-  // Accountant tab cover everything else and must balance to save.
+  // ACCOUNTING (Zoho Books-style: Home / Items / Sales / Purchases / Banking /
+  // Accountant / Reports). A set of double-entry "books" per person, separate
+  // from the Resident/Home Country budget tracking. Documents post journal
+  // entries automatically; manual entries must balance. Every posted entry
+  // carries the id of the document that created it so edits/deletes can
+  // reverse it cleanly.
   // ============================================================
+  function defaultTaxRates(){
+    return [ { id: uid(), name: 'VAT 5%', rate: 5 }, { id: uid(), name: 'GST 18%', rate: 18 } ];
+  }
+  function acctEnsureShape(acc){
+    ['accounts','journalEntries','items','invoices','customers','vendors','bills','creditNotes','vendorCredits','tags','fixedAssets','activity'].forEach(k => { if(!Array.isArray(acc[k])) acc[k] = []; });
+    if(!Array.isArray(acc.taxRates)) acc.taxRates = defaultTaxRates();
+    if(!acc.counters || typeof acc.counters !== 'object') acc.counters = {};
+    ['invoice','bill','creditNote','vendorCredit'].forEach(k => { if(typeof acc.counters[k] !== 'number') acc.counters[k] = 1000; });
+    if(!acc.settings || typeof acc.settings !== 'object') acc.settings = {};
+    if(typeof acc.settings.lockedThrough !== 'string') acc.settings.lockedThrough = '';
+    if(typeof acc.settings.approvalThreshold !== 'number') acc.settings.approvalThreshold = 0;
+    return acc;
+  }
   function acctData(){
     const ud = currentData();
     if(!ud.accounting) ud.accounting = defaultAccountingData();
-    return ud.accounting;
+    return acctEnsureShape(ud.accounting);
   }
+  // One-time per-document backfill for data created before later features
+  // (partial payments, tax, credits, tags…) existed. Idempotent.
+  function acctMigrateDocs(acc){
+    acctEnsureShape(acc);
+    const maxNo = (docs, field) => docs.reduce((m, d) => { const n = parseInt(String(d[field] || '').replace(/\D/g, ''), 10); return isNaN(n) ? m : Math.max(m, n); }, 0);
+    acc.counters.invoice = Math.max(acc.counters.invoice, maxNo(acc.invoices, 'invoiceNo'));
+    acc.counters.bill = Math.max(acc.counters.bill, maxNo(acc.bills, 'billNo'));
+    acc.counters.creditNote = Math.max(acc.counters.creditNote, maxNo(acc.creditNotes, 'cnNo'));
+    acc.counters.vendorCredit = Math.max(acc.counters.vendorCredit, maxNo(acc.vendorCredits, 'vcNo'));
+    acc.invoices.concat(acc.bills).forEach(d => {
+      if(!Array.isArray(d.payments)) d.payments = [];
+      if(typeof d.amountPaid !== 'number') d.amountPaid = d.status === 'Paid' ? Number(d.total) || 0 : 0;
+      if(typeof d.amountCredited !== 'number') d.amountCredited = 0;
+      if(typeof d.amountRefunded !== 'number') d.amountRefunded = 0;
+      if(typeof d.notes !== 'string') d.notes = '';
+      if(d.recurring === undefined) d.recurring = null;
+      if(!Array.isArray(d.tagIds)) d.tagIds = [];
+      if(!Array.isArray(d.attachments)) d.attachments = [];
+      if(typeof d.subtotal !== 'number') d.subtotal = Number(d.total) || 0;
+      if(typeof d.taxTotal !== 'number') d.taxTotal = 0;
+    });
+    acc.journalEntries.forEach(je => {
+      if(!Array.isArray(je.tagIds)) je.tagIds = [];
+      if(!Array.isArray(je.reconciledAccounts)) je.reconciledAccounts = [];
+    });
+  }
+
+  const acctR2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
+  // Same look as fmt() but never masked by privacy mode — used for PDFs and
+  // anything that leaves the screen.
+  function acctMoney(amount){
+    const sym = CURRENCIES[state.settings.currency] || state.settings.currency;
+    const abs = Math.abs(Number(amount) || 0).toFixed(2);
+    const sign = Number(amount) < 0 ? '-' : '';
+    return sym.length > 1 ? `${sign}${sym} ${abs}` : `${sign}${sym}${abs}`;
+  }
+  function acctNextNo(kind){
+    const acc = acctData();
+    const prefix = { invoice: 'INV-', bill: 'BILL-', creditNote: 'CN-', vendorCredit: 'VC-' }[kind];
+    acc.counters[kind] = (Number(acc.counters[kind]) || 1000) + 1;
+    return prefix + acc.counters[kind];
+  }
+  function acctLog(action, detail){
+    const acc = acctData();
+    const who = currentUser ? (currentUser.name || currentUser.username || currentUser.email || 'user') : 'unknown';
+    acc.activity.push({ id: uid(), ts: new Date().toISOString(), user: who, action, detail: detail || '' });
+    if(acc.activity.length > 500) acc.activity.splice(0, acc.activity.length - 500);
+  }
+  function acctIsAdmin(){ return !!(currentUser && currentUser.role === 'admin'); }
+
+  // ---- Period lock ----
+  function acctLockedThrough(){ return acctData().settings.lockedThrough || ''; }
+  function acctIsLocked(dateStr){ const l = acctLockedThrough(); return !!(l && dateStr && dateStr <= l); }
+  function acctGuardLocked(dateStr, what){
+    if(acctIsLocked(dateStr)){
+      alert(`${what} is dated ${dateStr}, which is inside the locked period (through ${acctLockedThrough()}). An admin can unlock it in Accountant → Period lock.`);
+      return false;
+    }
+    return true;
+  }
+  // Blocks changing a document whose posted entries (or its own date) fall in
+  // a locked period, or that have already been reconciled against a bank
+  // statement.
+  function acctGuardSource(sourceId, docDate, what){
+    const acc = acctData();
+    const entries = acc.journalEntries.filter(je => je.sourceInvoiceId === sourceId);
+    if(entries.some(je => acctIsLocked(je.date)) || acctIsLocked(docDate)){
+      alert(`${what} touches the locked period (through ${acctLockedThrough()}). An admin can unlock it in Accountant → Period lock.`);
+      return false;
+    }
+    if(entries.some(je => (je.reconciledAccounts || []).length)){
+      alert(`${what} has entries already reconciled against a bank statement, so it can't be changed.`);
+      return false;
+    }
+    return true;
+  }
+
+  // ---- Accounts & journal ----
   function getSystemAccount(kind, name, type){
     const acc = acctData();
     let a = acc.accounts.find(x => x.systemKind === kind);
@@ -13373,8 +13602,10 @@
     const a = acctData().accounts.find(x => x.id === id);
     return a ? a.name : '(deleted account)';
   }
-  function postJournalEntry(date, memo, lines, sourceId){
-    acctData().journalEntries.push({ id: uid(), date, memo, lines, sourceInvoiceId: sourceId || null, auto: !!sourceId });
+  function postJournalEntry(date, memo, lines, sourceId, tagIds){
+    const je = { id: uid(), date, memo, lines, sourceInvoiceId: sourceId || null, auto: !!sourceId, tagIds: (tagIds || []).slice(), reconciledAccounts: [] };
+    acctData().journalEntries.push(je);
+    return je;
   }
   function reverseEntriesForSource(sourceId){
     const acc = acctData();
@@ -13396,72 +13627,153 @@
     const normalDebit = account.type === 'Asset' || account.type === 'Expense';
     return normalDebit ? (debit - credit) : (credit - debit);
   }
-  function computePnl(from, to){
+
+  // ---- Tax ----
+  function acctTaxOptionsHtml(selectedId){
+    return '<option value="">No tax</option>' + acctData().taxRates.map(t => `<option value="${t.id}" ${t.id === selectedId ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
+  }
+  function acctLineTax(amount, taxRateId){
+    const t = acctData().taxRates.find(x => x.id === taxRateId);
+    const rate = t ? (Number(t.rate) || 0) : 0;
+    return { taxRate: rate, taxName: t ? t.name : '', tax: acctR2(amount * rate / 100) };
+  }
+  function acctDocTotals(lines){
+    const subtotal = acctR2(lines.reduce((s, l) => s + (Number(l.amount) || 0), 0));
+    const taxTotal = acctR2(lines.reduce((s, l) => s + (Number(l.tax) || 0), 0));
+    return { subtotal, taxTotal, total: acctR2(subtotal + taxTotal) };
+  }
+  const acctSub = (d) => d.subtotal != null ? Number(d.subtotal) : Number(d.total) || 0;
+  const acctTaxTotal = (d) => Number(d.taxTotal) || 0;
+  function acctDraftTotalsHtml(lines, kind){
+    let sub = 0, tax = 0;
+    lines.forEach(l => {
+      const amt = kind === 'sales' ? acctR2((Number(l.qty) || 0) * (Number(l.rate) || 0)) : acctR2(Number(l.amount) || 0);
+      sub += amt; tax += acctLineTax(amt, l.taxRateId).tax;
+    });
+    return `Subtotal ${fmt(sub)} · Tax ${fmt(tax)} · Total <strong>${fmt(acctR2(sub + tax))}</strong>`;
+  }
+
+  // ---- Status ----
+  // Stored status is Draft / Sent-or-Open / Paid / Pending / Rejected.
+  // Partial, Overdue and Credited are derived at display time from amounts
+  // and dates so there's a single source of truth.
+  const ACCT_UNPOSTED = ['Draft', 'Pending', 'Rejected'];
+  function acctIsPosted(doc){ return !ACCT_UNPOSTED.includes(doc.status); }
+  function acctOutstanding(doc){ return Math.max(0, acctR2((Number(doc.total) || 0) - (Number(doc.amountPaid) || 0) - (Number(doc.amountCredited) || 0))); }
+  function acctRefundDue(doc){ return Math.max(0, acctR2((Number(doc.amountPaid) || 0) + (Number(doc.amountCredited) || 0) - (Number(doc.total) || 0) - (Number(doc.amountRefunded) || 0))); }
+  function acctEffectiveStatus(doc, postedLabel, asOf){
+    const today = asOf || todayStr();
+    if(doc.status === 'Draft') return 'Draft';
+    if(doc.status === 'Pending') return 'Pending Approval';
+    if(doc.status === 'Rejected') return 'Rejected';
+    const paid = Number(doc.amountPaid) || 0;
+    if(acctOutstanding(doc) <= 0.005) return paid > 0 || (Number(doc.total) || 0) <= 0.005 ? 'Paid' : 'Credited';
+    const overdue = !!(doc.dueDate && doc.dueDate < today);
+    if(paid > 0) return overdue ? 'Overdue' : 'Partial';
+    return overdue ? 'Overdue' : postedLabel;
+  }
+  function acctBadgeHtml(effectiveStatus){
+    const map = { Draft: 'draft', Sent: 'sent', Open: 'sent', Partial: 'partial', Paid: 'paid', Overdue: 'overdue', Credited: 'sent', 'Pending Approval': 'partial', Rejected: 'overdue' };
+    return `<span class="acct-badge acct-badge-${map[effectiveStatus] || 'draft'}">${escapeHtml(effectiveStatus)}</span>`;
+  }
+
+  // ---- Tags ----
+  function acctTagFamily(tagId){
+    const tags = acctData().tags;
+    const out = new Set([tagId]);
+    let added = true;
+    while(added){
+      added = false;
+      tags.forEach(t => { if(t.parentId && out.has(t.parentId) && !out.has(t.id)){ out.add(t.id); added = true; } });
+    }
+    return out;
+  }
+  function acctTagLabel(t){
+    const p = t.parentId ? acctData().tags.find(x => x.id === t.parentId) : null;
+    return p ? `${p.name} › ${t.name}` : t.name;
+  }
+  function acctFillTagSelect(selectId, selectedIds){
+    const el = document.getElementById(selectId);
+    if(!el) return;
+    const keep = selectedIds || Array.from(el.selectedOptions).map(o => o.value);
+    el.innerHTML = acctData().tags.map(t => `<option value="${t.id}" ${keep.includes(t.id) ? 'selected' : ''}>${escapeHtml(acctTagLabel(t))}</option>`).join('');
+  }
+  function acctSelectedTags(selectId){
+    const el = document.getElementById(selectId);
+    return el ? Array.from(el.selectedOptions).map(o => o.value) : [];
+  }
+
+  // ---- Reports math ----
+  function computePnl(from, to, tagId){
     const acc = acctData();
+    const fam = tagId ? acctTagFamily(tagId) : null;
     const totals = {};
     acc.journalEntries.forEach(je => {
       if(from && je.date < from) return;
       if(to && je.date > to) return;
+      if(fam && !(je.tagIds || []).some(id => fam.has(id))) return;
       je.lines.forEach(l => {
         const a = acc.accounts.find(x => x.id === l.accountId);
         if(!a || (a.type !== 'Income' && a.type !== 'Expense')) return;
-        const delta = a.type === 'Income' ? (Number(l.credit)||0) - (Number(l.debit)||0) : (Number(l.debit)||0) - (Number(l.credit)||0);
+        const delta = a.type === 'Income' ? (Number(l.credit) || 0) - (Number(l.debit) || 0) : (Number(l.debit) || 0) - (Number(l.credit) || 0);
         totals[a.id] = (totals[a.id] || 0) + delta;
       });
     });
     const incomeAccounts = acc.accounts.filter(a => a.type === 'Income').map(a => ({ account: a, amount: totals[a.id] || 0 }));
     const expenseAccounts = acc.accounts.filter(a => a.type === 'Expense').map(a => ({ account: a, amount: totals[a.id] || 0 }));
-    const totalIncome = incomeAccounts.reduce((s,r) => s + r.amount, 0);
-    const totalExpense = expenseAccounts.reduce((s,r) => s + r.amount, 0);
+    const totalIncome = incomeAccounts.reduce((s, r) => s + r.amount, 0);
+    const totalExpense = expenseAccounts.reduce((s, r) => s + r.amount, 0);
     return { incomeAccounts, expenseAccounts, totalIncome, totalExpense, netIncome: totalIncome - totalExpense };
   }
   function computeBalanceSheet(asOf){
     const acc = acctData();
     const rowsOf = (type) => acc.accounts.filter(a => a.type === type).map(a => ({ account: a, balance: acctAccountBalance(a.id, asOf) }));
-    const assets = rowsOf('Asset');
-    const liabilities = rowsOf('Liability');
-    const equity = rowsOf('Equity');
-    const totalAssets = assets.reduce((s,r) => s + r.balance, 0);
-    const totalLiabilities = liabilities.reduce((s,r) => s + r.balance, 0);
-    const totalEquityBooked = equity.reduce((s,r) => s + r.balance, 0);
+    const assets = rowsOf('Asset'), liabilities = rowsOf('Liability'), equity = rowsOf('Equity');
+    const totalAssets = assets.reduce((s, r) => s + r.balance, 0);
+    const totalLiabilities = liabilities.reduce((s, r) => s + r.balance, 0);
+    const totalEquityBooked = equity.reduce((s, r) => s + r.balance, 0);
     const pnl = computePnl(null, asOf);
-    const totalEquity = totalEquityBooked + pnl.netIncome;
-    return { assets, liabilities, equity, retainedEarnings: pnl.netIncome, totalAssets, totalLiabilities, totalEquity };
+    return { assets, liabilities, equity, retainedEarnings: pnl.netIncome, totalAssets, totalLiabilities, totalEquity: totalEquityBooked + pnl.netIncome };
+  }
+  function computeProfitByItem(from, to, tagId){
+    const acc = acctData();
+    const fam = tagId ? acctTagFamily(tagId) : null;
+    const inTag = (doc) => !fam || (doc.tagIds || []).some(id => fam.has(id));
+    const inRange = (d) => (!from || d >= from) && (!to || d <= to);
+    const rows = {};
+    const row = (itemId, name) => { const k = itemId || name; return rows[k] || (rows[k] = { name, qty: 0, revenue: 0, cost: 0 }); };
+    acc.invoices.filter(i => acctIsPosted(i) && inRange(i.date) && inTag(i)).forEach(inv => inv.lines.forEach(l => {
+      const it = acc.items.find(x => x.id === l.itemId);
+      const r = row(l.itemId, l.name);
+      const qty = Number(l.qty) || 0;
+      r.qty += qty; r.revenue += Number(l.amount) || 0;
+      const unit = l.unitCost != null ? Number(l.unitCost) : (it && it.type === 'Goods' ? Number(it.purchasePrice) || 0 : 0);
+      r.cost += unit * qty;
+    }));
+    acc.creditNotes.filter(c => inRange(c.date) && inTag(c)).forEach(cn => cn.lines.forEach(l => {
+      const r = row(l.itemId, l.name);
+      const qty = Number(l.qty) || 0;
+      r.qty -= qty; r.revenue -= Number(l.amount) || 0;
+      if(cn.restock) r.cost -= (Number(l.unitCost) || 0) * qty;
+    }));
+    return Object.values(rows).map(r => ({ ...r, profit: r.revenue - r.cost, margin: r.revenue ? ((r.revenue - r.cost) / r.revenue) * 100 : 0 })).sort((a, b) => b.profit - a.profit);
   }
   function addDaysToDate(dateStr, days){
     const d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0,10);
+    return d.toISOString().slice(0, 10);
   }
   function acctAddByFreq(dateStr, freq){
     if(freq === 'weekly') return addDaysToDate(dateStr, 7);
     if(freq === 'yearly') return addMonthsToDate(dateStr, 12);
     return addMonthsToDate(dateStr, 1);
   }
-  // Draft/Sent-or-Open/Paid is what's actually stored; Partial and Overdue
-  // are derived at display time from amountPaid vs total and dueDate vs
-  // today, so there's only ever one source of truth for "is this paid".
-  function acctEffectiveStatus(doc, postedLabel, asOf){
-    const today = asOf || todayStr();
-    if(doc.status === 'Draft') return 'Draft';
-    const total = Number(doc.total) || 0, paid = Number(doc.amountPaid) || 0;
-    const isPaid = paid >= total - 0.005;
-    if(isPaid) return 'Paid';
-    const overdue = !!(doc.dueDate && doc.dueDate < today);
-    if(paid > 0) return overdue ? 'Overdue' : 'Partial';
-    return overdue ? 'Overdue' : postedLabel;
-  }
-  function acctBadgeHtml(effectiveStatus){
-    const map = { Draft: 'draft', Sent: 'sent', Open: 'sent', Partial: 'partial', Paid: 'paid', Overdue: 'overdue' };
-    const cls = map[effectiveStatus] || 'draft';
-    return `<span class="acct-badge acct-badge-${cls}">${escapeHtml(effectiveStatus)}</span>`;
-  }
   function computeAgedBuckets(docs, asOf){
     const today = asOf || todayStr();
-    const order = ['Current','1-30','31-60','61-90','90+'];
-    const buckets = { Current: [], '1-30': [], '31-60': [], '61-90': [], '90+': [] };
-    docs.filter(d => d.status !== 'Draft' && (Number(d.amountPaid)||0) < Number(d.total) - 0.005).forEach(d => {
-      const outstanding = Number(d.total) - (Number(d.amountPaid)||0);
+    const order = ['Current', '1-30', '31-60', '61-90', '90+'];
+    const buckets = { 'Current': [], '1-30': [], '31-60': [], '61-90': [], '90+': [] };
+    docs.filter(d => acctIsPosted(d) && acctOutstanding(d) > 0.005).forEach(d => {
+      const outstanding = acctOutstanding(d);
       const due = d.dueDate || d.date;
       const daysOverdue = due ? Math.floor((new Date(today + 'T00:00:00') - new Date(due + 'T00:00:00')) / 86400000) : 0;
       let bucket = 'Current';
@@ -13472,7 +13784,7 @@
       buckets[bucket].push({ doc: d, outstanding });
     });
     const totals = {};
-    order.forEach(k => { totals[k] = buckets[k].reduce((s,r) => s + r.outstanding, 0); });
+    order.forEach(k => { totals[k] = buckets[k].reduce((s, r) => s + r.outstanding, 0); });
     return { buckets, totals, order };
   }
   function renderAgedTable(containerEl, docs, nameField, numberField){
@@ -13488,6 +13800,7 @@
     ` : '<div class="empty">Nothing outstanding.</div>';
   }
 
+  // ---- Navigation ----
   function activateAcctSubtab(sub){
     document.querySelectorAll('#subtabsAcct .subtab').forEach(b => b.classList.toggle('active', b.dataset.acctSub === sub));
     document.querySelectorAll('.subpanel[data-acct-sub]').forEach(p => p.classList.toggle('active', p.dataset.acctSub === sub));
@@ -13495,6 +13808,7 @@
     if(sub === 'items') renderAcctItems();
     if(sub === 'sales') renderAcctSales();
     if(sub === 'purchases') renderAcctPurchases();
+    if(sub === 'banking') renderAcctBanking();
     if(sub === 'accountant') renderAcctAccountant();
     if(sub === 'reports') renderAcctReports();
   }
@@ -13515,21 +13829,30 @@
     if(!box) return;
     const acc = acctData();
     const today = todayStr();
-    const outstandingInvoices = acc.invoices.filter(i => i.status !== 'Draft' && (Number(i.amountPaid)||0) < Number(i.total) - 0.005);
-    const outstandingBills = acc.bills.filter(b => b.status !== 'Draft' && (Number(b.amountPaid)||0) < Number(b.total) - 0.005);
-    const receivables = outstandingInvoices.reduce((s,i) => s + (Number(i.total) - (Number(i.amountPaid)||0)), 0);
-    const payables = outstandingBills.reduce((s,b) => s + (Number(b.total) - (Number(b.amountPaid)||0)), 0);
-    const overdueReceivables = outstandingInvoices.filter(i => i.dueDate && i.dueDate < today).reduce((s,i) => s + (Number(i.total) - (Number(i.amountPaid)||0)), 0);
-    const overduePayables = outstandingBills.filter(b => b.dueDate && b.dueDate < today).reduce((s,b) => s + (Number(b.total) - (Number(b.amountPaid)||0)), 0);
+    const outInv = acc.invoices.filter(i => acctIsPosted(i) && acctOutstanding(i) > 0.005);
+    const outBills = acc.bills.filter(b => acctIsPosted(b) && acctOutstanding(b) > 0.005);
+    const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+    const receivables = sum(outInv, acctOutstanding);
+    const payables = sum(outBills, acctOutstanding);
+    const overdueR = sum(outInv.filter(i => i.dueDate && i.dueDate < today), acctOutstanding);
+    const overdueP = sum(outBills.filter(b => b.dueDate && b.dueDate < today), acctOutstanding);
     const pnl = computePnl(null, today);
     box.innerHTML = `
       <div class="stat gold"><div class="num">${fmt(receivables)}</div><div class="label">Receivables</div></div>
-      <div class="stat gold"><div class="num">${fmt(overdueReceivables)}</div><div class="label">Overdue receivables</div></div>
+      <div class="stat gold"><div class="num">${fmt(overdueR)}</div><div class="label">Overdue receivables</div></div>
       <div class="stat teal"><div class="num">${fmt(payables)}</div><div class="label">Payables</div></div>
-      <div class="stat teal"><div class="num">${fmt(overduePayables)}</div><div class="label">Overdue payables</div></div>
+      <div class="stat teal"><div class="num">${fmt(overdueP)}</div><div class="label">Overdue payables</div></div>
       <div class="stat teal"><div class="num">${acc.items.length}</div><div class="label">Items</div></div>
       <div class="stat ${pnl.netIncome >= 0 ? 'teal' : 'gold'}"><div class="num">${fmt(pnl.netIncome)}</div><div class="label">Net income (all time)</div></div>
     `;
+    const notes = [];
+    const pending = acc.bills.filter(b => b.status === 'Pending').length;
+    if(pending) notes.push(`⏳ ${pending} bill${pending === 1 ? '' : 's'} waiting for approval${acctIsAdmin() ? ' — review them in Purchases.' : '.'}`);
+    const refundsCustomers = sum(acc.invoices, acctRefundDue), refundsVendors = sum(acc.bills, acctRefundDue);
+    if(refundsCustomers > 0.005) notes.push(`↩ Refunds due to customers: ${fmt(refundsCustomers)}`);
+    if(refundsVendors > 0.005) notes.push(`↩ Refunds due from vendors: ${fmt(refundsVendors)}`);
+    if(acc.settings.lockedThrough) notes.push(`🔒 Books locked through ${escapeHtml(acc.settings.lockedThrough)}`);
+    document.getElementById('acctHomeNotes').innerHTML = notes.join('<br>');
   }
 
   // ---- ITEMS ----
@@ -13538,7 +13861,7 @@
     if(!list) return;
     const acc = acctData();
     const q = (document.getElementById('acctItemSearch')?.value || '').trim().toLowerCase();
-    const items = q ? acc.items.filter(it => it.name.toLowerCase().includes(q) || (it.sku||'').toLowerCase().includes(q)) : acc.items;
+    const items = q ? acc.items.filter(it => it.name.toLowerCase().includes(q) || (it.sku || '').toLowerCase().includes(q)) : acc.items;
     list.innerHTML = items.length ? '' : '<li class="empty">No items match.</li>';
     items.forEach(it => {
       const li = document.createElement('li');
@@ -13549,11 +13872,8 @@
             <div class="tx-amount">${fmt(it.salesPrice)}</div>
           </div>
           <div class="card-desc" style="margin-top:2px;">${escapeHtml(it.type)}${it.type === 'Goods' ? ' · Stock: ' + it.qtyOnHand : ''} · Cost: ${fmt(it.purchasePrice)}</div>
-          <div style="text-align:right; margin-top:6px;">
-            <button class="del-btn" data-id="${it.id}">×</button>
-          </div>
-        </div>
-      `;
+          <div style="text-align:right; margin-top:6px;"><button class="del-btn" data-id="${it.id}">×</button></div>
+        </div>`;
       list.appendChild(li);
     });
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
@@ -13568,99 +13888,208 @@
     const name = document.getElementById('acctItemName').value.trim();
     if(!name){ alert('Enter an item name.'); return; }
     acctData().items.push({
-      id: uid(),
-      name,
+      id: uid(), name,
       sku: document.getElementById('acctItemSku').value.trim(),
       type: document.getElementById('acctItemType').value,
       salesPrice: Number(document.getElementById('acctItemSalesPrice').value) || 0,
       purchasePrice: Number(document.getElementById('acctItemPurchasePrice').value) || 0,
       qtyOnHand: Number(document.getElementById('acctItemQty').value) || 0
     });
-    ['acctItemName','acctItemSku','acctItemSalesPrice','acctItemPurchasePrice','acctItemQty'].forEach(id => { document.getElementById(id).value = ''; });
+    ['acctItemName', 'acctItemSku', 'acctItemSalesPrice', 'acctItemPurchasePrice', 'acctItemQty'].forEach(id => { document.getElementById(id).value = ''; });
     save(); renderAcctItems();
   });
 
-  // ---- CUSTOMERS (Sales) ----
-  function renderAcctCustomers(){
-    const wrap = document.getElementById('acctCustList');
-    const datalist = document.getElementById('acctCustomerDatalist');
+  // ---- CUSTOMERS / VENDORS ----
+  function acctRenderPartyList(listId, datalistId, key, emptyMsg, rerender){
+    const wrap = document.getElementById(listId);
     if(!wrap) return;
     const acc = acctData();
-    wrap.innerHTML = acc.customers.map(c => `
+    wrap.innerHTML = acc[key].map(c => `
       <span class="acct-mini-chip">${escapeHtml(c.name)}${c.phone ? ' · ' + escapeHtml(c.phone) : ''}<button type="button" data-id="${c.id}">×</button></span>
-    `).join('') || '<span style="font-size:11.5px;color:var(--ink-soft);">No customers saved yet — type a name in the invoice form below, or add one here for quick reuse.</span>';
+    `).join('') || `<span style="font-size:11.5px;color:var(--ink-soft);">${emptyMsg}</span>`;
     wrap.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', () => {
-      acc.customers = acc.customers.filter(c => c.id !== btn.dataset.id);
-      save(); renderAcctCustomers();
+      acc[key] = acc[key].filter(c => c.id !== btn.dataset.id);
+      save(); rerender();
     }));
-    if(datalist) datalist.innerHTML = acc.customers.map(c => `<option value="${escapeHtml(c.name)}"></option>`).join('');
+    const datalist = document.getElementById(datalistId);
+    if(datalist) datalist.innerHTML = acc[key].map(c => `<option value="${escapeHtml(c.name)}"></option>`).join('');
   }
+  function renderAcctCustomers(){ acctRenderPartyList('acctCustList', 'acctCustomerDatalist', 'customers', 'No customers saved yet — type a name in the invoice form, or add one here for quick reuse (add a WhatsApp number to enable one-tap invoice sharing).', renderAcctCustomers); }
+  function renderAcctVendors(){ acctRenderPartyList('acctVendList', 'acctVendorDatalist', 'vendors', 'No vendors saved yet — type a name in the bill form, or add one here for quick reuse.', renderAcctVendors); }
   const acctCustAddBtn = document.getElementById('acctCustAdd');
   if(acctCustAddBtn) acctCustAddBtn.addEventListener('click', () => {
     const name = document.getElementById('acctCustName').value.trim();
     if(!name){ alert('Enter a customer name.'); return; }
     acctData().customers.push({ id: uid(), name, email: document.getElementById('acctCustEmail').value.trim(), phone: document.getElementById('acctCustPhone').value.trim() });
-    ['acctCustName','acctCustEmail','acctCustPhone'].forEach(id => { document.getElementById(id).value = ''; });
+    ['acctCustName', 'acctCustEmail', 'acctCustPhone'].forEach(id => { document.getElementById(id).value = ''; });
     save(); renderAcctCustomers();
   });
-
-  // ---- VENDORS (Purchases) ----
-  function renderAcctVendors(){
-    const wrap = document.getElementById('acctVendList');
-    const datalist = document.getElementById('acctVendorDatalist');
-    if(!wrap) return;
-    const acc = acctData();
-    wrap.innerHTML = acc.vendors.map(v => `
-      <span class="acct-mini-chip">${escapeHtml(v.name)}${v.phone ? ' · ' + escapeHtml(v.phone) : ''}<button type="button" data-id="${v.id}">×</button></span>
-    `).join('') || '<span style="font-size:11.5px;color:var(--ink-soft);">No vendors saved yet — type a name in the bill form below, or add one here for quick reuse.</span>';
-    wrap.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', () => {
-      acc.vendors = acc.vendors.filter(v => v.id !== btn.dataset.id);
-      save(); renderAcctVendors();
-    }));
-    if(datalist) datalist.innerHTML = acc.vendors.map(v => `<option value="${escapeHtml(v.name)}"></option>`).join('');
-  }
   const acctVendAddBtn = document.getElementById('acctVendAdd');
   if(acctVendAddBtn) acctVendAddBtn.addEventListener('click', () => {
     const name = document.getElementById('acctVendName').value.trim();
     if(!name){ alert('Enter a vendor name.'); return; }
     acctData().vendors.push({ id: uid(), name, email: document.getElementById('acctVendEmail').value.trim(), phone: document.getElementById('acctVendPhone').value.trim() });
-    ['acctVendName','acctVendEmail','acctVendPhone'].forEach(id => { document.getElementById(id).value = ''; });
+    ['acctVendName', 'acctVendEmail', 'acctVendPhone'].forEach(id => { document.getElementById(id).value = ''; });
     save(); renderAcctVendors();
   });
 
-  // ---- SALES (Invoices) ----
-  let acctInvDraftLines = [];
-  let editingInvoiceId = null;
-  let editingInvoiceNo = null;
-  let editingInvoiceRecurringGroupId = null;
-  function renderAcctInvLines(){
-    const wrap = document.getElementById('acctInvLines');
+  // ---- Attachments (compressed receipt/invoice images) ----
+  // Stored inside the same saved data as everything else, so they're kept
+  // small: max 2 per document, downscaled and re-encoded as JPEG.
+  const ACCT_MAX_ATTACH = 2;
+  function acctCompressImage(file){
+    return new Promise((resolve, reject) => {
+      if(!file || !/^image\//.test(file.type)) return reject(new Error('Please choose an image file.'));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read that file.'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Could not open that image.'));
+        img.onload = () => {
+          const max = 900;
+          let w = img.width, h = img.height;
+          if(w > max || h > max){ const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext && canvas.getContext('2d');
+          if(!ctx) return reject(new Error('Image processing isn\'t available in this browser.'));
+          ctx.drawImage(img, 0, 0, w, h);
+          let dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          if(dataUrl.length > 220000) dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+          if(dataUrl.length > 300000) return reject(new Error('That image is still too large after compression.'));
+          resolve(dataUrl);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function acctRenderDraftAttachments(listId, arr){
+    const wrap = document.getElementById(listId);
+    if(!wrap) return;
+    wrap.innerHTML = arr.map((a, i) => `<span class="acct-mini-chip">📎 ${escapeHtml(a.name)}<button type="button" data-i="${i}">×</button></span>`).join('');
+    wrap.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => { arr.splice(Number(b.dataset.i), 1); acctRenderDraftAttachments(listId, arr); }));
+  }
+  function acctWireAttachInput(inputId, listId, arr){
+    const input = document.getElementById(inputId);
+    if(!input) return;
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      if(!file) return;
+      if(arr.length >= ACCT_MAX_ATTACH){ alert(`You can attach up to ${ACCT_MAX_ATTACH} images per document.`); input.value = ''; return; }
+      try {
+        const dataUrl = await acctCompressImage(file);
+        arr.push({ name: file.name, dataUrl });
+        acctRenderDraftAttachments(listId, arr);
+      } catch(e){ alert(e.message); }
+      input.value = '';
+    });
+  }
+  function acctOpenAttachment(att){
+    const w = window.open('', '_blank');
+    if(!w){ alert('Allow pop-ups to view the attachment.'); return; }
+    w.document.write(`<title>${escapeHtml(att.name)}</title><img src="${att.dataUrl}" style="max-width:100%;">`);
+  }
+  function acctBindDocLinks(listEl){
+    const acc = acctData();
+    listEl.querySelectorAll('.acct-attach-link').forEach(a => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const doc = acc.invoices.concat(acc.bills).find(d => d.id === a.dataset.doc);
+      const att = doc && (doc.attachments || [])[Number(a.dataset.i)];
+      if(att) acctOpenAttachment(att);
+    }));
+  }
+  function acctDocMetaHtml(doc){
+    const acc = acctData();
+    const tags = (doc.tagIds || []).map(id => acc.tags.find(t => t.id === id)).filter(Boolean).map(t => `<span class="acct-mini-chip" style="padding:1px 7px;">${escapeHtml(acctTagLabel(t))}</span>`).join(' ');
+    const att = (doc.attachments || []).map((a, i) => `<a href="#" class="acct-attach-link" data-doc="${doc.id}" data-i="${i}" style="font-size:11px;">📎 ${escapeHtml(a.name)}</a>`).join(' ');
+    return (tags || att) ? `<div class="card-desc" style="margin-top:2px;">${tags} ${att}</div>` : '';
+  }
+
+  // ---- Line editors (shared by invoices/credit notes and bills/vendor credits) ----
+  function acctRenderSalesLines(wrapId, totalsId, lines){
+    const wrap = document.getElementById(wrapId);
     if(!wrap) return;
     const items = acctData().items;
-    wrap.innerHTML = acctInvDraftLines.length ? acctInvDraftLines.map((ln, idx) => `
+    const updateTotals = () => { const t = document.getElementById(totalsId); if(t) t.innerHTML = acctDraftTotalsHtml(lines, 'sales'); };
+    wrap.innerHTML = lines.length ? lines.map((ln, idx) => `
       <div class="add-row" data-idx="${idx}">
-        <select class="who-select acct-inv-line-item" style="flex:2;">
+        <select class="who-select acct-sl-item" style="flex:2;">
           <option value="">Select item…</option>
           ${items.map(it => `<option value="${it.id}" ${it.id === ln.itemId ? 'selected' : ''}>${escapeHtml(it.name)}</option>`).join('')}
         </select>
-        <input type="number" class="acct-inv-line-qty" value="${ln.qty}" min="0" step="1" style="max-width:70px;" placeholder="Qty">
-        <input type="number" class="acct-inv-line-rate" value="${ln.rate}" min="0" step="0.01" style="max-width:90px;" placeholder="Rate">
-        <span style="min-width:70px;text-align:right;font-size:12.5px;align-self:center;">${fmt(ln.qty * ln.rate)}</span>
-        <button type="button" class="del-btn acct-inv-line-del" style="align-self:center;">×</button>
-      </div>
-    `).join('') : '<div class="empty" style="margin-bottom:8px;">No lines yet — add one below.</div>';
-    wrap.querySelectorAll('.acct-inv-line-item').forEach((el, i) => el.addEventListener('change', () => {
-      const it = items.find(x => x.id === el.value);
-      acctInvDraftLines[i].itemId = el.value;
-      if(it && !acctInvDraftLines[i].rate) acctInvDraftLines[i].rate = it.salesPrice;
-      renderAcctInvLines();
-    }));
-    wrap.querySelectorAll('.acct-inv-line-qty').forEach((el, i) => el.addEventListener('input', () => { acctInvDraftLines[i].qty = Number(el.value) || 0; renderAcctInvLines(); }));
-    wrap.querySelectorAll('.acct-inv-line-rate').forEach((el, i) => el.addEventListener('input', () => { acctInvDraftLines[i].rate = Number(el.value) || 0; renderAcctInvLines(); }));
-    wrap.querySelectorAll('.acct-inv-line-del').forEach((el, i) => el.addEventListener('click', () => { acctInvDraftLines.splice(i, 1); renderAcctInvLines(); }));
+        <input type="number" class="acct-sl-qty" value="${ln.qty}" min="0" step="1" style="max-width:64px;" placeholder="Qty">
+        <input type="number" class="acct-sl-rate" value="${ln.rate}" min="0" step="0.01" style="max-width:84px;" placeholder="Rate">
+        <select class="who-select acct-sl-tax" style="max-width:110px;">${acctTaxOptionsHtml(ln.taxRateId)}</select>
+        <span class="acct-sl-amt" style="min-width:64px;text-align:right;font-size:12.5px;align-self:center;">${fmt((Number(ln.qty) || 0) * (Number(ln.rate) || 0))}</span>
+        <button type="button" class="del-btn acct-sl-del" style="align-self:center;">×</button>
+      </div>`).join('') : '<div class="empty" style="margin-bottom:8px;">No lines yet — add one below.</div>';
+    const refresh = (i, row) => { row.querySelector('.acct-sl-amt').textContent = fmt((Number(lines[i].qty) || 0) * (Number(lines[i].rate) || 0)); updateTotals(); };
+    wrap.querySelectorAll('[data-idx]').forEach((row, i) => {
+      row.querySelector('.acct-sl-item').addEventListener('change', (e) => {
+        const it = items.find(x => x.id === e.target.value);
+        lines[i].itemId = e.target.value;
+        if(it && !Number(lines[i].rate)){ lines[i].rate = it.salesPrice; row.querySelector('.acct-sl-rate').value = it.salesPrice; }
+        refresh(i, row);
+      });
+      row.querySelector('.acct-sl-qty').addEventListener('input', (e) => { lines[i].qty = Number(e.target.value) || 0; refresh(i, row); });
+      row.querySelector('.acct-sl-rate').addEventListener('input', (e) => { lines[i].rate = Number(e.target.value) || 0; refresh(i, row); });
+      row.querySelector('.acct-sl-tax').addEventListener('change', (e) => { lines[i].taxRateId = e.target.value; refresh(i, row); });
+      row.querySelector('.acct-sl-del').addEventListener('click', () => { lines.splice(i, 1); acctRenderSalesLines(wrapId, totalsId, lines); });
+    });
+    updateTotals();
   }
+  function acctRenderPurchaseLines(wrapId, totalsId, lines){
+    const wrap = document.getElementById(wrapId);
+    if(!wrap) return;
+    const accounts = acctData().accounts.filter(a => a.type !== 'Income');
+    const updateTotals = () => { const t = document.getElementById(totalsId); if(t) t.innerHTML = acctDraftTotalsHtml(lines, 'bill'); };
+    wrap.innerHTML = lines.length ? lines.map((ln, idx) => `
+      <div class="add-row" data-idx="${idx}">
+        <input type="text" class="acct-pl-desc" value="${escapeHtml(ln.description || '')}" placeholder="Description" style="flex:2;">
+        <select class="who-select acct-pl-account" style="flex:2;">
+          <option value="">Select account…</option>
+          ${accounts.map(a => `<option value="${a.id}" ${a.id === ln.accountId ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}
+        </select>
+        <select class="who-select acct-pl-tax" style="max-width:110px;">${acctTaxOptionsHtml(ln.taxRateId)}</select>
+        <input type="number" class="acct-pl-amount" value="${ln.amount || ''}" min="0" step="0.01" style="max-width:90px;" placeholder="Amount">
+        <button type="button" class="del-btn acct-pl-del" style="align-self:center;">×</button>
+      </div>`).join('') : '<div class="empty" style="margin-bottom:8px;">No lines yet — add one below.</div>';
+    wrap.querySelectorAll('[data-idx]').forEach((row, i) => {
+      row.querySelector('.acct-pl-desc').addEventListener('input', (e) => { lines[i].description = e.target.value; });
+      row.querySelector('.acct-pl-account').addEventListener('change', (e) => { lines[i].accountId = e.target.value; });
+      row.querySelector('.acct-pl-tax').addEventListener('change', (e) => { lines[i].taxRateId = e.target.value; updateTotals(); });
+      row.querySelector('.acct-pl-amount').addEventListener('input', (e) => { lines[i].amount = Number(e.target.value) || 0; updateTotals(); });
+      row.querySelector('.acct-pl-del').addEventListener('click', () => { lines.splice(i, 1); acctRenderPurchaseLines(wrapId, totalsId, lines); });
+    });
+    updateTotals();
+  }
+  function acctBuildSalesLines(draftLines){
+    const acc = acctData();
+    return draftLines.filter(l => l.itemId && l.qty > 0).map(l => {
+      const it = acc.items.find(x => x.id === l.itemId);
+      const amount = acctR2((Number(l.qty) || 0) * (Number(l.rate) || 0));
+      const t = acctLineTax(amount, l.taxRateId);
+      return { itemId: l.itemId, name: it ? it.name : '(deleted item)', qty: Number(l.qty), rate: Number(l.rate) || 0, amount, taxRateId: l.taxRateId || '', taxRate: t.taxRate, taxName: t.taxName, tax: t.tax };
+    });
+  }
+  function acctBuildPurchaseLines(draftLines){
+    return draftLines.filter(l => l.accountId && l.amount > 0).map(l => {
+      const amount = acctR2(l.amount);
+      const t = acctLineTax(amount, l.taxRateId);
+      return { description: l.description || '', accountId: l.accountId, amount, taxRateId: l.taxRateId || '', taxRate: t.taxRate, taxName: t.taxName, tax: t.tax };
+    });
+  }
+
+  // ---- SALES (Invoices) ----
+  const acctInvDraftLines = [];
+  const acctInvDraftAttachments = [];
+  let editingInvoiceId = null;
+  let editingInvoiceNo = null;
+  let editingInvoiceRecurringGroupId = null;
+  acctWireAttachInput('acctInvAttach', 'acctInvAttachList', acctInvDraftAttachments);
   const acctInvAddLineBtn = document.getElementById('acctInvAddLine');
-  if(acctInvAddLineBtn) acctInvAddLineBtn.addEventListener('click', () => { acctInvDraftLines.push({ itemId: '', qty: 1, rate: 0 }); renderAcctInvLines(); });
+  if(acctInvAddLineBtn) acctInvAddLineBtn.addEventListener('click', () => { acctInvDraftLines.push({ itemId: '', qty: 1, rate: 0, taxRateId: '' }); acctRenderSalesLines('acctInvLines', 'acctInvTotals', acctInvDraftLines); });
   const acctInvRecurringCb = document.getElementById('acctInvRecurring');
   if(acctInvRecurringCb) acctInvRecurringCb.addEventListener('change', () => {
     const on = acctInvRecurringCb.checked;
@@ -13671,10 +14100,12 @@
   function postInvoiceSaleEntry(invoice){
     const ar = getSystemAccount('AR', 'Accounts Receivable', 'Asset');
     const sales = getSystemAccount('SALES', 'Sales Revenue', 'Income');
-    postJournalEntry(invoice.date, `Invoice ${invoice.invoiceNo} — ${invoice.customer}`, [
-      { accountId: ar.id, debit: invoice.total, credit: 0 },
-      { accountId: sales.id, debit: 0, credit: invoice.total }
-    ], invoice.id);
+    const lines = [{ accountId: ar.id, debit: invoice.total, credit: 0 }, { accountId: sales.id, debit: 0, credit: acctSub(invoice) }];
+    if(acctTaxTotal(invoice) > 0.004){
+      const tp = getSystemAccount('TAXPAY', 'Tax Payable', 'Liability');
+      lines.push({ accountId: tp.id, debit: 0, credit: acctTaxTotal(invoice) });
+    }
+    postJournalEntry(invoice.date, `Invoice ${invoice.invoiceNo} — ${invoice.customer}`, lines, invoice.id, invoice.tagIds);
   }
   function postInvoicePayment(invoice, amount){
     const ar = getSystemAccount('AR', 'Accounts Receivable', 'Asset');
@@ -13682,7 +14113,7 @@
     postJournalEntry(todayStr(), `Payment received — ${invoice.invoiceNo}`, [
       { accountId: cash.id, debit: amount, credit: 0 },
       { accountId: ar.id, debit: 0, credit: amount }
-    ], invoice.id);
+    ], invoice.id, invoice.tagIds);
   }
   function postInventoryForInvoice(invoice){
     const acc = acctData();
@@ -13691,15 +14122,16 @@
       const it = acc.items.find(x => x.id === l.itemId);
       if(!it || it.type !== 'Goods') return;
       it.qtyOnHand = Math.max(0, (Number(it.qtyOnHand) || 0) - l.qty);
-      cogsTotal += (Number(it.purchasePrice) || 0) * l.qty;
+      l.unitCost = Number(it.purchasePrice) || 0;
+      cogsTotal += l.unitCost * l.qty;
     });
     if(cogsTotal > 0){
       const cogs = getSystemAccount('COGS', 'Cost of Goods Sold', 'Expense');
       const inv = getSystemAccount('INVENTORY', 'Inventory Asset', 'Asset');
       postJournalEntry(invoice.date, `COGS — ${invoice.invoiceNo}`, [
-        { accountId: cogs.id, debit: cogsTotal, credit: 0 },
-        { accountId: inv.id, debit: 0, credit: cogsTotal }
-      ], invoice.id);
+        { accountId: cogs.id, debit: acctR2(cogsTotal), credit: 0 },
+        { accountId: inv.id, debit: 0, credit: acctR2(cogsTotal) }
+      ], invoice.id, invoice.tagIds);
     }
   }
   function restoreStockForLines(lines){
@@ -13709,83 +14141,152 @@
       if(it && it.type === 'Goods') it.qtyOnHand = (Number(it.qtyOnHand) || 0) + l.qty;
     });
   }
+  function acctPostInvoice(inv){ postInvoiceSaleEntry(inv); postInventoryForInvoice(inv); }
   function recordInvoicePayment(inv){
-    const remaining = Math.max(0, Number(inv.total) - Number(inv.amountPaid || 0));
-    const input = prompt(`Record payment for ${inv.invoiceNo} (${inv.customer}). Remaining balance: ${fmt(remaining)}. Enter amount:`, remaining.toFixed(2));
+    const remaining = acctOutstanding(inv);
+    if(remaining <= 0.005){ alert('Nothing is outstanding on this invoice.'); return; }
+    if(!acctGuardLocked(todayStr(), 'A payment recorded today')) return;
+    if(inv.status === 'Draft' && !acctGuardLocked(inv.date, 'This invoice')) return;
+    const input = prompt(`Record payment for ${inv.invoiceNo} (${inv.customer}). Remaining balance: ${acctMoney(remaining)}. Enter amount:`, remaining.toFixed(2));
     if(input === null) return;
     const amount = Number(input);
     if(!(amount > 0)){ alert('Enter a positive amount.'); return; }
-    const acc = acctData();
-    if(inv.status === 'Draft'){ postInvoiceSaleEntry(inv); postInventoryForInvoice(inv); inv.status = 'Sent'; }
-    const applied = Math.min(amount, remaining || amount);
+    if(inv.status === 'Draft'){ acctPostInvoice(inv); inv.status = 'Sent'; }
+    const applied = Math.min(amount, remaining);
     postInvoicePayment(inv, applied);
-    inv.amountPaid = (Number(inv.amountPaid) || 0) + applied;
+    inv.amountPaid = acctR2((Number(inv.amountPaid) || 0) + applied);
     inv.payments.push({ id: uid(), date: todayStr(), amount: applied });
-    if(inv.amountPaid >= Number(inv.total) - 0.005){ inv.status = 'Paid'; inv.paidDate = todayStr(); }
+    if(acctOutstanding(inv) <= 0.005){ inv.status = 'Paid'; inv.paidDate = todayStr(); }
+    acctLog('Payment received', `${inv.invoiceNo}: ${acctMoney(applied)}`);
+    save(); renderAcctSales(); renderAcctHome();
+  }
+  function recordInvoiceRefund(inv){
+    const due = acctRefundDue(inv);
+    if(due <= 0.005){ alert('No refund is due on this invoice.'); return; }
+    if(!acctGuardLocked(todayStr(), 'A refund recorded today')) return;
+    const input = prompt(`Refund to ${inv.customer} for ${inv.invoiceNo}. Refund due: ${acctMoney(due)}. Enter amount refunded:`, due.toFixed(2));
+    if(input === null) return;
+    const amount = Number(input);
+    if(!(amount > 0) || amount > due + 0.005){ alert('Enter an amount up to the refund due.'); return; }
+    const ar = getSystemAccount('AR', 'Accounts Receivable', 'Asset');
+    const cash = getSystemAccount('CASH', 'Cash', 'Asset');
+    postJournalEntry(todayStr(), `Refund paid — ${inv.invoiceNo}`, [
+      { accountId: ar.id, debit: amount, credit: 0 },
+      { accountId: cash.id, debit: 0, credit: amount }
+    ], inv.id, inv.tagIds);
+    inv.amountRefunded = acctR2((Number(inv.amountRefunded) || 0) + amount);
+    acctLog('Refund paid', `${inv.invoiceNo}: ${acctMoney(amount)}`);
     save(); renderAcctSales(); renderAcctHome();
   }
   function resetInvoiceForm(){
-    editingInvoiceId = null;
-    editingInvoiceNo = null;
-    editingInvoiceRecurringGroupId = null;
-    acctInvDraftLines = [];
-    document.getElementById('acctInvCustomer').value = '';
-    document.getElementById('acctInvDate').value = '';
-    document.getElementById('acctInvDueDate').value = '';
+    editingInvoiceId = null; editingInvoiceNo = null; editingInvoiceRecurringGroupId = null;
+    acctInvDraftLines.length = 0;
+    acctInvDraftAttachments.length = 0;
+    ['acctInvCustomer', 'acctInvDate', 'acctInvDueDate', 'acctInvNotes', 'acctInvRecurEnd'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('acctInvStatus').value = 'Draft';
-    document.getElementById('acctInvNotes').value = '';
     document.getElementById('acctInvRecurring').checked = false;
     document.getElementById('acctInvRecurFreq').style.display = 'none';
     document.getElementById('acctInvRecurEnd').style.display = 'none';
-    document.getElementById('acctInvRecurEnd').value = '';
     document.getElementById('acctInvEditingNote').style.display = 'none';
     document.getElementById('acctInvCancelEdit').style.display = 'none';
-    renderAcctInvLines();
+    acctFillTagSelect('acctInvTags', []);
+    acctRenderDraftAttachments('acctInvAttachList', acctInvDraftAttachments);
+    acctRenderSalesLines('acctInvLines', 'acctInvTotals', acctInvDraftLines);
   }
   function startEditInvoice(id){
     const acc = acctData();
     const inv = acc.invoices.find(i => i.id === id);
     if(!inv) return;
-    if((inv.payments || []).length > 0){
-      if(!confirm('This invoice already has payment(s) recorded. Editing it will reverse its posted entries and reset it to unpaid — you\'ll need to re-record any payments after saving. Continue?')) return;
-    }
-    if(inv.status !== 'Draft'){
-      reverseEntriesForSource(inv.id);
-      restoreStockForLines(inv.lines);
-    }
+    if((Number(inv.amountCredited) || 0) > 0 || (Number(inv.amountRefunded) || 0) > 0){ alert('This invoice has credit notes or refunds against it. Delete those first if you need to edit it.'); return; }
+    if(!acctGuardSource(inv.id, inv.date, 'This invoice')) return;
+    if((inv.payments || []).length > 0 && !confirm('This invoice already has payment(s) recorded. Editing it will reverse its posted entries and reset it to unpaid — you\'ll need to re-record any payments after saving. Continue?')) return;
+    if(acctIsPosted(inv)){ reverseEntriesForSource(inv.id); restoreStockForLines(inv.lines); }
     acc.invoices = acc.invoices.filter(i => i.id !== id);
-    editingInvoiceId = id;
-    editingInvoiceNo = inv.invoiceNo;
-    editingInvoiceRecurringGroupId = inv.recurringGroupId || null;
-    acctInvDraftLines = inv.lines.map(l => ({ itemId: l.itemId, qty: l.qty, rate: l.rate }));
+    editingInvoiceId = id; editingInvoiceNo = inv.invoiceNo; editingInvoiceRecurringGroupId = inv.recurringGroupId || null;
+    acctInvDraftLines.length = 0;
+    inv.lines.forEach(l => acctInvDraftLines.push({ itemId: l.itemId, qty: l.qty, rate: l.rate, taxRateId: l.taxRateId || '' }));
+    acctInvDraftAttachments.length = 0;
+    (inv.attachments || []).forEach(a => acctInvDraftAttachments.push(a));
     document.getElementById('acctInvCustomer').value = inv.customer;
     document.getElementById('acctInvDate').value = inv.date;
     document.getElementById('acctInvDueDate').value = inv.dueDate || '';
-    document.getElementById('acctInvStatus').value = inv.status === 'Paid' ? 'Sent' : inv.status;
+    document.getElementById('acctInvStatus').value = inv.status === 'Paid' ? 'Sent' : (inv.status === 'Draft' || inv.status === 'Sent' ? inv.status : 'Draft');
     document.getElementById('acctInvNotes').value = inv.notes || '';
     const isRecurring = !!(inv.recurring && inv.recurring.frequency);
     document.getElementById('acctInvRecurring').checked = isRecurring;
     document.getElementById('acctInvRecurFreq').style.display = isRecurring ? '' : 'none';
     document.getElementById('acctInvRecurEnd').style.display = isRecurring ? '' : 'none';
-    if(isRecurring){
-      document.getElementById('acctInvRecurFreq').value = inv.recurring.frequency;
-      document.getElementById('acctInvRecurEnd').value = inv.recurring.endDate || '';
-    }
+    if(isRecurring){ document.getElementById('acctInvRecurFreq').value = inv.recurring.frequency; document.getElementById('acctInvRecurEnd').value = inv.recurring.endDate || ''; }
     document.getElementById('acctInvEditingNote').style.display = '';
     document.getElementById('acctInvCancelEdit').style.display = '';
-    renderAcctInvLines();
+    acctFillTagSelect('acctInvTags', inv.tagIds || []);
+    acctRenderDraftAttachments('acctInvAttachList', acctInvDraftAttachments);
+    acctRenderSalesLines('acctInvLines', 'acctInvTotals', acctInvDraftLines);
+    acctLog('Invoice opened for editing', inv.invoiceNo);
     save(); renderAcctSales(); renderAcctHome();
   }
   const acctInvCancelEditBtn = document.getElementById('acctInvCancelEdit');
   if(acctInvCancelEditBtn) acctInvCancelEditBtn.addEventListener('click', () => {
-    alert('Editing cancelled — note the original invoice\'s posted entries were already reversed and won\'t be restored automatically. Re-create it if needed.');
-    resetInvoiceForm();
-    renderAcctSales();
+    alert('Editing cancelled — the original invoice\'s posted entries were already reversed and won\'t be restored automatically. Re-create it if needed.');
+    resetInvoiceForm(); renderAcctSales();
   });
+
+  // ---- Invoice PDF + WhatsApp ----
+  function acctPdfHeader(doc, title, number){
+    doc.setFillColor(31, 111, 99);
+    doc.rect(0, 0, 210, 26, 'F');
+    doc.setFontSize(16); doc.setTextColor(255, 255, 255);
+    doc.text(state.appTitle || 'Household Ledger', 14, 16);
+    doc.setFontSize(11);
+    doc.text(`${title} ${number}`, 196, 16, { align: 'right' });
+    doc.setTextColor(0);
+  }
+  function acctPdfTotals(doc, y, rows){
+    doc.setFontSize(10);
+    rows.forEach(([label, value, bold]) => {
+      doc.setFont(undefined, bold ? 'bold' : 'normal');
+      doc.text(label, 140, y); doc.text(value, 196, y, { align: 'right' });
+      y += 6;
+    });
+    doc.setFont(undefined, 'normal');
+    return y;
+  }
+  function acctInvoicePdf(inv){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    acctPdfHeader(doc, 'INVOICE', inv.invoiceNo);
+    doc.setFontSize(11);
+    doc.text(`Bill to: ${inv.customer}`, 14, 38);
+    doc.text(`Date: ${inv.date}`, 14, 45);
+    if(inv.dueDate) doc.text(`Due: ${inv.dueDate}`, 14, 52);
+    const body = inv.lines.map(l => [l.name, String(l.qty), acctMoney(l.rate), l.taxName ? `${l.taxName}` : '—', acctMoney(l.amount)]);
+    doc.autoTable({ startY: 60, head: [['Item', 'Qty', 'Rate', 'Tax', 'Amount']], body, styles: { fontSize: 9 }, headStyles: { fillColor: [31, 111, 99], textColor: [255, 255, 255] } });
+    let y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 100) + 10;
+    const rows = [['Subtotal', acctMoney(acctSub(inv))], ['Tax', acctMoney(acctTaxTotal(inv))], ['Total', acctMoney(inv.total), true]];
+    if((Number(inv.amountCredited) || 0) > 0) rows.push(['Credits applied', acctMoney(inv.amountCredited)]);
+    if((Number(inv.amountPaid) || 0) > 0) rows.push(['Paid', acctMoney(inv.amountPaid)]);
+    rows.push(['Balance due', acctMoney(acctOutstanding(inv)), true]);
+    y = acctPdfTotals(doc, y, rows);
+    if(inv.notes){ doc.setFontSize(9); doc.text(doc.splitTextToSize(`Notes: ${inv.notes}`, 180), 14, y + 8); }
+    doc.save(`${inv.invoiceNo}.pdf`);
+  }
+  function acctWhatsAppInvoice(inv){
+    const cust = acctData().customers.find(c => c.name.toLowerCase() === String(inv.customer).toLowerCase());
+    const phone = cust && cust.phone ? cust.phone.replace(/\D/g, '') : '';
+    let text = `Hello ${inv.customer}, this is ${inv.invoiceNo} from ${state.appTitle || 'us'} — total ${acctMoney(inv.total)}`;
+    if(acctOutstanding(inv) > 0.005 && acctOutstanding(inv) < inv.total - 0.005) text += `, balance due ${acctMoney(acctOutstanding(inv))}`;
+    if(inv.dueDate) text += `, due ${inv.dueDate}`;
+    text += '. Thank you!';
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+  }
+
   function renderAcctSales(){
     renderAcctCustomers();
+    acctFillTagSelect('acctInvTags');
+    acctRenderSalesLines('acctInvLines', 'acctInvTotals', acctInvDraftLines);
+    acctRenderSalesLines('acctCnLines', 'acctCnTotals', acctCnDraftLines);
+    acctRenderDraftAttachments('acctInvAttachList', acctInvDraftAttachments);
     const list = document.getElementById('acctInvList');
-    renderAcctInvLines();
     if(!list) return;
     const acc = acctData();
     const q = (document.getElementById('acctInvSearch')?.value || '').trim().toLowerCase();
@@ -13794,7 +14295,8 @@
     [...invoices].reverse().forEach(inv => {
       const li = document.createElement('li');
       const effective = acctEffectiveStatus(inv, 'Sent');
-      const remaining = Math.max(0, Number(inv.total) - Number(inv.amountPaid || 0));
+      const remaining = acctOutstanding(inv);
+      const refundDue = acctRefundDue(inv);
       li.innerHTML = `
         <div style="width:100%;">
           <div class="card-row-top">
@@ -13802,112 +14304,202 @@
             <div class="tx-amount">${fmt(inv.total)}</div>
           </div>
           <div class="card-desc" style="margin-top:2px;">${escapeHtml(inv.date)}${inv.dueDate ? ' · due ' + escapeHtml(inv.dueDate) : ''} · ${acctBadgeHtml(effective)}${inv.recurring && inv.recurring.frequency ? ' <span style="font-size:10px;color:var(--ink-soft);">↻ ' + escapeHtml(inv.recurring.frequency) + '</span>' : ''}</div>
-          <div class="card-desc" style="margin-top:2px;">${inv.lines.map(l => escapeHtml(l.name) + ' × ' + l.qty).join(', ')}</div>
-          ${(Number(inv.amountPaid)||0) > 0 && effective !== 'Paid' ? `<div class="card-desc" style="margin-top:2px;">Paid ${fmt(inv.amountPaid)} of ${fmt(inv.total)} — ${fmt(remaining)} remaining</div>` : ''}
+          <div class="card-desc" style="margin-top:2px;">${inv.lines.map(l => escapeHtml(l.name) + ' × ' + l.qty).join(', ')}${acctTaxTotal(inv) > 0.004 ? ' · incl. tax ' + fmt(acctTaxTotal(inv)) : ''}</div>
+          ${acctDocMetaHtml(inv)}
+          ${(Number(inv.amountPaid) || 0) > 0 || (Number(inv.amountCredited) || 0) > 0 ? `<div class="card-desc" style="margin-top:2px;">${(Number(inv.amountPaid) || 0) > 0 ? 'Paid ' + fmt(inv.amountPaid) : ''}${(Number(inv.amountCredited) || 0) > 0 ? ' · Credited ' + fmt(inv.amountCredited) : ''}${remaining > 0.005 && acctIsPosted(inv) ? ' · ' + fmt(remaining) + ' remaining' : ''}</div>` : ''}
+          ${refundDue > 0.005 ? `<div class="card-desc" style="margin-top:2px;color:#9A6400;">Refund due to customer: ${fmt(refundDue)}</div>` : ''}
           <div style="text-align:right; margin-top:6px;">
             ${inv.status === 'Draft' ? `<button class="edit-btn acct-inv-mark-sent" data-id="${inv.id}">Mark Sent</button>` : ''}
-            ${effective !== 'Paid' ? `<button class="edit-btn acct-inv-record-payment" data-id="${inv.id}">Record Payment</button>` : ''}
+            ${acctIsPosted(inv) && remaining > 0.005 || inv.status === 'Draft' ? `<button class="edit-btn acct-inv-record-payment" data-id="${inv.id}">Record Payment</button>` : ''}
+            ${refundDue > 0.005 ? `<button class="edit-btn acct-inv-refund" data-id="${inv.id}">Record Refund</button>` : ''}
+            <button class="edit-btn acct-inv-pdf" data-id="${inv.id}">PDF</button>
+            <button class="edit-btn acct-inv-wa" data-id="${inv.id}">WhatsApp</button>
             <button class="edit-btn acct-inv-edit" data-id="${inv.id}">Edit</button>
             <button class="del-btn acct-inv-del" data-id="${inv.id}">×</button>
           </div>
-        </div>
-      `;
+        </div>`;
       list.appendChild(li);
     });
+    acctBindDocLinks(list);
+    const find = (el) => acc.invoices.find(i => i.id === el.dataset.id);
     list.querySelectorAll('.acct-inv-mark-sent').forEach(el => el.addEventListener('click', () => {
-      const inv = acc.invoices.find(i => i.id === el.dataset.id);
+      const inv = find(el);
       if(!inv || inv.status !== 'Draft') return;
+      if(!acctGuardLocked(inv.date, 'This invoice')) return;
       inv.status = 'Sent';
-      postInvoiceSaleEntry(inv);
-      postInventoryForInvoice(inv);
+      acctPostInvoice(inv);
+      acctLog('Invoice sent', inv.invoiceNo);
       save(); renderAcctSales(); renderAcctHome();
     }));
-    list.querySelectorAll('.acct-inv-record-payment').forEach(el => el.addEventListener('click', () => {
-      const inv = acc.invoices.find(i => i.id === el.dataset.id);
-      if(inv) recordInvoicePayment(inv);
-    }));
+    list.querySelectorAll('.acct-inv-record-payment').forEach(el => el.addEventListener('click', () => { const inv = find(el); if(inv) recordInvoicePayment(inv); }));
+    list.querySelectorAll('.acct-inv-refund').forEach(el => el.addEventListener('click', () => { const inv = find(el); if(inv) recordInvoiceRefund(inv); }));
+    list.querySelectorAll('.acct-inv-pdf').forEach(el => el.addEventListener('click', () => { const inv = find(el); if(inv) acctInvoicePdf(inv); }));
+    list.querySelectorAll('.acct-inv-wa').forEach(el => el.addEventListener('click', () => { const inv = find(el); if(inv) acctWhatsAppInvoice(inv); }));
     list.querySelectorAll('.acct-inv-edit').forEach(el => el.addEventListener('click', () => startEditInvoice(el.dataset.id)));
     list.querySelectorAll('.acct-inv-del').forEach(el => el.addEventListener('click', () => {
-      const inv = acc.invoices.find(i => i.id === el.dataset.id);
+      const inv = find(el);
+      if(!inv) return;
+      if((Number(inv.amountCredited) || 0) > 0 || (Number(inv.amountRefunded) || 0) > 0){ alert('This invoice has credit notes or refunds against it. Delete those first.'); return; }
+      if(!acctGuardSource(inv.id, inv.date, 'This invoice')) return;
       if(!confirm('Delete this invoice? Any journal entries and stock changes it caused will be reversed.')) return;
-      if(inv && inv.status !== 'Draft'){
-        reverseEntriesForSource(inv.id);
-        restoreStockForLines(inv.lines);
-      }
-      acc.invoices = acc.invoices.filter(i => i.id !== el.dataset.id);
+      if(acctIsPosted(inv)){ reverseEntriesForSource(inv.id); restoreStockForLines(inv.lines); }
+      acc.invoices = acc.invoices.filter(i => i.id !== inv.id);
+      acctLog('Invoice deleted', inv.invoiceNo);
       save(); renderAcctSales(); renderAcctHome();
     }));
+    renderAcctCreditNotes();
   }
+  const acctInvSearchEl = document.getElementById('acctInvSearch');
+  if(acctInvSearchEl) acctInvSearchEl.addEventListener('input', renderAcctSales);
   const acctInvSaveBtn = document.getElementById('acctInvSave');
   if(acctInvSaveBtn) acctInvSaveBtn.addEventListener('click', () => {
     const customer = document.getElementById('acctInvCustomer').value.trim();
     if(!customer){ alert('Enter a customer name.'); return; }
-    const validLines = acctInvDraftLines.filter(l => l.itemId && l.qty > 0);
-    if(!validLines.length){ alert('Add at least one item line.'); return; }
-    const date = document.getElementById('acctInvDate').value || todayStr();
-    const dueDate = document.getElementById('acctInvDueDate').value || '';
-    const status = document.getElementById('acctInvStatus').value;
-    const notes = document.getElementById('acctInvNotes').value.trim();
-    const isRecurring = document.getElementById('acctInvRecurring').checked;
-    const recurFreq = document.getElementById('acctInvRecurFreq').value;
-    const recurEnd = document.getElementById('acctInvRecurEnd').value || null;
     const acc = acctData();
-    const lines = validLines.map(l => {
-      const it = acc.items.find(x => x.id === l.itemId);
-      return { itemId: l.itemId, name: it ? it.name : '(deleted item)', qty: l.qty, rate: l.rate, amount: l.qty * l.rate };
-    });
-    const total = lines.reduce((s, l) => s + l.amount, 0);
-    const id = editingInvoiceId || uid();
-    const invoiceNo = editingInvoiceId && editingInvoiceNo ? editingInvoiceNo : ('INV-' + (1001 + acc.invoices.length));
+    const lines = acctBuildSalesLines(acctInvDraftLines);
+    if(!lines.length){ alert('Add at least one item line.'); return; }
+    const date = document.getElementById('acctInvDate').value || todayStr();
+    const status = document.getElementById('acctInvStatus').value;
+    if(status !== 'Draft' && !acctGuardLocked(date, 'This invoice')) return;
+    const dueDate = document.getElementById('acctInvDueDate').value || '';
+    const isRecurring = document.getElementById('acctInvRecurring').checked;
+    const { subtotal, taxTotal, total } = acctDocTotals(lines);
     const invoice = {
-      id, invoiceNo, customer, date, dueDate, lines, total, status,
-      amountPaid: 0, payments: [], notes,
-      recurring: isRecurring ? { frequency: recurFreq, endDate: recurEnd } : null,
+      id: editingInvoiceId || uid(),
+      invoiceNo: editingInvoiceNo || acctNextNo('invoice'),
+      customer, date, dueDate, lines, subtotal, taxTotal, total, status,
+      amountPaid: 0, amountCredited: 0, amountRefunded: 0, payments: [],
+      notes: document.getElementById('acctInvNotes').value.trim(),
+      tagIds: acctSelectedTags('acctInvTags'),
+      attachments: acctInvDraftAttachments.slice(),
+      recurring: isRecurring ? { frequency: document.getElementById('acctInvRecurFreq').value, endDate: document.getElementById('acctInvRecurEnd').value || null } : null,
       recurringGroupId: isRecurring ? (editingInvoiceRecurringGroupId || uid()) : null,
       paidDate: ''
     };
+    const wasEditing = !!editingInvoiceId;
     acc.invoices.push(invoice);
-    if(status === 'Sent' || status === 'Paid'){
-      postInvoiceSaleEntry(invoice);
-      postInventoryForInvoice(invoice);
-    }
+    if(status === 'Sent' || status === 'Paid') acctPostInvoice(invoice);
     if(status === 'Paid'){
-      postInvoicePayment(invoice, total);
-      invoice.amountPaid = total;
-      invoice.payments.push({ id: uid(), date, amount: total });
-      invoice.paidDate = date;
+      if(!acctGuardLocked(todayStr(), 'A payment recorded today')){ /* posted as sent only */ invoice.status = 'Sent'; }
+      else {
+        postInvoicePayment(invoice, total);
+        invoice.amountPaid = total;
+        invoice.payments.push({ id: uid(), date: todayStr(), amount: total });
+        invoice.paidDate = todayStr();
+      }
     }
+    acctLog(wasEditing ? 'Invoice updated' : 'Invoice created', `${invoice.invoiceNo} · ${customer} · ${acctMoney(total)}`);
     resetInvoiceForm();
     save(); renderAcctSales(); renderAcctHome();
   });
 
+  // ---- Credit notes (customers) ----
+  const acctCnDraftLines = [];
+  function acctFillInvoiceSelect(selectId, selectedValue){
+    const el = document.getElementById(selectId);
+    if(!el) return;
+    const keep = selectedValue !== undefined ? selectedValue : el.value;
+    const invs = acctData().invoices.filter(i => acctIsPosted(i));
+    el.innerHTML = '<option value="">Select invoice…</option>' + invs.map(i => `<option value="${i.id}" ${i.id === keep ? 'selected' : ''}>${escapeHtml(i.invoiceNo)} · ${escapeHtml(i.customer)} · ${escapeHtml(acctMoney(i.total))}</option>`).join('');
+  }
+  const acctCnAddLineBtn = document.getElementById('acctCnAddLine');
+  if(acctCnAddLineBtn) acctCnAddLineBtn.addEventListener('click', () => { acctCnDraftLines.push({ itemId: '', qty: 1, rate: 0, taxRateId: '' }); acctRenderSalesLines('acctCnLines', 'acctCnTotals', acctCnDraftLines); });
+  const acctCnFillBtn = document.getElementById('acctCnFill');
+  if(acctCnFillBtn) acctCnFillBtn.addEventListener('click', () => {
+    const inv = acctData().invoices.find(i => i.id === document.getElementById('acctCnInvoice').value);
+    if(!inv){ alert('Pick an invoice first.'); return; }
+    acctCnDraftLines.length = 0;
+    inv.lines.forEach(l => acctCnDraftLines.push({ itemId: l.itemId, qty: l.qty, rate: l.rate, taxRateId: l.taxRateId || '' }));
+    acctRenderSalesLines('acctCnLines', 'acctCnTotals', acctCnDraftLines);
+  });
+  function renderAcctCreditNotes(){
+    acctFillInvoiceSelect('acctCnInvoice');
+    const list = document.getElementById('acctCnList');
+    if(!list) return;
+    const acc = acctData();
+    list.innerHTML = acc.creditNotes.length ? '' : '<li class="empty">No credit notes yet.</li>';
+    [...acc.creditNotes].reverse().forEach(cn => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div style="width:100%;">
+          <div class="card-row-top"><div class="card-bank">${escapeHtml(cn.cnNo)} · ${escapeHtml(cn.customer)}</div><div class="tx-amount">${fmt(cn.total)}</div></div>
+          <div class="card-desc" style="margin-top:2px;">${escapeHtml(cn.date)} · against ${escapeHtml(cn.invoiceNo)}${cn.restock ? ' · returned to stock' : ''}</div>
+          <div class="card-desc" style="margin-top:2px;">${cn.lines.map(l => escapeHtml(l.name) + ' × ' + l.qty).join(', ')}${cn.notes ? ' · ' + escapeHtml(cn.notes) : ''}</div>
+          <div style="text-align:right; margin-top:6px;"><button class="del-btn" data-id="${cn.id}">×</button></div>
+        </div>`;
+      list.appendChild(li);
+    });
+    list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
+      const cn = acc.creditNotes.find(c => c.id === el.dataset.id);
+      if(!cn) return;
+      const inv = acc.invoices.find(i => i.id === cn.invoiceId);
+      if(inv && (Number(inv.amountRefunded) || 0) > 0){ alert('A refund was recorded against this invoice. Delete that refund first (or edit through a manual journal entry).'); return; }
+      if(!acctGuardSource(cn.id, cn.date, 'This credit note')) return;
+      if(!confirm('Delete this credit note? Its journal entries will be reversed.')) return;
+      reverseEntriesForSource(cn.id);
+      if(cn.restock) cn.lines.forEach(l => { const it = acc.items.find(x => x.id === l.itemId); if(it && it.type === 'Goods') it.qtyOnHand = Math.max(0, (Number(it.qtyOnHand) || 0) - l.qty); });
+      if(inv){
+        inv.amountCredited = Math.max(0, acctR2((Number(inv.amountCredited) || 0) - cn.total));
+        if(inv.status === 'Paid' && acctOutstanding(inv) > 0.005) inv.status = 'Sent';
+      }
+      acc.creditNotes = acc.creditNotes.filter(c => c.id !== cn.id);
+      acctLog('Credit note deleted', cn.cnNo);
+      save(); renderAcctSales(); renderAcctHome();
+    }));
+  }
+  const acctCnSaveBtn = document.getElementById('acctCnSave');
+  if(acctCnSaveBtn) acctCnSaveBtn.addEventListener('click', () => {
+    const acc = acctData();
+    const inv = acc.invoices.find(i => i.id === document.getElementById('acctCnInvoice').value);
+    if(!inv){ alert('Pick the invoice this credit note is against.'); return; }
+    const lines = acctBuildSalesLines(acctCnDraftLines);
+    if(!lines.length){ alert('Add at least one line.'); return; }
+    const date = document.getElementById('acctCnDate').value || todayStr();
+    if(!acctGuardLocked(date, 'This credit note')) return;
+    const { subtotal, taxTotal, total } = acctDocTotals(lines);
+    const creditable = acctR2(Number(inv.total) - (Number(inv.amountCredited) || 0));
+    if(total > creditable + 0.005){ alert(`This credit note (${acctMoney(total)}) is more than what's left to credit on ${inv.invoiceNo} (${acctMoney(creditable)}).`); return; }
+    const restock = document.getElementById('acctCnRestock').checked;
+    lines.forEach(l => {
+      const src = inv.lines.find(x => x.itemId === l.itemId);
+      const it = acc.items.find(x => x.id === l.itemId);
+      l.unitCost = src && src.unitCost != null ? Number(src.unitCost) : (it && it.type === 'Goods' ? Number(it.purchasePrice) || 0 : 0);
+    });
+    const cn = { id: uid(), cnNo: acctNextNo('creditNote'), invoiceId: inv.id, invoiceNo: inv.invoiceNo, customer: inv.customer, date, lines, subtotal, taxTotal, total, restock, notes: document.getElementById('acctCnNotes').value.trim(), tagIds: (inv.tagIds || []).slice() };
+    acc.creditNotes.push(cn);
+    const ar = getSystemAccount('AR', 'Accounts Receivable', 'Asset');
+    const sales = getSystemAccount('SALES', 'Sales Revenue', 'Income');
+    const jl = [{ accountId: sales.id, debit: subtotal, credit: 0 }, { accountId: ar.id, debit: 0, credit: total }];
+    if(taxTotal > 0.004){ const tp = getSystemAccount('TAXPAY', 'Tax Payable', 'Liability'); jl.push({ accountId: tp.id, debit: taxTotal, credit: 0 }); }
+    postJournalEntry(date, `Credit note ${cn.cnNo} — ${inv.invoiceNo}`, jl, cn.id, cn.tagIds);
+    if(restock){
+      let cogsBack = 0;
+      lines.forEach(l => { const it = acc.items.find(x => x.id === l.itemId); if(it && it.type === 'Goods'){ it.qtyOnHand = (Number(it.qtyOnHand) || 0) + l.qty; cogsBack += (l.unitCost || 0) * l.qty; } });
+      if(cogsBack > 0){
+        const cogs = getSystemAccount('COGS', 'Cost of Goods Sold', 'Expense');
+        const invAcc = getSystemAccount('INVENTORY', 'Inventory Asset', 'Asset');
+        postJournalEntry(date, `Stock returned — ${cn.cnNo}`, [{ accountId: invAcc.id, debit: acctR2(cogsBack), credit: 0 }, { accountId: cogs.id, debit: 0, credit: acctR2(cogsBack) }], cn.id, cn.tagIds);
+      }
+    }
+    inv.amountCredited = acctR2((Number(inv.amountCredited) || 0) + total);
+    if(acctOutstanding(inv) <= 0.005 && (Number(inv.amountPaid) || 0) > 0){ inv.status = 'Paid'; inv.paidDate = inv.paidDate || todayStr(); }
+    acctLog('Credit note created', `${cn.cnNo} · ${inv.invoiceNo} · ${acctMoney(total)}`);
+    acctCnDraftLines.length = 0;
+    ['acctCnDate', 'acctCnNotes'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('acctCnRestock').checked = false;
+    save(); renderAcctSales(); renderAcctHome();
+  });
+
   // ---- PURCHASES (Bills) ----
-  let acctBillDraftLines = [];
+  const acctBillDraftLines = [];
+  const acctBillDraftAttachments = [];
   let editingBillId = null;
   let editingBillNo = null;
   let editingBillRecurringGroupId = null;
-  function renderAcctBillLines(){
-    const wrap = document.getElementById('acctBillLines');
-    if(!wrap) return;
-    const accounts = acctData().accounts.filter(a => a.type !== 'Income');
-    wrap.innerHTML = acctBillDraftLines.length ? acctBillDraftLines.map((ln, idx) => `
-      <div class="add-row" data-idx="${idx}">
-        <input type="text" class="acct-bill-line-desc" value="${escapeHtml(ln.description || '')}" placeholder="Description" style="flex:2;">
-        <select class="who-select acct-bill-line-account" style="flex:2;">
-          <option value="">Select account…</option>
-          ${accounts.map(a => `<option value="${a.id}" ${a.id === ln.accountId ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}
-        </select>
-        <input type="number" class="acct-bill-line-amount" value="${ln.amount || ''}" min="0" step="0.01" style="max-width:100px;" placeholder="Amount">
-        <button type="button" class="del-btn acct-bill-line-del" style="align-self:center;">×</button>
-      </div>
-    `).join('') : '<div class="empty" style="margin-bottom:8px;">No lines yet — add one below.</div>';
-    wrap.querySelectorAll('.acct-bill-line-desc').forEach((el, i) => el.addEventListener('input', () => { acctBillDraftLines[i].description = el.value; }));
-    wrap.querySelectorAll('.acct-bill-line-account').forEach((el, i) => el.addEventListener('change', () => { acctBillDraftLines[i].accountId = el.value; }));
-    wrap.querySelectorAll('.acct-bill-line-amount').forEach((el, i) => el.addEventListener('input', () => { acctBillDraftLines[i].amount = Number(el.value) || 0; }));
-    wrap.querySelectorAll('.acct-bill-line-del').forEach((el, i) => el.addEventListener('click', () => { acctBillDraftLines.splice(i, 1); renderAcctBillLines(); }));
-  }
+  let editingBillCreatedBy = null;
+  acctWireAttachInput('acctBillAttach', 'acctBillAttachList', acctBillDraftAttachments);
   const acctBillAddLineBtn = document.getElementById('acctBillAddLine');
-  if(acctBillAddLineBtn) acctBillAddLineBtn.addEventListener('click', () => { acctBillDraftLines.push({ description: '', accountId: '', amount: 0 }); renderAcctBillLines(); });
+  if(acctBillAddLineBtn) acctBillAddLineBtn.addEventListener('click', () => { acctBillDraftLines.push({ description: '', accountId: '', amount: 0, taxRateId: '' }); acctRenderPurchaseLines('acctBillLines', 'acctBillTotals', acctBillDraftLines); });
   const acctBillRecurringCb = document.getElementById('acctBillRecurring');
   if(acctBillRecurringCb) acctBillRecurringCb.addEventListener('change', () => {
     const on = acctBillRecurringCb.checked;
@@ -13918,8 +14510,12 @@
   function postBillEntry(bill){
     const ap = getSystemAccount('AP', 'Accounts Payable', 'Liability');
     const lines = bill.lines.map(l => ({ accountId: l.accountId, debit: l.amount, credit: 0 }));
+    if(acctTaxTotal(bill) > 0.004){
+      const tr = getSystemAccount('TAXREC', 'Tax Receivable', 'Asset');
+      lines.push({ accountId: tr.id, debit: acctTaxTotal(bill), credit: 0 });
+    }
     lines.push({ accountId: ap.id, debit: 0, credit: bill.total });
-    postJournalEntry(bill.date, `Bill ${bill.billNo} — ${bill.vendor}`, lines, bill.id);
+    postJournalEntry(bill.date, `Bill ${bill.billNo} — ${bill.vendor}`, lines, bill.id, bill.tagIds);
   }
   function postBillPayment(bill, amount){
     const ap = getSystemAccount('AP', 'Accounts Payable', 'Liability');
@@ -13927,81 +14523,126 @@
     postJournalEntry(todayStr(), `Payment made — ${bill.billNo}`, [
       { accountId: ap.id, debit: amount, credit: 0 },
       { accountId: cash.id, debit: 0, credit: amount }
-    ], bill.id);
+    ], bill.id, bill.tagIds);
   }
   function recordBillPayment(bill){
-    const remaining = Math.max(0, Number(bill.total) - Number(bill.amountPaid || 0));
-    const input = prompt(`Record payment for ${bill.billNo} (${bill.vendor}). Remaining balance: ${fmt(remaining)}. Enter amount:`, remaining.toFixed(2));
+    const remaining = acctOutstanding(bill);
+    if(remaining <= 0.005){ alert('Nothing is outstanding on this bill.'); return; }
+    if(!acctGuardLocked(todayStr(), 'A payment recorded today')) return;
+    if(bill.status === 'Draft' && !acctGuardLocked(bill.date, 'This bill')) return;
+    const input = prompt(`Record payment for ${bill.billNo} (${bill.vendor}). Remaining balance: ${acctMoney(remaining)}. Enter amount:`, remaining.toFixed(2));
     if(input === null) return;
     const amount = Number(input);
     if(!(amount > 0)){ alert('Enter a positive amount.'); return; }
     if(bill.status === 'Draft'){ postBillEntry(bill); bill.status = 'Open'; }
-    const applied = Math.min(amount, remaining || amount);
+    const applied = Math.min(amount, remaining);
     postBillPayment(bill, applied);
-    bill.amountPaid = (Number(bill.amountPaid) || 0) + applied;
+    bill.amountPaid = acctR2((Number(bill.amountPaid) || 0) + applied);
     bill.payments.push({ id: uid(), date: todayStr(), amount: applied });
-    if(bill.amountPaid >= Number(bill.total) - 0.005){ bill.status = 'Paid'; bill.paidDate = todayStr(); }
+    if(acctOutstanding(bill) <= 0.005){ bill.status = 'Paid'; bill.paidDate = todayStr(); }
+    acctLog('Bill payment made', `${bill.billNo}: ${acctMoney(applied)}`);
+    save(); renderAcctPurchases(); renderAcctHome();
+  }
+  function recordBillRefund(bill){
+    const due = acctRefundDue(bill);
+    if(due <= 0.005){ alert('No refund is due on this bill.'); return; }
+    if(!acctGuardLocked(todayStr(), 'A refund recorded today')) return;
+    const input = prompt(`Refund received from ${bill.vendor} for ${bill.billNo}. Refund due: ${acctMoney(due)}. Enter amount received:`, due.toFixed(2));
+    if(input === null) return;
+    const amount = Number(input);
+    if(!(amount > 0) || amount > due + 0.005){ alert('Enter an amount up to the refund due.'); return; }
+    const ap = getSystemAccount('AP', 'Accounts Payable', 'Liability');
+    const cash = getSystemAccount('CASH', 'Cash', 'Asset');
+    postJournalEntry(todayStr(), `Refund received — ${bill.billNo}`, [
+      { accountId: cash.id, debit: amount, credit: 0 },
+      { accountId: ap.id, debit: 0, credit: amount }
+    ], bill.id, bill.tagIds);
+    bill.amountRefunded = acctR2((Number(bill.amountRefunded) || 0) + amount);
+    acctLog('Refund received', `${bill.billNo}: ${acctMoney(amount)}`);
     save(); renderAcctPurchases(); renderAcctHome();
   }
   function resetBillForm(){
-    editingBillId = null;
-    editingBillNo = null;
-    editingBillRecurringGroupId = null;
-    acctBillDraftLines = [];
-    document.getElementById('acctBillVendor').value = '';
-    document.getElementById('acctBillDate').value = '';
-    document.getElementById('acctBillDueDate').value = '';
+    editingBillId = null; editingBillNo = null; editingBillRecurringGroupId = null; editingBillCreatedBy = null;
+    acctBillDraftLines.length = 0;
+    acctBillDraftAttachments.length = 0;
+    ['acctBillVendor', 'acctBillDate', 'acctBillDueDate', 'acctBillNotes', 'acctBillRecurEnd'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('acctBillStatus').value = 'Draft';
-    document.getElementById('acctBillNotes').value = '';
     document.getElementById('acctBillRecurring').checked = false;
     document.getElementById('acctBillRecurFreq').style.display = 'none';
     document.getElementById('acctBillRecurEnd').style.display = 'none';
-    document.getElementById('acctBillRecurEnd').value = '';
     document.getElementById('acctBillEditingNote').style.display = 'none';
     document.getElementById('acctBillCancelEdit').style.display = 'none';
-    renderAcctBillLines();
+    acctFillTagSelect('acctBillTags', []);
+    acctRenderDraftAttachments('acctBillAttachList', acctBillDraftAttachments);
+    acctRenderPurchaseLines('acctBillLines', 'acctBillTotals', acctBillDraftLines);
   }
   function startEditBill(id){
     const acc = acctData();
     const bill = acc.bills.find(b => b.id === id);
     if(!bill) return;
-    if((bill.payments || []).length > 0){
-      if(!confirm('This bill already has payment(s) recorded. Editing it will reverse its posted entries and reset it to unpaid — you\'ll need to re-record any payments after saving. Continue?')) return;
-    }
-    if(bill.status !== 'Draft') reverseEntriesForSource(bill.id);
+    if((Number(bill.amountCredited) || 0) > 0 || (Number(bill.amountRefunded) || 0) > 0){ alert('This bill has vendor credits or refunds against it. Delete those first if you need to edit it.'); return; }
+    if(!acctGuardSource(bill.id, bill.date, 'This bill')) return;
+    if((bill.payments || []).length > 0 && !confirm('This bill already has payment(s) recorded. Editing it will reverse its posted entries and reset it to unpaid — you\'ll need to re-record any payments after saving. Continue?')) return;
+    if(acctIsPosted(bill)) reverseEntriesForSource(bill.id);
     acc.bills = acc.bills.filter(b => b.id !== id);
-    editingBillId = id;
-    editingBillNo = bill.billNo;
-    editingBillRecurringGroupId = bill.recurringGroupId || null;
-    acctBillDraftLines = bill.lines.map(l => ({ description: l.description, accountId: l.accountId, amount: l.amount }));
+    editingBillId = id; editingBillNo = bill.billNo; editingBillRecurringGroupId = bill.recurringGroupId || null; editingBillCreatedBy = bill.createdBy || null;
+    acctBillDraftLines.length = 0;
+    bill.lines.forEach(l => acctBillDraftLines.push({ description: l.description, accountId: l.accountId, amount: l.amount, taxRateId: l.taxRateId || '' }));
+    acctBillDraftAttachments.length = 0;
+    (bill.attachments || []).forEach(a => acctBillDraftAttachments.push(a));
     document.getElementById('acctBillVendor').value = bill.vendor;
     document.getElementById('acctBillDate').value = bill.date;
     document.getElementById('acctBillDueDate').value = bill.dueDate || '';
-    document.getElementById('acctBillStatus').value = bill.status === 'Paid' ? 'Open' : bill.status;
+    document.getElementById('acctBillStatus').value = bill.status === 'Paid' ? 'Open' : (bill.status === 'Pending' ? (bill.requestedStatus === 'Paid' ? 'Open' : (bill.requestedStatus || 'Open')) : (bill.status === 'Rejected' ? 'Draft' : bill.status));
     document.getElementById('acctBillNotes').value = bill.notes || '';
     const isRecurring = !!(bill.recurring && bill.recurring.frequency);
     document.getElementById('acctBillRecurring').checked = isRecurring;
     document.getElementById('acctBillRecurFreq').style.display = isRecurring ? '' : 'none';
     document.getElementById('acctBillRecurEnd').style.display = isRecurring ? '' : 'none';
-    if(isRecurring){
-      document.getElementById('acctBillRecurFreq').value = bill.recurring.frequency;
-      document.getElementById('acctBillRecurEnd').value = bill.recurring.endDate || '';
-    }
+    if(isRecurring){ document.getElementById('acctBillRecurFreq').value = bill.recurring.frequency; document.getElementById('acctBillRecurEnd').value = bill.recurring.endDate || ''; }
     document.getElementById('acctBillEditingNote').style.display = '';
     document.getElementById('acctBillCancelEdit').style.display = '';
-    renderAcctBillLines();
+    acctFillTagSelect('acctBillTags', bill.tagIds || []);
+    acctRenderDraftAttachments('acctBillAttachList', acctBillDraftAttachments);
+    acctRenderPurchaseLines('acctBillLines', 'acctBillTotals', acctBillDraftLines);
+    acctLog('Bill opened for editing', bill.billNo);
     save(); renderAcctPurchases(); renderAcctHome();
   }
   const acctBillCancelEditBtn = document.getElementById('acctBillCancelEdit');
   if(acctBillCancelEditBtn) acctBillCancelEditBtn.addEventListener('click', () => {
-    alert('Editing cancelled — note the original bill\'s posted entries were already reversed and won\'t be restored automatically. Re-create it if needed.');
-    resetBillForm();
-    renderAcctPurchases();
+    alert('Editing cancelled — the original bill\'s posted entries were already reversed and won\'t be restored automatically. Re-create it if needed.');
+    resetBillForm(); renderAcctPurchases();
   });
+
+  function acctBillPdf(bill){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    acctPdfHeader(doc, 'BILL', bill.billNo);
+    doc.setFontSize(11);
+    doc.text(`Vendor: ${bill.vendor}`, 14, 38);
+    doc.text(`Date: ${bill.date}`, 14, 45);
+    if(bill.dueDate) doc.text(`Due: ${bill.dueDate}`, 14, 52);
+    const body = bill.lines.map(l => [l.description || '—', acctAccountName(l.accountId), l.taxName || '—', acctMoney(l.amount)]);
+    doc.autoTable({ startY: 60, head: [['Description', 'Account', 'Tax', 'Amount']], body, styles: { fontSize: 9 }, headStyles: { fillColor: [31, 111, 99], textColor: [255, 255, 255] } });
+    let y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 100) + 10;
+    const rows = [['Subtotal', acctMoney(acctSub(bill))], ['Tax', acctMoney(acctTaxTotal(bill))], ['Total', acctMoney(bill.total), true]];
+    if((Number(bill.amountCredited) || 0) > 0) rows.push(['Credits applied', acctMoney(bill.amountCredited)]);
+    if((Number(bill.amountPaid) || 0) > 0) rows.push(['Paid', acctMoney(bill.amountPaid)]);
+    rows.push(['Balance due', acctMoney(acctOutstanding(bill)), true]);
+    y = acctPdfTotals(doc, y, rows);
+    if(bill.notes){ doc.setFontSize(9); doc.text(doc.splitTextToSize(`Notes: ${bill.notes}`, 180), 14, y + 8); }
+    doc.save(`${bill.billNo}.pdf`);
+  }
+
   function renderAcctPurchases(){
     renderAcctVendors();
+    acctFillTagSelect('acctBillTags');
+    acctRenderPurchaseLines('acctBillLines', 'acctBillTotals', acctBillDraftLines);
+    acctRenderPurchaseLines('acctVcLines', 'acctVcTotals', acctVcDraftLines);
+    acctRenderDraftAttachments('acctBillAttachList', acctBillDraftAttachments);
+    const thr = document.getElementById('acctApprovalThreshold');
+    if(thr && document.activeElement !== thr) thr.value = acctData().settings.approvalThreshold || '';
     const list = document.getElementById('acctBillList');
-    renderAcctBillLines();
     if(!list) return;
     const acc = acctData();
     const q = (document.getElementById('acctBillSearch')?.value || '').trim().toLowerCase();
@@ -14010,7 +14651,8 @@
     [...bills].reverse().forEach(bill => {
       const li = document.createElement('li');
       const effective = acctEffectiveStatus(bill, 'Open');
-      const remaining = Math.max(0, Number(bill.total) - Number(bill.amountPaid || 0));
+      const remaining = acctOutstanding(bill);
+      const refundDue = acctRefundDue(bill);
       li.innerHTML = `
         <div style="width:100%;">
           <div class="card-row-top">
@@ -14018,144 +14660,387 @@
             <div class="tx-amount">${fmt(bill.total)}</div>
           </div>
           <div class="card-desc" style="margin-top:2px;">${escapeHtml(bill.date)}${bill.dueDate ? ' · due ' + escapeHtml(bill.dueDate) : ''} · ${acctBadgeHtml(effective)}${bill.recurring && bill.recurring.frequency ? ' <span style="font-size:10px;color:var(--ink-soft);">↻ ' + escapeHtml(bill.recurring.frequency) + '</span>' : ''}</div>
-          <div class="card-desc" style="margin-top:2px;">${bill.lines.map(l => escapeHtml(l.description || acctAccountName(l.accountId)) + ': ' + fmt(l.amount)).join(', ')}</div>
-          ${(Number(bill.amountPaid)||0) > 0 && effective !== 'Paid' ? `<div class="card-desc" style="margin-top:2px;">Paid ${fmt(bill.amountPaid)} of ${fmt(bill.total)} — ${fmt(remaining)} remaining</div>` : ''}
+          <div class="card-desc" style="margin-top:2px;">${bill.lines.map(l => escapeHtml(l.description || acctAccountName(l.accountId)) + ': ' + fmt(l.amount)).join(', ')}${acctTaxTotal(bill) > 0.004 ? ' · incl. tax ' + fmt(acctTaxTotal(bill)) : ''}</div>
+          ${acctDocMetaHtml(bill)}
+          ${(Number(bill.amountPaid) || 0) > 0 || (Number(bill.amountCredited) || 0) > 0 ? `<div class="card-desc" style="margin-top:2px;">${(Number(bill.amountPaid) || 0) > 0 ? 'Paid ' + fmt(bill.amountPaid) : ''}${(Number(bill.amountCredited) || 0) > 0 ? ' · Credited ' + fmt(bill.amountCredited) : ''}${remaining > 0.005 && acctIsPosted(bill) ? ' · ' + fmt(remaining) + ' remaining' : ''}</div>` : ''}
+          ${refundDue > 0.005 ? `<div class="card-desc" style="margin-top:2px;color:#9A6400;">Refund due from vendor: ${fmt(refundDue)}</div>` : ''}
           <div style="text-align:right; margin-top:6px;">
             ${bill.status === 'Draft' ? `<button class="edit-btn acct-bill-mark-open" data-id="${bill.id}">Mark Open</button>` : ''}
-            ${effective !== 'Paid' ? `<button class="edit-btn acct-bill-record-payment" data-id="${bill.id}">Record Payment</button>` : ''}
+            ${bill.status === 'Pending' && acctIsAdmin() ? `<button class="edit-btn acct-bill-approve" data-id="${bill.id}">Approve</button><button class="edit-btn acct-bill-reject" data-id="${bill.id}">Reject</button>` : ''}
+            ${(acctIsPosted(bill) && remaining > 0.005) || bill.status === 'Draft' ? `<button class="edit-btn acct-bill-record-payment" data-id="${bill.id}">Record Payment</button>` : ''}
+            ${refundDue > 0.005 ? `<button class="edit-btn acct-bill-refund" data-id="${bill.id}">Record Refund</button>` : ''}
+            <button class="edit-btn acct-bill-pdf" data-id="${bill.id}">PDF</button>
             <button class="edit-btn acct-bill-edit" data-id="${bill.id}">Edit</button>
             <button class="del-btn acct-bill-del" data-id="${bill.id}">×</button>
           </div>
-        </div>
-      `;
+        </div>`;
       list.appendChild(li);
     });
+    acctBindDocLinks(list);
+    const find = (el) => acc.bills.find(b => b.id === el.dataset.id);
     list.querySelectorAll('.acct-bill-mark-open').forEach(el => el.addEventListener('click', () => {
-      const bill = acc.bills.find(b => b.id === el.dataset.id);
+      const bill = find(el);
       if(!bill || bill.status !== 'Draft') return;
+      if(!acctGuardLocked(bill.date, 'This bill')) return;
       bill.status = 'Open';
       postBillEntry(bill);
+      acctLog('Bill opened', bill.billNo);
       save(); renderAcctPurchases(); renderAcctHome();
     }));
-    list.querySelectorAll('.acct-bill-record-payment').forEach(el => el.addEventListener('click', () => {
-      const bill = acc.bills.find(b => b.id === el.dataset.id);
-      if(bill) recordBillPayment(bill);
+    list.querySelectorAll('.acct-bill-approve').forEach(el => el.addEventListener('click', () => {
+      const bill = find(el);
+      if(!bill || bill.status !== 'Pending' || !acctIsAdmin()) return;
+      if(!acctGuardLocked(bill.date, 'This bill')) return;
+      const wanted = bill.requestedStatus || 'Open';
+      bill.status = 'Open';
+      postBillEntry(bill);
+      if(wanted === 'Paid' && acctGuardLocked(todayStr(), 'A payment recorded today')){
+        postBillPayment(bill, bill.total);
+        bill.amountPaid = bill.total; bill.payments.push({ id: uid(), date: todayStr(), amount: bill.total });
+        bill.status = 'Paid'; bill.paidDate = todayStr();
+      }
+      bill.approvedBy = currentUser ? currentUser.id : '';
+      acctLog('Bill approved', `${bill.billNo} · ${acctMoney(bill.total)}`);
+      save(); renderAcctPurchases(); renderAcctHome();
     }));
+    list.querySelectorAll('.acct-bill-reject').forEach(el => el.addEventListener('click', () => {
+      const bill = find(el);
+      if(!bill || bill.status !== 'Pending' || !acctIsAdmin()) return;
+      bill.status = 'Rejected';
+      acctLog('Bill rejected', `${bill.billNo} · ${acctMoney(bill.total)}`);
+      save(); renderAcctPurchases(); renderAcctHome();
+    }));
+    list.querySelectorAll('.acct-bill-record-payment').forEach(el => el.addEventListener('click', () => { const b = find(el); if(b) recordBillPayment(b); }));
+    list.querySelectorAll('.acct-bill-refund').forEach(el => el.addEventListener('click', () => { const b = find(el); if(b) recordBillRefund(b); }));
+    list.querySelectorAll('.acct-bill-pdf').forEach(el => el.addEventListener('click', () => { const b = find(el); if(b) acctBillPdf(b); }));
     list.querySelectorAll('.acct-bill-edit').forEach(el => el.addEventListener('click', () => startEditBill(el.dataset.id)));
     list.querySelectorAll('.acct-bill-del').forEach(el => el.addEventListener('click', () => {
-      const bill = acc.bills.find(b => b.id === el.dataset.id);
+      const bill = find(el);
+      if(!bill) return;
+      if((Number(bill.amountCredited) || 0) > 0 || (Number(bill.amountRefunded) || 0) > 0){ alert('This bill has vendor credits or refunds against it. Delete those first.'); return; }
+      if(!acctGuardSource(bill.id, bill.date, 'This bill')) return;
       if(!confirm('Delete this bill? Any journal entries it caused will be reversed.')) return;
-      if(bill && bill.status !== 'Draft') reverseEntriesForSource(bill.id);
-      acc.bills = acc.bills.filter(b => b.id !== el.dataset.id);
+      if(acctIsPosted(bill)) reverseEntriesForSource(bill.id);
+      acc.bills = acc.bills.filter(b => b.id !== bill.id);
+      acctLog('Bill deleted', bill.billNo);
       save(); renderAcctPurchases(); renderAcctHome();
     }));
+    renderAcctVendorCredits();
   }
+  const acctBillSearchEl = document.getElementById('acctBillSearch');
+  if(acctBillSearchEl) acctBillSearchEl.addEventListener('input', renderAcctPurchases);
+  const acctApprovalSaveBtn = document.getElementById('acctApprovalSave');
+  if(acctApprovalSaveBtn) acctApprovalSaveBtn.addEventListener('click', () => {
+    if(!acctIsAdmin()){ alert('Only an admin can change the approval threshold.'); return; }
+    const v = Number(document.getElementById('acctApprovalThreshold').value) || 0;
+    acctData().settings.approvalThreshold = v < 0 ? 0 : v;
+    acctLog('Approval threshold changed', v > 0 ? `bills over ${acctMoney(v)} need approval` : 'approval turned off');
+    save(); renderAcctPurchases();
+  });
   const acctBillSaveBtn = document.getElementById('acctBillSave');
   if(acctBillSaveBtn) acctBillSaveBtn.addEventListener('click', () => {
     const vendor = document.getElementById('acctBillVendor').value.trim();
     if(!vendor){ alert('Enter a vendor name.'); return; }
-    const validLines = acctBillDraftLines.filter(l => l.accountId && l.amount > 0);
-    if(!validLines.length){ alert('Add at least one line with an account and amount.'); return; }
-    const date = document.getElementById('acctBillDate').value || todayStr();
-    const dueDate = document.getElementById('acctBillDueDate').value || '';
-    const status = document.getElementById('acctBillStatus').value;
-    const notes = document.getElementById('acctBillNotes').value.trim();
-    const isRecurring = document.getElementById('acctBillRecurring').checked;
-    const recurFreq = document.getElementById('acctBillRecurFreq').value;
-    const recurEnd = document.getElementById('acctBillRecurEnd').value || null;
     const acc = acctData();
-    const lines = validLines.map(l => ({ description: l.description, accountId: l.accountId, amount: l.amount }));
-    const total = lines.reduce((s, l) => s + l.amount, 0);
-    const id = editingBillId || uid();
-    const billNo = editingBillId && editingBillNo ? editingBillNo : ('BILL-' + (1001 + acc.bills.length));
+    const lines = acctBuildPurchaseLines(acctBillDraftLines);
+    if(!lines.length){ alert('Add at least one line with an account and amount.'); return; }
+    const date = document.getElementById('acctBillDate').value || todayStr();
+    const requested = document.getElementById('acctBillStatus').value;
+    if(requested !== 'Draft' && !acctGuardLocked(date, 'This bill')) return;
+    const { subtotal, taxTotal, total } = acctDocTotals(lines);
+    // Household members' bills over the threshold wait for an admin.
+    const needsApproval = (requested === 'Open' || requested === 'Paid') && acc.settings.approvalThreshold > 0 && total > acc.settings.approvalThreshold && !acctIsAdmin();
+    const status = needsApproval ? 'Pending' : requested;
+    const isRecurring = document.getElementById('acctBillRecurring').checked;
     const bill = {
-      id, billNo, vendor, date, dueDate, lines, total, status,
-      amountPaid: 0, payments: [], notes,
-      recurring: isRecurring ? { frequency: recurFreq, endDate: recurEnd } : null,
+      id: editingBillId || uid(),
+      billNo: editingBillNo || acctNextNo('bill'),
+      vendor, date, dueDate: document.getElementById('acctBillDueDate').value || '', lines, subtotal, taxTotal, total, status,
+      requestedStatus: needsApproval ? requested : null,
+      createdBy: editingBillCreatedBy || (currentUser ? currentUser.id : ''),
+      amountPaid: 0, amountCredited: 0, amountRefunded: 0, payments: [],
+      notes: document.getElementById('acctBillNotes').value.trim(),
+      tagIds: acctSelectedTags('acctBillTags'),
+      attachments: acctBillDraftAttachments.slice(),
+      recurring: isRecurring ? { frequency: document.getElementById('acctBillRecurFreq').value, endDate: document.getElementById('acctBillRecurEnd').value || null } : null,
       recurringGroupId: isRecurring ? (editingBillRecurringGroupId || uid()) : null,
       paidDate: ''
     };
+    const wasEditing = !!editingBillId;
     acc.bills.push(bill);
     if(status === 'Open' || status === 'Paid') postBillEntry(bill);
     if(status === 'Paid'){
-      postBillPayment(bill, total);
-      bill.amountPaid = total;
-      bill.payments.push({ id: uid(), date, amount: total });
-      bill.paidDate = date;
+      if(acctGuardLocked(todayStr(), 'A payment recorded today')){
+        postBillPayment(bill, total);
+        bill.amountPaid = total; bill.payments.push({ id: uid(), date: todayStr(), amount: total }); bill.paidDate = todayStr();
+      } else { bill.status = 'Open'; }
     }
+    acctLog(wasEditing ? 'Bill updated' : (needsApproval ? 'Bill submitted for approval' : 'Bill created'), `${bill.billNo} · ${vendor} · ${acctMoney(total)}`);
+    if(needsApproval) alert('This bill is above the approval threshold, so it was saved as Pending Approval. An admin needs to approve it before it posts.');
     resetBillForm();
     save(); renderAcctPurchases(); renderAcctHome();
   });
 
-  // ---- Recurring invoices/bills — generated once per login, mirroring
-  // generateRecurringTransactions()'s pattern elsewhere in the app. ----
+  // ---- Vendor credits ----
+  const acctVcDraftLines = [];
+  function acctFillBillSelect(selectId, selectedValue){
+    const el = document.getElementById(selectId);
+    if(!el) return;
+    const keep = selectedValue !== undefined ? selectedValue : el.value;
+    const bills = acctData().bills.filter(b => acctIsPosted(b));
+    el.innerHTML = '<option value="">Select bill…</option>' + bills.map(b => `<option value="${b.id}" ${b.id === keep ? 'selected' : ''}>${escapeHtml(b.billNo)} · ${escapeHtml(b.vendor)} · ${escapeHtml(acctMoney(b.total))}</option>`).join('');
+  }
+  const acctVcAddLineBtn = document.getElementById('acctVcAddLine');
+  if(acctVcAddLineBtn) acctVcAddLineBtn.addEventListener('click', () => { acctVcDraftLines.push({ description: '', accountId: '', amount: 0, taxRateId: '' }); acctRenderPurchaseLines('acctVcLines', 'acctVcTotals', acctVcDraftLines); });
+  const acctVcFillBtn = document.getElementById('acctVcFill');
+  if(acctVcFillBtn) acctVcFillBtn.addEventListener('click', () => {
+    const bill = acctData().bills.find(b => b.id === document.getElementById('acctVcBill').value);
+    if(!bill){ alert('Pick a bill first.'); return; }
+    acctVcDraftLines.length = 0;
+    bill.lines.forEach(l => acctVcDraftLines.push({ description: l.description, accountId: l.accountId, amount: l.amount, taxRateId: l.taxRateId || '' }));
+    acctRenderPurchaseLines('acctVcLines', 'acctVcTotals', acctVcDraftLines);
+  });
+  function renderAcctVendorCredits(){
+    acctFillBillSelect('acctVcBill');
+    const list = document.getElementById('acctVcList');
+    if(!list) return;
+    const acc = acctData();
+    list.innerHTML = acc.vendorCredits.length ? '' : '<li class="empty">No vendor credits yet.</li>';
+    [...acc.vendorCredits].reverse().forEach(vc => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div style="width:100%;">
+          <div class="card-row-top"><div class="card-bank">${escapeHtml(vc.vcNo)} · ${escapeHtml(vc.vendor)}</div><div class="tx-amount">${fmt(vc.total)}</div></div>
+          <div class="card-desc" style="margin-top:2px;">${escapeHtml(vc.date)} · against ${escapeHtml(vc.billNo)}</div>
+          <div class="card-desc" style="margin-top:2px;">${vc.lines.map(l => escapeHtml(l.description || acctAccountName(l.accountId)) + ': ' + fmt(l.amount)).join(', ')}${vc.notes ? ' · ' + escapeHtml(vc.notes) : ''}</div>
+          <div style="text-align:right; margin-top:6px;"><button class="del-btn" data-id="${vc.id}">×</button></div>
+        </div>`;
+      list.appendChild(li);
+    });
+    list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
+      const vc = acc.vendorCredits.find(c => c.id === el.dataset.id);
+      if(!vc) return;
+      const bill = acc.bills.find(b => b.id === vc.billId);
+      if(bill && (Number(bill.amountRefunded) || 0) > 0){ alert('A refund was recorded against this bill. Delete that refund first.'); return; }
+      if(!acctGuardSource(vc.id, vc.date, 'This vendor credit')) return;
+      if(!confirm('Delete this vendor credit? Its journal entries will be reversed.')) return;
+      reverseEntriesForSource(vc.id);
+      if(bill){
+        bill.amountCredited = Math.max(0, acctR2((Number(bill.amountCredited) || 0) - vc.total));
+        if(bill.status === 'Paid' && acctOutstanding(bill) > 0.005) bill.status = 'Open';
+      }
+      acc.vendorCredits = acc.vendorCredits.filter(c => c.id !== vc.id);
+      acctLog('Vendor credit deleted', vc.vcNo);
+      save(); renderAcctPurchases(); renderAcctHome();
+    }));
+  }
+  const acctVcSaveBtn = document.getElementById('acctVcSave');
+  if(acctVcSaveBtn) acctVcSaveBtn.addEventListener('click', () => {
+    const acc = acctData();
+    const bill = acc.bills.find(b => b.id === document.getElementById('acctVcBill').value);
+    if(!bill){ alert('Pick the bill this credit is against.'); return; }
+    const lines = acctBuildPurchaseLines(acctVcDraftLines);
+    if(!lines.length){ alert('Add at least one line with an account and amount.'); return; }
+    const date = document.getElementById('acctVcDate').value || todayStr();
+    if(!acctGuardLocked(date, 'This vendor credit')) return;
+    const { subtotal, taxTotal, total } = acctDocTotals(lines);
+    const creditable = acctR2(Number(bill.total) - (Number(bill.amountCredited) || 0));
+    if(total > creditable + 0.005){ alert(`This credit (${acctMoney(total)}) is more than what's left to credit on ${bill.billNo} (${acctMoney(creditable)}).`); return; }
+    const vc = { id: uid(), vcNo: acctNextNo('vendorCredit'), billId: bill.id, billNo: bill.billNo, vendor: bill.vendor, date, lines, subtotal, taxTotal, total, notes: document.getElementById('acctVcNotes').value.trim(), tagIds: (bill.tagIds || []).slice() };
+    acc.vendorCredits.push(vc);
+    const ap = getSystemAccount('AP', 'Accounts Payable', 'Liability');
+    const jl = [{ accountId: ap.id, debit: total, credit: 0 }];
+    lines.forEach(l => jl.push({ accountId: l.accountId, debit: 0, credit: l.amount }));
+    if(taxTotal > 0.004){ const tr = getSystemAccount('TAXREC', 'Tax Receivable', 'Asset'); jl.push({ accountId: tr.id, debit: 0, credit: taxTotal }); }
+    postJournalEntry(date, `Vendor credit ${vc.vcNo} — ${bill.billNo}`, jl, vc.id, vc.tagIds);
+    bill.amountCredited = acctR2((Number(bill.amountCredited) || 0) + total);
+    if(acctOutstanding(bill) <= 0.005 && (Number(bill.amountPaid) || 0) > 0){ bill.status = 'Paid'; bill.paidDate = bill.paidDate || todayStr(); }
+    acctLog('Vendor credit created', `${vc.vcNo} · ${bill.billNo} · ${acctMoney(total)}`);
+    acctVcDraftLines.length = 0;
+    ['acctVcDate', 'acctVcNotes'].forEach(id => { document.getElementById(id).value = ''; });
+    save(); renderAcctPurchases(); renderAcctHome();
+  });
+
+  // ---- Fixed assets & depreciation ----
+  function acctAssetPlan(a){
+    const months = Math.max(1, Math.round((Number(a.lifeYears) || 1) * 12));
+    const base = acctR2((Number(a.cost) || 0) - (Number(a.salvage) || 0));
+    const monthly = acctR2(base / months);
+    return { months, base, monthly };
+  }
+  function acctAssetAccumulated(a){
+    const { months, base, monthly } = acctAssetPlan(a);
+    const n = Number(a.monthsPosted) || 0;
+    return n >= months ? base : acctR2(monthly * n);
+  }
+  function acctPostDepreciationForAsset(a, upToDate){
+    const { months, base, monthly } = acctAssetPlan(a);
+    let posted = 0;
+    while((a.monthsPosted || 0) < months){
+      const k = (a.monthsPosted || 0) + 1;
+      const date = addMonthsToDate(a.purchaseDate, k);
+      if(date > upToDate) break;
+      if(a.status === 'Disposed' && a.disposedDate && date > a.disposedDate) break;
+      const amt = k < months ? monthly : acctR2(base - monthly * (months - 1));
+      if(amt > 0){
+        const exp = getSystemAccount('DEPEXP', 'Depreciation Expense', 'Expense');
+        const acd = getSystemAccount('ACCDEP', 'Accumulated Depreciation', 'Asset');
+        postJournalEntry(date, `Depreciation — ${a.name} (${k}/${months})`, [{ accountId: exp.id, debit: amt, credit: 0 }, { accountId: acd.id, debit: 0, credit: amt }], a.id);
+      }
+      a.monthsPosted = k;
+      posted++;
+    }
+    return posted;
+  }
+  function acctPostAllDepreciation(upToDate){
+    let n = 0;
+    acctData().fixedAssets.filter(a => a.status !== 'Disposed').forEach(a => { n += acctPostDepreciationForAsset(a, upToDate); });
+    return n;
+  }
+  function renderAcctFixedAssets(){
+    const list = document.getElementById('acctFaList');
+    if(!list) return;
+    const acc = acctData();
+    list.innerHTML = acc.fixedAssets.length ? '' : '<li class="empty">No fixed assets yet.</li>';
+    acc.fixedAssets.forEach(a => {
+      const plan = acctAssetPlan(a);
+      const accum = acctAssetAccumulated(a);
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div style="width:100%;">
+          <div class="card-row-top"><div class="card-bank">${escapeHtml(a.name)}</div><div class="tx-amount">${fmt(a.cost)}</div></div>
+          <div class="card-desc" style="margin-top:2px;">Bought ${escapeHtml(a.purchaseDate)} · ${a.lifeYears} yr · salvage ${fmt(a.salvage || 0)} · ${fmt(plan.monthly)}/month</div>
+          <div class="card-desc" style="margin-top:2px;">Depreciated ${fmt(accum)} (${a.monthsPosted || 0}/${plan.months} months) · Book value ${fmt(acctR2(a.cost - accum))}${a.status === 'Disposed' ? ' · <span class="acct-badge acct-badge-draft">Disposed ' + escapeHtml(a.disposedDate) + '</span>' : ''}</div>
+          <div style="text-align:right; margin-top:6px;">
+            ${a.status !== 'Disposed' ? `<button class="edit-btn acct-fa-dispose" data-id="${a.id}">Dispose / sell</button>` : ''}
+            <button class="del-btn acct-fa-del" data-id="${a.id}">×</button>
+          </div>
+        </div>`;
+      list.appendChild(li);
+    });
+    list.querySelectorAll('.acct-fa-dispose').forEach(el => el.addEventListener('click', () => {
+      const a = acc.fixedAssets.find(x => x.id === el.dataset.id);
+      if(!a) return;
+      const date = todayStr();
+      if(!acctGuardLocked(date, 'The disposal')) return;
+      const input = prompt(`Dispose of "${a.name}" today. Sale proceeds received (enter 0 if scrapped):`, '0');
+      if(input === null) return;
+      const proceeds = Math.max(0, Number(input) || 0);
+      acctPostDepreciationForAsset(a, date);
+      const accum = acctAssetAccumulated(a);
+      const nbv = acctR2(a.cost - accum);
+      const gainLoss = acctR2(proceeds - nbv);
+      const fa = getSystemAccount('FIXEDASSET', 'Fixed Assets', 'Asset');
+      const acd = getSystemAccount('ACCDEP', 'Accumulated Depreciation', 'Asset');
+      const jl = [];
+      if(proceeds > 0){ const cash = getSystemAccount('CASH', 'Cash', 'Asset'); jl.push({ accountId: cash.id, debit: proceeds, credit: 0 }); }
+      if(accum > 0) jl.push({ accountId: acd.id, debit: accum, credit: 0 });
+      if(gainLoss < 0){ const loss = getSystemAccount('ASSETLOSS', 'Loss on Asset Disposal', 'Expense'); jl.push({ accountId: loss.id, debit: -gainLoss, credit: 0 }); }
+      jl.push({ accountId: fa.id, debit: 0, credit: a.cost });
+      if(gainLoss > 0){ const gain = getSystemAccount('ASSETGAIN', 'Gain on Asset Disposal', 'Income'); jl.push({ accountId: gain.id, debit: 0, credit: gainLoss }); }
+      postJournalEntry(date, `Disposal — ${a.name}`, jl, a.id);
+      a.status = 'Disposed'; a.disposedDate = date; a.disposalProceeds = proceeds;
+      acctLog('Asset disposed', `${a.name} · proceeds ${acctMoney(proceeds)} · ${gainLoss >= 0 ? 'gain' : 'loss'} ${acctMoney(Math.abs(gainLoss))}`);
+      save(); renderAcctAccountant(); renderAcctHome();
+    }));
+    list.querySelectorAll('.acct-fa-del').forEach(el => el.addEventListener('click', () => {
+      const a = acc.fixedAssets.find(x => x.id === el.dataset.id);
+      if(!a) return;
+      if(!acctGuardSource(a.id, a.purchaseDate, 'This asset')) return;
+      if(!confirm('Delete this asset? Its purchase, depreciation and disposal entries will all be reversed.')) return;
+      reverseEntriesForSource(a.id);
+      acc.fixedAssets = acc.fixedAssets.filter(x => x.id !== a.id);
+      acctLog('Asset deleted', a.name);
+      save(); renderAcctAccountant(); renderAcctHome();
+    }));
+  }
+  const acctFaAddBtn = document.getElementById('acctFaAdd');
+  if(acctFaAddBtn) acctFaAddBtn.addEventListener('click', () => {
+    const name = document.getElementById('acctFaName').value.trim();
+    const cost = Number(document.getElementById('acctFaCost').value) || 0;
+    const salvage = Number(document.getElementById('acctFaSalvage').value) || 0;
+    const life = Number(document.getElementById('acctFaLife').value) || 0;
+    const purchaseDate = document.getElementById('acctFaDate').value || todayStr();
+    if(!name || cost <= 0 || life <= 0){ alert('Enter a name, a cost above 0 and a life in years.'); return; }
+    if(salvage < 0 || salvage >= cost){ alert('Salvage value must be between 0 and the cost.'); return; }
+    if(!acctGuardLocked(purchaseDate, 'This asset')) return;
+    const a = { id: uid(), name, cost: acctR2(cost), salvage: acctR2(salvage), lifeYears: life, purchaseDate, status: 'Active', monthsPosted: 0 };
+    acctData().fixedAssets.push(a);
+    if(document.getElementById('acctFaBook').checked){
+      const fa = getSystemAccount('FIXEDASSET', 'Fixed Assets', 'Asset');
+      const cash = getSystemAccount('CASH', 'Cash', 'Asset');
+      postJournalEntry(purchaseDate, `Asset purchase — ${name}`, [{ accountId: fa.id, debit: a.cost, credit: 0 }, { accountId: cash.id, debit: 0, credit: a.cost }], a.id);
+    }
+    acctPostDepreciationForAsset(a, todayStr());
+    acctLog('Asset added', `${name} · ${acctMoney(a.cost)}`);
+    ['acctFaName', 'acctFaCost', 'acctFaSalvage', 'acctFaLife', 'acctFaDate'].forEach(id => { document.getElementById(id).value = ''; });
+    save(); renderAcctAccountant(); renderAcctHome();
+  });
+  const acctFaRunDepBtn = document.getElementById('acctFaRunDep');
+  if(acctFaRunDepBtn) acctFaRunDepBtn.addEventListener('click', () => {
+    const n = acctPostAllDepreciation(todayStr());
+    alert(n ? `Posted ${n} month${n === 1 ? '' : 's'} of depreciation.` : 'Depreciation is already up to date.');
+    if(n){ acctLog('Depreciation posted', `${n} month(s)`); save(); renderAcctAccountant(); renderAcctHome(); }
+  });
+
+  // ---- Recurring invoices/bills + scheduled depreciation — run once per
+  // login, mirroring generateRecurringTransactions() elsewhere in the app. ----
   function generateRecurringAccountingDocs(){
     const acc = acctData();
     let changed = false;
-    const invGroups = {};
-    acc.invoices.filter(i => i.recurring && i.recurring.frequency && i.recurringGroupId).forEach(i => {
-      if(!invGroups[i.recurringGroupId] || i.date > invGroups[i.recurringGroupId].date) invGroups[i.recurringGroupId] = i;
-    });
-    Object.values(invGroups).forEach(latest => {
+    const latestByGroup = (docs) => {
+      const groups = {};
+      docs.filter(d => d.recurring && d.recurring.frequency && d.recurringGroupId && acctIsPosted(d)).forEach(d => { if(!groups[d.recurringGroupId] || d.date > groups[d.recurringGroupId].date) groups[d.recurringGroupId] = d; });
+      return Object.values(groups);
+    };
+    const nextDates = (latest) => {
+      const out = [];
       const freq = latest.recurring.frequency, endDate = latest.recurring.endDate;
-      let nextDate = acctAddByFreq(latest.date, freq);
-      let guard = 0;
-      while(nextDate <= todayStr() && (!endDate || nextDate <= endDate) && guard < 36){
-        const dup = acc.invoices.find(x => x.recurringGroupId === latest.recurringGroupId && x.date === nextDate);
-        if(!dup){
-          const dueShift = latest.dueDate ? (new Date(latest.dueDate) - new Date(latest.date)) : null;
-          const newDue = dueShift !== null ? addDaysToDate(nextDate, Math.round(dueShift / 86400000)) : '';
-          const clone = {
-            id: uid(), invoiceNo: 'INV-' + (1001 + acc.invoices.length), customer: latest.customer,
-            date: nextDate, dueDate: newDue, lines: latest.lines.map(l => Object.assign({}, l)), total: latest.total,
-            status: 'Sent', amountPaid: 0, payments: [], notes: latest.notes,
-            recurring: { frequency: freq, endDate }, recurringGroupId: latest.recurringGroupId, paidDate: ''
-          };
-          acc.invoices.push(clone);
-          postInvoiceSaleEntry(clone);
-          postInventoryForInvoice(clone);
-          changed = true;
-        }
-        nextDate = acctAddByFreq(nextDate, freq);
-        guard++;
-      }
+      let nextDate = acctAddByFreq(latest.date, freq), guard = 0;
+      while(nextDate <= todayStr() && (!endDate || nextDate <= endDate) && guard < 36){ out.push(nextDate); nextDate = acctAddByFreq(nextDate, freq); guard++; }
+      return out;
+    };
+    latestByGroup(acc.invoices).forEach(latest => {
+      const dueShift = latest.dueDate ? Math.round((new Date(latest.dueDate) - new Date(latest.date)) / 86400000) : null;
+      nextDates(latest).forEach(date => {
+        if(acc.invoices.some(x => x.recurringGroupId === latest.recurringGroupId && x.date === date)) return;
+        if(acctIsLocked(date)) return; // closed periods stay closed
+        const clone = { ...latest, id: uid(), invoiceNo: acctNextNo('invoice'), date, dueDate: dueShift !== null ? addDaysToDate(date, dueShift) : '', lines: latest.lines.map(l => ({ ...l })), status: 'Sent', amountPaid: 0, amountCredited: 0, amountRefunded: 0, payments: [], attachments: [], tagIds: (latest.tagIds || []).slice(), recurring: { ...latest.recurring }, paidDate: '' };
+        acc.invoices.push(clone);
+        acctPostInvoice(clone);
+        acctLog('Recurring invoice generated', `${clone.invoiceNo} · ${clone.customer}`);
+        changed = true;
+      });
     });
-    const billGroups = {};
-    acc.bills.filter(b => b.recurring && b.recurring.frequency && b.recurringGroupId).forEach(b => {
-      if(!billGroups[b.recurringGroupId] || b.date > billGroups[b.recurringGroupId].date) billGroups[b.recurringGroupId] = b;
+    latestByGroup(acc.bills).forEach(latest => {
+      const dueShift = latest.dueDate ? Math.round((new Date(latest.dueDate) - new Date(latest.date)) / 86400000) : null;
+      nextDates(latest).forEach(date => {
+        if(acc.bills.some(x => x.recurringGroupId === latest.recurringGroupId && x.date === date)) return;
+        if(acctIsLocked(date)) return;
+        const clone = { ...latest, id: uid(), billNo: acctNextNo('bill'), date, dueDate: dueShift !== null ? addDaysToDate(date, dueShift) : '', lines: latest.lines.map(l => ({ ...l })), status: 'Open', requestedStatus: null, amountPaid: 0, amountCredited: 0, amountRefunded: 0, payments: [], attachments: [], tagIds: (latest.tagIds || []).slice(), recurring: { ...latest.recurring }, paidDate: '' };
+        acc.bills.push(clone);
+        postBillEntry(clone);
+        acctLog('Recurring bill generated', `${clone.billNo} · ${clone.vendor}`);
+        changed = true;
+      });
     });
-    Object.values(billGroups).forEach(latest => {
-      const freq = latest.recurring.frequency, endDate = latest.recurring.endDate;
-      let nextDate = acctAddByFreq(latest.date, freq);
-      let guard = 0;
-      while(nextDate <= todayStr() && (!endDate || nextDate <= endDate) && guard < 36){
-        const dup = acc.bills.find(x => x.recurringGroupId === latest.recurringGroupId && x.date === nextDate);
-        if(!dup){
-          const dueShift = latest.dueDate ? (new Date(latest.dueDate) - new Date(latest.date)) : null;
-          const newDue = dueShift !== null ? addDaysToDate(nextDate, Math.round(dueShift / 86400000)) : '';
-          const clone = {
-            id: uid(), billNo: 'BILL-' + (1001 + acc.bills.length), vendor: latest.vendor,
-            date: nextDate, dueDate: newDue, lines: latest.lines.map(l => Object.assign({}, l)), total: latest.total,
-            status: 'Open', amountPaid: 0, payments: [], notes: latest.notes,
-            recurring: { frequency: freq, endDate }, recurringGroupId: latest.recurringGroupId, paidDate: ''
-          };
-          acc.bills.push(clone);
-          postBillEntry(clone);
-          changed = true;
-        }
-        nextDate = acctAddByFreq(nextDate, freq);
-        guard++;
-      }
-    });
+    const dep = acctPostAllDepreciation(todayStr());
+    if(dep){ acctLog('Depreciation posted automatically', `${dep} month(s)`); changed = true; }
     if(changed){ save(); renderAccounting(); }
   }
 
-  // ---- ACCOUNTANT (Chart of Accounts + Journal Entries + Trial Balance) ----
+  // ---- ACCOUNTANT ----
   function renderAcctAccountant(){
     renderAcctCoa();
+    acctFillTagSelect('acctJeTags');
     renderAcctJeLines();
     renderAcctJournalEntries();
     renderAcctTrialBalance();
+    renderAcctFixedAssets();
+    renderAcctTaxRates();
+    renderAcctTags();
+    renderAcctLock();
+    renderAcctAudit();
   }
   function renderAcctCoa(){
     const list = document.getElementById('acctCoaList');
@@ -14168,13 +15053,13 @@
         <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
           <div><strong>${escapeHtml(a.code || '')}</strong> ${escapeHtml(a.name)} <span style="font-size:11px;color:var(--ink-soft);">(${escapeHtml(a.type)})</span></div>
           <button class="del-btn" data-id="${a.id}">×</button>
-        </div>
-      `;
+        </div>`;
       list.appendChild(li);
     });
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
-      const inUse = acc.journalEntries.some(je => je.lines.some(l => l.accountId === el.dataset.id));
-      if(inUse){ alert('This account has journal entries posted against it and can\'t be deleted.'); return; }
+      if(acc.journalEntries.some(je => je.lines.some(l => l.accountId === el.dataset.id))){ alert('This account has journal entries posted against it and can\'t be deleted.'); return; }
+      const acct = acc.accounts.find(a => a.id === el.dataset.id);
+      if(acct && acct.systemKind && !confirm(`"${acct.name}" is used automatically by invoices, bills or assets. If you delete it, it will be recreated the next time it's needed. Delete anyway?`)) return;
       acc.accounts = acc.accounts.filter(a => a.id !== el.dataset.id);
       save(); renderAcctCoa(); renderAcctJeLines();
     }));
@@ -14189,7 +15074,7 @@
     save(); renderAcctCoa(); renderAcctJeLines();
   });
 
-  let acctJeDraftLines = [];
+  const acctJeDraftLines = [];
   function updateJeBalanceNote(){
     const note = document.getElementById('acctJeBalanceNote');
     if(!note) return;
@@ -14212,12 +15097,11 @@
         <input type="number" class="acct-je-line-debit" value="${ln.debit || ''}" placeholder="Debit" step="0.01" style="max-width:100px;">
         <input type="number" class="acct-je-line-credit" value="${ln.credit || ''}" placeholder="Credit" step="0.01" style="max-width:100px;">
         <button type="button" class="del-btn acct-je-line-del" style="align-self:center;">×</button>
-      </div>
-    `).join('') : '<div class="empty" style="margin-bottom:8px;">No lines yet — add at least two below.</div>';
+      </div>`).join('') : '<div class="empty" style="margin-bottom:8px;">No lines yet — add at least two below.</div>';
     wrap.querySelectorAll('.acct-je-line-account').forEach((el, i) => el.addEventListener('change', () => { acctJeDraftLines[i].accountId = el.value; }));
     wrap.querySelectorAll('.acct-je-line-debit').forEach((el, i) => el.addEventListener('input', () => { acctJeDraftLines[i].debit = Number(el.value) || 0; acctJeDraftLines[i].credit = 0; updateJeBalanceNote(); }));
     wrap.querySelectorAll('.acct-je-line-credit').forEach((el, i) => el.addEventListener('input', () => { acctJeDraftLines[i].credit = Number(el.value) || 0; acctJeDraftLines[i].debit = 0; updateJeBalanceNote(); }));
-    wrap.querySelectorAll('.acct-je-line-del').forEach((el, i) => el.addEventListener('click', () => { acctJeDraftLines.splice(i, 1); renderAcctJeLines(); updateJeBalanceNote(); }));
+    wrap.querySelectorAll('.acct-je-line-del').forEach((el, i) => el.addEventListener('click', () => { acctJeDraftLines.splice(i, 1); renderAcctJeLines(); }));
     updateJeBalanceNote();
   }
   const acctJeAddLineBtn = document.getElementById('acctJeAddLine');
@@ -14230,10 +15114,13 @@
     const totalCredit = validLines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
     if(Math.abs(totalDebit - totalCredit) > 0.005){ alert('Debits and credits must be equal to save a journal entry.'); return; }
     const date = document.getElementById('acctJeDate').value || todayStr();
+    if(!acctGuardLocked(date, 'This journal entry')) return;
     const memo = document.getElementById('acctJeMemo').value.trim();
-    postJournalEntry(date, memo, validLines.map(l => ({ accountId: l.accountId, debit: l.debit, credit: l.credit })));
-    acctJeDraftLines = [];
+    postJournalEntry(date, memo, validLines.map(l => ({ accountId: l.accountId, debit: l.debit, credit: l.credit })), null, acctSelectedTags('acctJeTags'));
+    acctLog('Journal entry created', `${memo || '(no memo)'} · ${acctMoney(totalDebit)}`);
+    acctJeDraftLines.length = 0;
     document.getElementById('acctJeMemo').value = '';
+    acctFillTagSelect('acctJeTags', []);
     save(); renderAcctJeLines(); renderAcctJournalEntries(); renderAcctTrialBalance(); renderAcctHome();
   });
   function renderAcctJournalEntries(){
@@ -14241,24 +15128,30 @@
     if(!list) return;
     const acc = acctData();
     list.innerHTML = acc.journalEntries.length ? '' : '<li class="empty">No journal entries yet.</li>';
-    [...acc.journalEntries].reverse().forEach(je => {
+    [...acc.journalEntries].reverse().slice(0, 100).forEach(je => {
       const li = document.createElement('li');
       const total = je.lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
+      const tags = (je.tagIds || []).map(id => acc.tags.find(t => t.id === id)).filter(Boolean).map(t => `<span class="acct-mini-chip" style="padding:1px 7px;">${escapeHtml(acctTagLabel(t))}</span>`).join(' ');
       li.innerHTML = `
         <div style="width:100%;">
           <div class="card-row-top">
-            <div class="card-bank">${escapeHtml(je.memo || '(no memo)')}${je.auto ? ' <span style="font-size:10px;color:var(--ink-soft);">(auto)</span>' : ''}</div>
+            <div class="card-bank">${escapeHtml(je.memo || '(no memo)')}${je.auto ? ' <span style="font-size:10px;color:var(--ink-soft);">(auto)</span>' : ''}${(je.reconciledAccounts || []).length ? ' <span style="font-size:10px;color:#1e8449;">✓ reconciled</span>' : ''}</div>
             <div class="tx-amount">${fmt(total)}</div>
           </div>
-          <div class="card-desc" style="margin-top:2px;">${escapeHtml(je.date)}</div>
+          <div class="card-desc" style="margin-top:2px;">${escapeHtml(je.date)} ${tags}</div>
           <div class="card-desc" style="margin-top:2px;">${je.lines.map(l => `${escapeHtml(acctAccountName(l.accountId))}: ${l.debit ? 'Dr ' + fmt(l.debit) : 'Cr ' + fmt(l.credit)}`).join(' · ')}</div>
           ${!je.auto ? `<div style="text-align:right; margin-top:6px;"><button class="del-btn" data-id="${je.id}">×</button></div>` : ''}
-        </div>
-      `;
+        </div>`;
       list.appendChild(li);
     });
+    if(acc.journalEntries.length > 100){ const li = document.createElement('li'); li.className = 'empty'; li.textContent = `Showing the latest 100 of ${acc.journalEntries.length} entries.`; list.appendChild(li); }
     list.querySelectorAll('.del-btn').forEach(el => el.addEventListener('click', () => {
-      acc.journalEntries = acc.journalEntries.filter(j => j.id !== el.dataset.id);
+      const je = acc.journalEntries.find(j => j.id === el.dataset.id);
+      if(!je) return;
+      if(!acctGuardLocked(je.date, 'This journal entry')) return;
+      if((je.reconciledAccounts || []).length){ alert('This entry has been reconciled against a bank statement and can\'t be deleted.'); return; }
+      acc.journalEntries = acc.journalEntries.filter(j => j.id !== je.id);
+      acctLog('Journal entry deleted', je.memo || '(no memo)');
       save(); renderAcctJournalEntries(); renderAcctTrialBalance(); renderAcctHome();
     }));
   }
@@ -14281,28 +15174,285 @@
     ` : '<div class="empty">No activity yet.</div>';
   }
 
-  // ---- REPORTS (P&L + Balance Sheet + Aged Receivables/Payables + export) ----
+  // ---- Tax rates ----
+  function renderAcctTaxRates(){
+    const wrap = document.getElementById('acctTaxList');
+    if(!wrap) return;
+    const acc = acctData();
+    wrap.innerHTML = acc.taxRates.map(t => `<span class="acct-mini-chip">${escapeHtml(t.name)} · ${t.rate}%<button type="button" data-id="${t.id}">×</button></span>`).join('') || '<span style="font-size:11.5px;color:var(--ink-soft);">No tax rates. Add one to use it on invoice and bill lines.</span>';
+    wrap.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', () => {
+      acc.taxRates = acc.taxRates.filter(t => t.id !== b.dataset.id);
+      save(); renderAcctTaxRates();
+    }));
+  }
+  const acctTaxAddBtn = document.getElementById('acctTaxAdd');
+  if(acctTaxAddBtn) acctTaxAddBtn.addEventListener('click', () => {
+    const name = document.getElementById('acctTaxName').value.trim();
+    const rate = Number(document.getElementById('acctTaxRate').value);
+    if(!name || !(rate >= 0)){ alert('Enter a name and a rate (0 or more).'); return; }
+    acctData().taxRates.push({ id: uid(), name, rate });
+    document.getElementById('acctTaxName').value = ''; document.getElementById('acctTaxRate').value = '';
+    save(); renderAcctTaxRates();
+  });
+
+  // ---- Reporting tags ----
+  function renderAcctTags(){
+    const wrap = document.getElementById('acctTagList');
+    const parentSel = document.getElementById('acctTagParent');
+    if(!wrap) return;
+    const acc = acctData();
+    wrap.innerHTML = acc.tags.map(t => `<span class="acct-mini-chip">${escapeHtml(acctTagLabel(t))}<button type="button" data-id="${t.id}">×</button></span>`).join('') || '<span style="font-size:11.5px;color:var(--ink-soft);">No tags yet.</span>';
+    wrap.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.id;
+      if(!confirm('Delete this tag? It will be removed from any documents and entries that use it (child tags become top-level).')) return;
+      acc.tags = acc.tags.filter(t => t.id !== id);
+      acc.tags.forEach(t => { if(t.parentId === id) t.parentId = null; });
+      acc.invoices.concat(acc.bills, acc.creditNotes, acc.vendorCredits, acc.journalEntries).forEach(d => { if(Array.isArray(d.tagIds)) d.tagIds = d.tagIds.filter(x => x !== id); });
+      save(); renderAcctTags();
+    }));
+    if(parentSel){
+      const keep = parentSel.value;
+      parentSel.innerHTML = '<option value="">Top-level tag</option>' + acc.tags.filter(t => !t.parentId).map(t => `<option value="${t.id}" ${t.id === keep ? 'selected' : ''}>Under: ${escapeHtml(t.name)}</option>`).join('');
+    }
+  }
+  const acctTagAddBtn = document.getElementById('acctTagAdd');
+  if(acctTagAddBtn) acctTagAddBtn.addEventListener('click', () => {
+    const name = document.getElementById('acctTagName').value.trim();
+    if(!name){ alert('Enter a tag name.'); return; }
+    acctData().tags.push({ id: uid(), name, parentId: document.getElementById('acctTagParent').value || null });
+    document.getElementById('acctTagName').value = '';
+    save(); renderAcctTags(); acctFillTagSelect('acctJeTags');
+  });
+
+  // ---- Period lock ----
+  function renderAcctLock(){
+    const status = document.getElementById('acctLockStatus');
+    if(!status) return;
+    const l = acctLockedThrough();
+    status.textContent = l ? `🔒 Locked through ${l}. Nothing dated on or before this can be added, edited or deleted.` : 'No period is locked.';
+  }
+  const acctLockBtn = document.getElementById('acctLockBtn');
+  if(acctLockBtn) acctLockBtn.addEventListener('click', () => {
+    if(!acctIsAdmin()){ alert('Only an admin can lock the books.'); return; }
+    const d = document.getElementById('acctLockDate').value;
+    if(!d){ alert('Pick the date to lock through.'); return; }
+    if(d > todayStr()){ alert('You can only lock through today or an earlier date.'); return; }
+    // Make sure depreciation for the period is already booked before closing it.
+    acctPostAllDepreciation(d);
+    acctData().settings.lockedThrough = d;
+    acctLog('Books locked', `through ${d}`);
+    save(); renderAcctAccountant(); renderAcctHome();
+  });
+  const acctUnlockBtn = document.getElementById('acctUnlockBtn');
+  if(acctUnlockBtn) acctUnlockBtn.addEventListener('click', () => {
+    if(!acctIsAdmin()){ alert('Only an admin can unlock the books.'); return; }
+    if(!acctLockedThrough()){ alert('Nothing is locked.'); return; }
+    if(!confirm('Unlock the books? Closed periods will become editable again.')) return;
+    acctLog('Books unlocked', `was locked through ${acctLockedThrough()}`);
+    acctData().settings.lockedThrough = '';
+    save(); renderAcctAccountant(); renderAcctHome();
+  });
+
+  // ---- Audit trail ----
+  function renderAcctAudit(){
+    const list = document.getElementById('acctAuditList');
+    if(!list) return;
+    const acc = acctData();
+    list.innerHTML = acc.activity.length ? '' : '<li class="empty">Nothing recorded yet.</li>';
+    [...acc.activity].reverse().slice(0, 60).forEach(a => {
+      const li = document.createElement('li');
+      li.innerHTML = `<div style="width:100%;"><div class="card-bank" style="font-size:12.5px;">${escapeHtml(a.action)}</div><div class="card-desc">${escapeHtml(a.detail)} · ${escapeHtml(a.user)} · ${escapeHtml(new Date(a.ts).toLocaleString())}</div></div>`;
+      list.appendChild(li);
+    });
+  }
+
+  // ---- BANKING (reconciliation) ----
+  let acctStmtRows = [];
+  function acctParseCsvLine(line){
+    const out = []; let cur = '', q = false;
+    for(let i = 0; i < line.length; i++){
+      const c = line[i];
+      if(q){ if(c === '"'){ if(line[i + 1] === '"'){ cur += '"'; i++; } else q = false; } else cur += c; }
+      else if(c === '"') q = true;
+      else if(c === ',' || c === ';' || c === '\t'){ out.push(cur.trim()); cur = ''; }
+      else cur += c;
+    }
+    out.push(cur.trim());
+    return out;
+  }
+  function acctNormalizeDate(s){
+    s = String(s || '').trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);
+    if(m){ const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+    const d = new Date(s);
+    return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+  }
+  function acctParseAmount(s){
+    let t = String(s || '').trim();
+    if(!t) return 0;
+    let neg = false;
+    if(/^\(.*\)$/.test(t)){ neg = true; t = t.slice(1, -1); }
+    t = t.replace(/[^0-9.\-]/g, '');
+    const n = parseFloat(t);
+    if(isNaN(n)) return 0;
+    return neg ? -Math.abs(n) : n;
+  }
+  function acctParseStatement(text){
+    const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if(!lines.length) return [];
+    const header = acctParseCsvLine(lines[0]).map(h => h.toLowerCase());
+    const hasHeader = header.some(h => /date|desc|amount|debit|credit|withdraw|deposit|narration|particular/.test(h));
+    const idx = { date: 0, desc: 1, amount: 2, debit: -1, credit: -1 };
+    if(hasHeader){
+      idx.date = idx.desc = idx.amount = -1;
+      header.forEach((h, i) => {
+        if(idx.date < 0 && /date/.test(h)) idx.date = i;
+        else if(idx.debit < 0 && /debit|withdraw/.test(h)) idx.debit = i;
+        else if(idx.credit < 0 && /credit|deposit/.test(h)) idx.credit = i;
+        else if(idx.amount < 0 && /amount/.test(h)) idx.amount = i;
+        else if(idx.desc < 0 && /desc|narration|particular|detail|memo|reference/.test(h)) idx.desc = i;
+      });
+    }
+    const rows = [];
+    lines.slice(hasHeader ? 1 : 0).forEach(line => {
+      const cols = acctParseCsvLine(line);
+      const date = acctNormalizeDate(cols[idx.date]);
+      if(!date) return;
+      let amount;
+      if(idx.amount >= 0) amount = acctParseAmount(cols[idx.amount]);
+      else amount = (idx.credit >= 0 ? Math.abs(acctParseAmount(cols[idx.credit])) : 0) - (idx.debit >= 0 ? Math.abs(acctParseAmount(cols[idx.debit])) : 0);
+      if(!amount) return;
+      rows.push({ id: uid(), date, description: idx.desc >= 0 ? (cols[idx.desc] || '') : '', amount: acctR2(amount), jeId: null, accept: true, done: false });
+    });
+    return rows;
+  }
+  function acctReconAccountId(){ const el = document.getElementById('acctReconAccount'); return el ? el.value : ''; }
+  function acctSignedForAccount(je, accountId){
+    return je.lines.filter(l => l.accountId === accountId).reduce((s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0);
+  }
+  function acctAutoMatch(){
+    const acc = acctData();
+    const accountId = acctReconAccountId();
+    const used = new Set();
+    acctStmtRows.forEach(r => { r.jeId = null; r.accept = true; r.done = false; });
+    acctStmtRows.forEach(r => {
+      const cands = acc.journalEntries.filter(je => !used.has(je.id) && !(je.reconciledAccounts || []).includes(accountId) && Math.abs(acctSignedForAccount(je, accountId) - r.amount) < 0.005 && Math.abs((new Date(je.date) - new Date(r.date)) / 86400000) <= 7);
+      cands.sort((a, b) => Math.abs(new Date(a.date) - new Date(r.date)) - Math.abs(new Date(b.date) - new Date(r.date)));
+      if(cands[0]){ r.jeId = cands[0].id; used.add(cands[0].id); }
+    });
+  }
+  function renderAcctBanking(){
+    const sel = document.getElementById('acctReconAccount');
+    if(!sel) return;
+    const acc = acctData();
+    const keep = sel.value;
+    const assets = acc.accounts.filter(a => a.type === 'Asset');
+    const cash = acc.accounts.find(a => a.systemKind === 'CASH');
+    sel.innerHTML = assets.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+    sel.value = keep && assets.some(a => a.id === keep) ? keep : (cash ? cash.id : (assets[0] ? assets[0].id : ''));
+    const accountId = sel.value;
+    let recTotal = 0, recCount = 0, unrecTotal = 0, unrecCount = 0;
+    acc.journalEntries.forEach(je => {
+      const signed = acctSignedForAccount(je, accountId);
+      if(!signed) return;
+      if((je.reconciledAccounts || []).includes(accountId)){ recTotal += signed; recCount++; } else { unrecTotal += signed; unrecCount++; }
+    });
+    const sum = document.getElementById('acctReconSummary');
+    if(sum) sum.innerHTML = `Reconciled: <strong>${fmt(recTotal)}</strong> (${recCount} entr${recCount === 1 ? 'y' : 'ies'}) · Not yet reconciled: <strong>${fmt(unrecTotal)}</strong> (${unrecCount})`;
+    const rowsEl = document.getElementById('acctReconRows');
+    const applyBtn = document.getElementById('acctReconApply');
+    if(!rowsEl) return;
+    if(!acctStmtRows.length){ rowsEl.innerHTML = '<div class="empty">Load a statement above to start matching.</div>'; if(applyBtn) applyBtn.style.display = 'none'; return; }
+    const offsetOptions = acc.accounts.filter(a => a.id !== accountId).map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+    rowsEl.innerHTML = acctStmtRows.map(r => {
+      const je = r.jeId ? acc.journalEntries.find(j => j.id === r.jeId) : null;
+      if(r.done) return `<div class="breakdown-row"><span class="label">${escapeHtml(r.date)} · ${escapeHtml(r.description)}</span><span style="color:#1e8449;">✓ ${fmt(r.amount)}</span></div>`;
+      if(je) return `<div class="breakdown-row"><span class="label"><label style="display:flex;gap:6px;align-items:flex-start;"><input type="checkbox" class="acct-recon-accept" data-id="${r.id}" ${r.accept ? 'checked' : ''}><span>${escapeHtml(r.date)} · ${escapeHtml(r.description)}<br><span style="color:var(--ink-soft);font-size:11px;">matches: ${escapeHtml(je.memo || '(no memo)')} (${escapeHtml(je.date)})</span></span></label></span><span>${fmt(r.amount)}</span></div>`;
+      return `<div class="breakdown-row" style="flex-wrap:wrap;gap:6px;"><span class="label">${escapeHtml(r.date)} · ${escapeHtml(r.description)} <span style="color:#9A6400;font-size:11px;">no match</span></span><span>${fmt(r.amount)}</span><span style="display:flex;gap:6px;width:100%;"><select class="who-select acct-recon-offset" data-id="${r.id}" style="flex:1;">${offsetOptions}</select><button type="button" class="edit-btn acct-recon-book" data-id="${r.id}">Book it</button></span></div>`;
+    }).join('');
+    const anyMatched = acctStmtRows.some(r => r.jeId && !r.done);
+    if(applyBtn) applyBtn.style.display = anyMatched ? '' : 'none';
+    rowsEl.querySelectorAll('.acct-recon-accept').forEach(cb => cb.addEventListener('change', () => { const r = acctStmtRows.find(x => x.id === cb.dataset.id); if(r) r.accept = cb.checked; }));
+    rowsEl.querySelectorAll('.acct-recon-book').forEach(btn => btn.addEventListener('click', () => {
+      const r = acctStmtRows.find(x => x.id === btn.dataset.id);
+      const offsetId = rowsEl.querySelector(`.acct-recon-offset[data-id="${btn.dataset.id}"]`).value;
+      if(!r || !offsetId) return;
+      if(!acctGuardLocked(r.date, 'This transaction')) return;
+      const jl = r.amount > 0
+        ? [{ accountId, debit: r.amount, credit: 0 }, { accountId: offsetId, debit: 0, credit: r.amount }]
+        : [{ accountId: offsetId, debit: -r.amount, credit: 0 }, { accountId, debit: 0, credit: -r.amount }];
+      const je = postJournalEntry(r.date, r.description || 'Bank transaction', jl, null, []);
+      je.reconciledAccounts = [accountId];
+      r.jeId = je.id; r.done = true;
+      acctLog('Bank transaction booked', `${r.description || ''} · ${acctMoney(r.amount)}`);
+      save(); renderAcctBanking(); renderAcctHome();
+    }));
+  }
+  const acctStmtFileEl = document.getElementById('acctStmtFile');
+  if(acctStmtFileEl) acctStmtFileEl.addEventListener('change', () => {
+    const f = acctStmtFileEl.files && acctStmtFileEl.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { document.getElementById('acctStmtText').value = String(reader.result || ''); };
+    reader.readAsText(f);
+  });
+  const acctReconAccountEl = document.getElementById('acctReconAccount');
+  if(acctReconAccountEl) acctReconAccountEl.addEventListener('change', () => { if(acctStmtRows.length) acctAutoMatch(); renderAcctBanking(); });
+  const acctStmtParseBtn = document.getElementById('acctStmtParse');
+  if(acctStmtParseBtn) acctStmtParseBtn.addEventListener('click', () => {
+    acctStmtRows = acctParseStatement(document.getElementById('acctStmtText').value);
+    if(!acctStmtRows.length){ alert('No transactions found. Check the columns (date, description, amount — or debit/credit) and try again.'); }
+    acctAutoMatch();
+    renderAcctBanking();
+  });
+  const acctReconApplyBtn = document.getElementById('acctReconApply');
+  if(acctReconApplyBtn) acctReconApplyBtn.addEventListener('click', () => {
+    const acc = acctData();
+    const accountId = acctReconAccountId();
+    let n = 0;
+    acctStmtRows.filter(r => r.jeId && r.accept && !r.done).forEach(r => {
+      const je = acc.journalEntries.find(j => j.id === r.jeId);
+      if(!je) return;
+      if(!(je.reconciledAccounts || []).includes(accountId)) je.reconciledAccounts.push(accountId);
+      r.done = true; n++;
+    });
+    if(n){ acctLog('Bank lines reconciled', `${n} line(s) on ${acctAccountName(accountId)}`); save(); }
+    renderAcctBanking(); renderAcctHome();
+  });
+
+  // ---- REPORTS (P&L, Profit by Item, Balance Sheet, Aging, export) ----
   function renderAcctReports(){
     const fromEl = document.getElementById('acctReportFrom');
     const toEl = document.getElementById('acctReportTo');
+    const tagEl = document.getElementById('acctReportTag');
     if(!fromEl || !toEl) return;
-    if(!fromEl.value) fromEl.value = todayStr().slice(0,8) + '01';
+    if(!fromEl.value) fromEl.value = todayStr().slice(0, 8) + '01';
     if(!toEl.value) toEl.value = todayStr();
-    const from = fromEl.value, to = toEl.value;
-    const pnl = computePnl(from, to);
-    const pnlBox = document.getElementById('acctPnl');
-    pnlBox.innerHTML = `
+    const acc = acctData();
+    if(tagEl){
+      const keep = tagEl.value;
+      tagEl.innerHTML = '<option value="">All (no tag filter)</option>' + acc.tags.map(t => `<option value="${t.id}" ${t.id === keep ? 'selected' : ''}>${escapeHtml(acctTagLabel(t))}</option>`).join('');
+    }
+    const from = fromEl.value, to = toEl.value, tagId = tagEl ? tagEl.value : '';
+    const pnl = computePnl(from, to, tagId || null);
+    document.getElementById('acctPnl').innerHTML = `
       <div style="font-weight:700;margin-bottom:4px;">Income</div>
-      ${pnl.incomeAccounts.filter(r => r.amount !== 0).map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.account.name)}</span><span>${fmt(r.amount)}</span></div>`).join('') || '<div class="empty">None</div>'}
+      ${pnl.incomeAccounts.filter(r => Math.abs(r.amount) > 0.004).map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.account.name)}</span><span>${fmt(r.amount)}</span></div>`).join('') || '<div class="empty">None</div>'}
       <div class="breakdown-row" style="border-top:1px solid var(--line);padding-top:4px;"><span class="label"><strong>Total income</strong></span><span><strong>${fmt(pnl.totalIncome)}</strong></span></div>
       <div style="font-weight:700;margin:10px 0 4px 0;">Expenses</div>
-      ${pnl.expenseAccounts.filter(r => r.amount !== 0).map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.account.name)}</span><span>${fmt(r.amount)}</span></div>`).join('') || '<div class="empty">None</div>'}
+      ${pnl.expenseAccounts.filter(r => Math.abs(r.amount) > 0.004).map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.account.name)}</span><span>${fmt(r.amount)}</span></div>`).join('') || '<div class="empty">None</div>'}
       <div class="breakdown-row" style="border-top:1px solid var(--line);padding-top:4px;"><span class="label"><strong>Total expenses</strong></span><span><strong>${fmt(pnl.totalExpense)}</strong></span></div>
       <div class="breakdown-row" style="margin-top:8px;"><span class="label"><strong>Net income</strong></span><span><strong style="color:${pnl.netIncome >= 0 ? '#1e8449' : 'var(--coral)'};">${fmt(pnl.netIncome)}</strong></span></div>
     `;
+    const pbi = computeProfitByItem(from, to, tagId || null);
+    document.getElementById('acctProfitByItem').innerHTML = pbi.length ? `
+      ${pbi.map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.name)} <span style="color:var(--ink-soft);font-size:11px;">(${r.qty} sold · ${r.margin.toFixed(0)}% margin)</span></span><span>${fmt(r.profit)}</span></div>`).join('')}
+      <div class="breakdown-row" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px;"><span class="label"><strong>Total profit</strong></span><span><strong>${fmt(pbi.reduce((s, r) => s + r.profit, 0))}</strong></span></div>
+    ` : '<div class="empty">No item sales in this period.</div>';
     const bs = computeBalanceSheet(to);
-    const bsBox = document.getElementById('acctBalanceSheet');
-    bsBox.innerHTML = `
+    document.getElementById('acctBalanceSheet').innerHTML = `
       <div style="font-weight:700;margin-bottom:4px;">Assets</div>
       ${bs.assets.filter(r => Math.abs(r.balance) > 0.005).map(r => `<div class="breakdown-row"><span class="label">${escapeHtml(r.account.name)}</span><span>${fmt(r.balance)}</span></div>`).join('') || '<div class="empty">None</div>'}
       <div class="breakdown-row" style="border-top:1px solid var(--line);padding-top:4px;"><span class="label"><strong>Total assets</strong></span><span><strong>${fmt(bs.totalAssets)}</strong></span></div>
@@ -14315,77 +15465,71 @@
       <div class="breakdown-row" style="border-top:1px solid var(--line);padding-top:4px;"><span class="label"><strong>Total equity</strong></span><span><strong>${fmt(bs.totalEquity)}</strong></span></div>
       <div class="breakdown-row" style="margin-top:8px;"><span class="label"><strong>Liabilities + Equity</strong></span><span><strong>${fmt(bs.totalLiabilities + bs.totalEquity)}</strong></span></div>
     `;
-    const acc = acctData();
     renderAgedTable(document.getElementById('acctAgedReceivables'), acc.invoices, 'customer', 'invoiceNo');
     renderAgedTable(document.getElementById('acctAgedPayables'), acc.bills, 'vendor', 'billNo');
   }
-  const acctReportFromEl = document.getElementById('acctReportFrom');
-  const acctReportToEl = document.getElementById('acctReportTo');
-  if(acctReportFromEl) acctReportFromEl.addEventListener('input', renderAcctReports);
-  if(acctReportToEl) acctReportToEl.addEventListener('input', renderAcctReports);
+  ['acctReportFrom', 'acctReportTo', 'acctReportTag'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('input', renderAcctReports); });
+  function acctExportBundle(){
+    const from = document.getElementById('acctReportFrom').value;
+    const to = document.getElementById('acctReportTo').value || todayStr();
+    const tagId = document.getElementById('acctReportTag').value || null;
+    return { from, to, tagId, pnl: computePnl(from, to, tagId), bs: computeBalanceSheet(to), pbi: computeProfitByItem(from, to, tagId) };
+  }
   const acctExportPdfBtn = document.getElementById('acctExportPdf');
   if(acctExportPdfBtn) acctExportPdfBtn.addEventListener('click', () => {
-    const from = document.getElementById('acctReportFrom').value, to = document.getElementById('acctReportTo').value || todayStr();
-    const pnl = computePnl(from, to);
-    const bs = computeBalanceSheet(to);
+    const { from, to, tagId, pnl, bs, pbi } = acctExportBundle();
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    doc.setFillColor(31, 111, 99);
-    doc.rect(0, 0, 210, 24, 'F');
-    doc.setFontSize(16); doc.setTextColor(255,255,255);
-    doc.text(state.appTitle || 'Household Ledger', 14, 15);
-    doc.setFontSize(10); doc.text('Accounting Report', 196, 15, { align: 'right' });
-    doc.setFontSize(11); doc.setTextColor(0);
-    doc.text(`Period: ${from || 'start'} to ${to}`, 14, 34);
-    let y = 44;
-    const fields = [{key:'Account',label:'Account'},{key:'Type',label:'Type'},{key:'Amount',label:'Amount'}];
-    doc.setFontSize(12); doc.text('Profit & Loss', 14, y); y += 2;
-    const pnlRecords = [
-      ...pnl.incomeAccounts.filter(r => r.amount !== 0).map(r => ({ Account: r.account.name, Type: 'Income', Amount: fmt(r.amount) })),
-      ...pnl.expenseAccounts.filter(r => r.amount !== 0).map(r => ({ Account: r.account.name, Type: 'Expense', Amount: fmt(r.amount) })),
-      { Account: 'Net income', Type: '', Amount: fmt(pnl.netIncome) }
-    ];
-    let table = rowsPdfTable(pnlRecords, fields);
-    doc.autoTable({ startY: y + 2, head: table.head, body: table.body, styles: { fontSize: 8.5 }, headStyles: { fillColor: [31,111,99], textColor: [255,255,255] } });
+    acctPdfHeader(doc, 'ACCOUNTING REPORT', '');
+    doc.setFontSize(11);
+    const tag = tagId ? acctData().tags.find(t => t.id === tagId) : null;
+    doc.text(`Period: ${from || 'start'} to ${to}${tag ? ' · Tag: ' + acctTagLabel(tag) : ''}`, 14, 36);
+    const fields = [{ key: 'Account', label: 'Account' }, { key: 'Type', label: 'Type' }, { key: 'Amount', label: 'Amount' }];
+    const style = { styles: { fontSize: 8.5 }, headStyles: { fillColor: [31, 111, 99], textColor: [255, 255, 255] } };
+    let y = 46;
+    doc.setFontSize(12); doc.text('Profit & Loss', 14, y);
+    let table = rowsPdfTable([
+      ...pnl.incomeAccounts.filter(r => Math.abs(r.amount) > 0.004).map(r => ({ Account: r.account.name, Type: 'Income', Amount: acctMoney(r.amount) })),
+      ...pnl.expenseAccounts.filter(r => Math.abs(r.amount) > 0.004).map(r => ({ Account: r.account.name, Type: 'Expense', Amount: acctMoney(r.amount) })),
+      { Account: 'Net income', Type: '', Amount: acctMoney(pnl.netIncome) }
+    ], fields);
+    doc.autoTable({ startY: y + 3, head: table.head, body: table.body, ...style });
     y = doc.lastAutoTable.finalY + 10;
-    doc.setFontSize(12); doc.text('Balance Sheet', 14, y); y += 2;
-    const bsRecords = [
-      ...bs.assets.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Asset', Amount: fmt(r.balance) })),
-      ...bs.liabilities.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Liability', Amount: fmt(r.balance) })),
-      ...bs.equity.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Equity', Amount: fmt(r.balance) })),
-      { Account: 'Retained earnings', Type: 'Equity', Amount: fmt(bs.retainedEarnings) }
-    ];
-    table = rowsPdfTable(bsRecords, fields);
-    doc.autoTable({ startY: y + 2, head: table.head, body: table.body, styles: { fontSize: 8.5 }, headStyles: { fillColor: [31,111,99], textColor: [255,255,255] } });
+    doc.setFontSize(12); doc.text('Profit by Item', 14, y);
+    table = rowsPdfTable(pbi.map(r => ({ Item: r.name, Qty: r.qty, Revenue: acctMoney(r.revenue), Cost: acctMoney(r.cost), Profit: acctMoney(r.profit) })), [{ key: 'Item', label: 'Item' }, { key: 'Qty', label: 'Qty' }, { key: 'Revenue', label: 'Revenue' }, { key: 'Cost', label: 'Cost' }, { key: 'Profit', label: 'Profit' }]);
+    doc.autoTable({ startY: y + 3, head: table.head, body: table.body, ...style });
+    y = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(12); doc.text('Balance Sheet', 14, y);
+    table = rowsPdfTable([
+      ...bs.assets.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Asset', Amount: acctMoney(r.balance) })),
+      ...bs.liabilities.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Liability', Amount: acctMoney(r.balance) })),
+      ...bs.equity.filter(r => Math.abs(r.balance) > 0.005).map(r => ({ Account: r.account.name, Type: 'Equity', Amount: acctMoney(r.balance) })),
+      { Account: 'Retained earnings', Type: 'Equity', Amount: acctMoney(bs.retainedEarnings) }
+    ], fields);
+    doc.autoTable({ startY: y + 3, head: table.head, body: table.body, ...style });
     doc.save(`Accounting_Report_${to}.pdf`);
   });
   const acctExportExcelBtn = document.getElementById('acctExportExcel');
   if(acctExportExcelBtn) acctExportExcelBtn.addEventListener('click', () => {
-    const from = document.getElementById('acctReportFrom').value, to = document.getElementById('acctReportTo').value || todayStr();
-    const pnl = computePnl(from, to);
-    const bs = computeBalanceSheet(to);
+    const { pnl, bs, pbi, to } = acctExportBundle();
     const acc = acctData();
     const wb = XLSX.utils.book_new();
-    const pnlAoa = [['Account','Type','Amount'],
-      ...pnl.incomeAccounts.filter(r => r.amount !== 0).map(r => [r.account.name, 'Income', r.amount]),
-      ...pnl.expenseAccounts.filter(r => r.amount !== 0).map(r => [r.account.name, 'Expense', r.amount]),
-      ['Net income', '', pnl.netIncome]];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pnlAoa), 'P&L');
-    const bsAoa = [['Account','Type','Amount'],
+    const sheet = (name, aoa) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+    sheet('P&L', [['Account', 'Type', 'Amount'],
+      ...pnl.incomeAccounts.filter(r => Math.abs(r.amount) > 0.004).map(r => [r.account.name, 'Income', r.amount]),
+      ...pnl.expenseAccounts.filter(r => Math.abs(r.amount) > 0.004).map(r => [r.account.name, 'Expense', r.amount]),
+      ['Net income', '', pnl.netIncome]]);
+    sheet('Profit by Item', [['Item', 'Qty', 'Revenue', 'Cost', 'Profit', 'Margin %'], ...pbi.map(r => [r.name, r.qty, r.revenue, r.cost, r.profit, Number(r.margin.toFixed(1))])]);
+    sheet('Balance Sheet', [['Account', 'Type', 'Amount'],
       ...bs.assets.filter(r => Math.abs(r.balance) > 0.005).map(r => [r.account.name, 'Asset', r.balance]),
       ...bs.liabilities.filter(r => Math.abs(r.balance) > 0.005).map(r => [r.account.name, 'Liability', r.balance]),
       ...bs.equity.filter(r => Math.abs(r.balance) > 0.005).map(r => [r.account.name, 'Equity', r.balance]),
-      ['Retained earnings', 'Equity', bs.retainedEarnings]];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bsAoa), 'Balance Sheet');
-    const arAoa = [['Invoice','Customer','Due','Outstanding'],
-      ...acc.invoices.filter(i => i.status !== 'Draft' && (Number(i.amountPaid)||0) < Number(i.total) - 0.005).map(i => [i.invoiceNo, i.customer, i.dueDate || i.date, Number(i.total) - (Number(i.amountPaid)||0)])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(arAoa), 'Aged Receivables');
-    const apAoa = [['Bill','Vendor','Due','Outstanding'],
-      ...acc.bills.filter(b => b.status !== 'Draft' && (Number(b.amountPaid)||0) < Number(b.total) - 0.005).map(b => [b.billNo, b.vendor, b.dueDate || b.date, Number(b.total) - (Number(b.amountPaid)||0)])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(apAoa), 'Aged Payables');
+      ['Retained earnings', 'Equity', bs.retainedEarnings]]);
+    sheet('Aged Receivables', [['Invoice', 'Customer', 'Due', 'Outstanding'], ...acc.invoices.filter(i => acctIsPosted(i) && acctOutstanding(i) > 0.005).map(i => [i.invoiceNo, i.customer, i.dueDate || i.date, acctOutstanding(i)])]);
+    sheet('Aged Payables', [['Bill', 'Vendor', 'Due', 'Outstanding'], ...acc.bills.filter(b => acctIsPosted(b) && acctOutstanding(b) > 0.005).map(b => [b.billNo, b.vendor, b.dueDate || b.date, acctOutstanding(b)])]);
+    sheet('Audit trail', [['When', 'Who', 'Action', 'Detail'], ...acc.activity.map(a => [a.ts, a.user, a.action, a.detail])]);
     XLSX.writeFile(wb, `Accounting_Report_${to}.xlsx`);
   });
-
 
   function renderAll(){
     updateTxPersonVisibilityCountry('UAE');
