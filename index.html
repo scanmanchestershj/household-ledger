@@ -3208,6 +3208,35 @@
         <div id="myAccountMsg" style="grid-column:1/-1; font-size:12px; color:var(--teal-dark); display:none;">Saved.</div>
       </div>
 
+      <div class="section-title" id="encSectionTitle" style="display:none;">Data encryption</div>
+      <div id="encSection" style="display:none;">
+        <div id="encStatusLine" style="font-size:12.5px;margin-bottom:10px;"></div>
+
+        <div id="encSetupBox">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">
+            Turning this on encrypts <strong>everything</strong> in this household's data — on this device, before it's ever sent anywhere — so Supabase only ever stores unreadable ciphertext. This is separate from your login password.
+            <br><br><strong style="color:var(--coral);">If you forget this passphrase, this data is gone forever. There is no reset, no recovery, and no one — including us — can get it back for you.</strong>
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;margin-bottom:10px;">
+            <input type="checkbox" id="encUnderstandCheck" style="margin-top:2px;">
+            <span>I understand losing this passphrase means permanently losing this household's data, with no way to recover it.</span>
+          </label>
+          <input type="password" id="encSetupPass" placeholder="New encryption passphrase (12+ characters)" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px;border-radius:10px;border:1px solid var(--line);margin-bottom:8px;">
+          <input type="password" id="encSetupPassConfirm" placeholder="Confirm passphrase" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;">
+          <div id="encSetupMsg" style="font-size:12px;color:var(--coral);min-height:16px;margin-bottom:8px;"></div>
+          <button type="button" class="add-btn full-width" id="encEnableBtn">Enable end-to-end encryption</button>
+        </div>
+
+        <div id="encChangeBox" style="display:none;">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Changing the passphrase needs the current one, to prove you actually have it.</div>
+          <input type="password" id="encChangeCurrent" placeholder="Current passphrase" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px;border-radius:10px;border:1px solid var(--line);margin-bottom:8px;">
+          <input type="password" id="encChangeNew" placeholder="New passphrase (12+ characters)" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px;border-radius:10px;border:1px solid var(--line);margin-bottom:8px;">
+          <input type="password" id="encChangeNewConfirm" placeholder="Confirm new passphrase" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;">
+          <div id="encChangeMsg" style="font-size:12px;color:var(--coral);min-height:16px;margin-bottom:8px;"></div>
+          <button type="button" class="add-btn full-width" id="encChangeBtn">Change passphrase</button>
+        </div>
+      </div>
+
       <div class="section-title">Appearance</div>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Pick whatever color feels right — this changes instantly and applies for everyone in this household.</div>
       <div id="themeSwatches" class="theme-swatch-row"></div>
@@ -3267,6 +3296,103 @@
   });
   let householdId = null;   // the signed-in user's household
   let myProfile = null;     // the signed-in user's own profiles row
+
+  // ---- End-to-end encryption of all household data (fully opt-in) ----
+  // When enabled, the ENTIRE household_data blob is encrypted client-side
+  // with AES-256-GCM before it's ever sent to Supabase, so the server only
+  // ever stores ciphertext — nothing in it is readable server-side, by
+  // Supabase, or by anyone who gets direct database access. The key is
+  // derived (PBKDF2, 250,000 iterations) from a passphrase that is NEVER
+  // sent anywhere and never written to localStorage/sessionStorage; it
+  // lives only as an in-memory CryptoKey for as long as this tab is open.
+  // Deliberately, there is NO recovery path of any kind: if the passphrase
+  // is lost, that data is permanently unreadable, by design.
+  let encKey = null;    // in-memory CryptoKey; null = locked / not enabled
+  let encSalt = '';     // this household's PBKDF2 salt — not secret, stored server-side
+  const ENC_PBKDF2_ITERATIONS = 250000;
+  function encAvailable(){ return !!(window.crypto && window.crypto.subtle); }
+  function encBytesToB64(bytes){
+    const arr = new Uint8Array(bytes);
+    let binary = '';
+    const chunk = 0x8000; // avoid stack overflow from spreading huge arrays
+    for(let i = 0; i < arr.length; i += chunk) binary += String.fromCharCode.apply(null, arr.subarray(i, i + chunk));
+    return btoa(binary);
+  }
+  function encB64ToBytes(b64){ return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+  function encNewSaltB64(){ return encBytesToB64(crypto.getRandomValues(new Uint8Array(16))); }
+  async function encDeriveKey(passphrase, saltB64){
+    const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: encB64ToBytes(saltB64), iterations: ENC_PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      baseKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+  }
+  async function encEncryptObject(obj, key){
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+    return { enc: true, v: 1, iv: encBytesToB64(iv), ct: encBytesToB64(ciphertext) };
+  }
+  async function encDecryptObject(wrapper, key){
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: encB64ToBytes(wrapper.iv) }, key, encB64ToBytes(wrapper.ct));
+    return JSON.parse(new TextDecoder().decode(plainBuf));
+  }
+  function ensureEncUnlockModalEl(){
+    let el = document.getElementById('encUnlockModal');
+    if(el) return el;
+    el = document.createElement('div');
+    el.id = 'encUnlockModal';
+    el.style.cssText = 'position:fixed;inset:0;z-index:7000;background:rgba(10,14,20,0.92);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:24px;';
+    el.innerHTML = `
+      <div style="background:var(--card,#fff);border-radius:16px;padding:28px 24px;max-width:340px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">
+        <div style="font-size:28px;margin-bottom:6px;">🔐</div>
+        <div style="font-weight:700;font-size:16px;margin-bottom:4px;">Unlock your data</div>
+        <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:16px;">This household's data is end-to-end encrypted. Enter your encryption passphrase to continue — this is separate from your login password, and no one can reset it for you.</div>
+        <input type="password" id="encUnlockInput" autocomplete="off" placeholder="Encryption passphrase" style="width:100%;box-sizing:border-box;font-size:15px;padding:10px;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;">
+        <div id="encUnlockError" style="font-size:12px;color:var(--coral);min-height:16px;margin-bottom:10px;"></div>
+        <button type="button" id="encUnlockBtn" class="add-btn full-width" style="margin-bottom:10px;">Unlock</button>
+        <button type="button" id="encUnlockSignOutBtn" style="background:none;border:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;cursor:pointer;width:100%;">Not now — sign out</button>
+      </div>
+    `;
+    document.body.appendChild(el);
+    return el;
+  }
+  // Resolves with the decrypted object once the correct passphrase is
+  // entered (retries happen inside this modal, nothing fails on a typo);
+  // only rejects if the person explicitly clicks "sign out".
+  function waitForEncUnlock(saltB64, wrapper){
+    return new Promise((resolve, reject) => {
+      const el = ensureEncUnlockModalEl();
+      const input = document.getElementById('encUnlockInput');
+      const err = document.getElementById('encUnlockError');
+      const btn = document.getElementById('encUnlockBtn');
+      const outBtn = document.getElementById('encUnlockSignOutBtn');
+      input.value = ''; err.textContent = '';
+      el.style.display = 'flex';
+      setTimeout(() => input.focus(), 50);
+      let settled = false;
+      async function tryUnlock(){
+        const pass = input.value;
+        if(!pass){ err.textContent = 'Enter your passphrase.'; return; }
+        btn.disabled = true; err.textContent = 'Unlocking…';
+        try{
+          const key = await encDeriveKey(pass, saltB64);
+          const decrypted = await encDecryptObject(wrapper, key);
+          encKey = key;
+          cleanup(); resolve(decrypted);
+        }catch(e){
+          btn.disabled = false;
+          err.textContent = 'Incorrect passphrase, or this data is corrupted.';
+          input.value = ''; input.focus();
+        }
+      }
+      function cleanup(){ if(settled) return; settled = true; el.style.display = 'none'; btn.removeEventListener('click', tryUnlock); outBtn.removeEventListener('click', onOut); input.removeEventListener('keydown', onKey); }
+      function onOut(){ cleanup(); reject(new Error('Signed out — encryption passphrase was not entered.')); }
+      function onKey(e){ if(e.key === 'Enter') tryUnlock(); }
+      btn.addEventListener('click', tryUnlock);
+      outBtn.addEventListener('click', onOut);
+      input.addEventListener('keydown', onKey);
+    });
+  }
 
   // ---- Theme (choosable colors, avoiding the default green/blue) ----
   const THEMES = {
@@ -4009,9 +4135,19 @@
     if(!profile) throw new Error('No household found for this account yet. Sign up or join a household first.');
     myProfile = profile;
     householdId = profile.household_id;
+    const { data: hh, error: hhErr } = await sb.from('households').select('enc_salt').eq('id', householdId).maybeSingle();
+    if(hhErr) throw hhErr;
+    encSalt = (hh && hh.enc_salt) || '';
     const { data: hd, error: hdErr } = await sb.from('household_data').select('data').eq('household_id', householdId).maybeSingle();
     if(hdErr) throw hdErr;
-    const parsed = (hd && hd.data) ? hd.data : {};
+    let parsed = (hd && hd.data) ? hd.data : {};
+    if(parsed && parsed.enc){
+      if(!encSalt) throw new Error('This household\'s data is encrypted but has no encryption salt on record — something is wrong. Contact support before doing anything else.');
+      if(!encAvailable()) throw new Error('Your browser doesn\'t support the encryption this household uses (Web Crypto). Try a current version of Chrome, Safari, Firefox, or Edge.');
+      parsed = await waitForEncUnlock(encSalt, parsed); // throws only if the person clicks "sign out"
+    } else {
+      encKey = null;
+    }
     state = Object.assign(state, parsed);
     state.settings = Object.assign({currency:'AED'}, parsed.settings || {});
     seedDefaults();
@@ -4034,10 +4170,15 @@
     if(!householdId || typeof sb.channel !== 'function') return;
     if(realtimeChannel){ try{ sb.removeChannel(realtimeChannel); }catch(e){} }
     realtimeChannel = sb.channel('household_data_' + householdId)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'household_data', filter: 'household_id=eq.' + householdId }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'household_data', filter: 'household_id=eq.' + householdId }, async (payload) => {
         const isOwnEcho = (Date.now() - lastLocalSaveAt) < 4000; // our own save() just landed — no toast needed
-        const newData = payload.new && payload.new.data;
+        let newData = payload.new && payload.new.data;
         if(!newData) return;
+        if(newData.enc){
+          if(!encKey) return; // this tab hasn't unlocked the passphrase yet — the next full load will pick up the latest version
+          try{ newData = await encDecryptObject(newData, encKey); }
+          catch(e){ console.warn('Could not decrypt realtime update (stale key or corrupted payload)', e); return; }
+        }
         if(!isOwnEcho){
           try{
             const oldGroceryCount = Object.values(state.userData || {}).reduce((s,u) => s + ((u.groceries||[]).length), 0);
@@ -4181,7 +4322,8 @@
       return;
     }
     try{
-      const { error } = await sb.from('household_data').upsert({ household_id: householdId, data: state, updated_at: new Date().toISOString() });
+      const payload = encKey ? await encEncryptObject(state, encKey) : state;
+      const { error } = await sb.from('household_data').upsert({ household_id: householdId, data: payload, updated_at: new Date().toISOString() });
       if(error){
         offlinePendingSync = true;
         setOfflineBanner(true, true);
@@ -4780,6 +4922,8 @@
     viewingUserId = null;
     householdId = null;
     myProfile = null;
+    encKey = null; encSalt = ''; // the encryption key only ever lives in memory — drop it on sign-out
+    if(realtimeChannel){ try{ sb.removeChannel(realtimeChannel); }catch(e){} realtimeChannel = null; }
     document.getElementById('appRoot').style.display = 'none';
     document.getElementById('loginGate').style.display = '';
     document.getElementById('loginEmail').value = '';
@@ -11733,7 +11877,102 @@
     document.getElementById('viewAdminDataBtn').addEventListener('click', () => { viewingUserId = adminUser.id; renderAll(); });
   }
 
+  // ---- Data encryption admin UI ----
+  function encDownloadRecoveryFile(passphrase){
+    const blob = new Blob([
+      `${state.appTitle || 'Household Ledger'} — encryption passphrase\n`,
+      `Saved: ${new Date().toLocaleString()}\n\n`,
+      `${passphrase}\n\n`,
+      `Keep this somewhere safe (a password manager is ideal). Anyone with this\n`,
+      `passphrase can read this household's data. If it's lost, the data cannot\n`,
+      `be recovered by anyone — not by signing in again, not by Supabase, not by us.\n`
+    ], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'encryption-passphrase.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  function renderEncSection(){
+    const title = document.getElementById('encSectionTitle');
+    const section = document.getElementById('encSection');
+    if(!title || !section) return;
+    const isAdmin = !!(currentUser && currentUser.role === 'admin');
+    title.style.display = isAdmin ? '' : 'none';
+    section.style.display = isAdmin ? '' : 'none';
+    if(!isAdmin) return;
+    const enabled = !!encSalt;
+    document.getElementById('encSetupBox').style.display = enabled ? 'none' : '';
+    document.getElementById('encChangeBox').style.display = enabled ? '' : 'none';
+    document.getElementById('encStatusLine').innerHTML = enabled
+      ? '🔐 <strong>Enabled</strong> — this household\'s data is end-to-end encrypted.'
+      : '🔓 <strong>Not enabled</strong> — data is protected by encryption at rest and in transit (standard), but is readable server-side.';
+  }
+  const encEnableBtn = document.getElementById('encEnableBtn');
+  if(encEnableBtn) encEnableBtn.addEventListener('click', async () => {
+    const msg = document.getElementById('encSetupMsg');
+    msg.style.color = 'var(--coral)';
+    if(!encAvailable()){ msg.textContent = 'Your browser doesn\'t support the Web Crypto API needed for this.'; return; }
+    if(!document.getElementById('encUnderstandCheck').checked){ msg.textContent = 'Check the box confirming you understand this can\'t be undone.'; return; }
+    const pass = document.getElementById('encSetupPass').value;
+    const confirm2 = document.getElementById('encSetupPassConfirm').value;
+    if(pass.length < 12){ msg.textContent = 'Use at least 12 characters — longer is better.'; return; }
+    if(pass !== confirm2){ msg.textContent = 'Passphrases don\'t match.'; return; }
+    encEnableBtn.disabled = true;
+    msg.style.color = 'var(--ink-soft)'; msg.textContent = 'Enabling…';
+    try{
+      const salt = encNewSaltB64();
+      const key = await encDeriveKey(pass, salt);
+      const { error: hhErr } = await sb.from('households').update({ enc_salt: salt }).eq('id', householdId);
+      if(hhErr) throw hhErr;
+      encSalt = salt; encKey = key;
+      await save(); // save() now encrypts automatically because encKey is set
+      encDownloadRecoveryFile(pass);
+      document.getElementById('encSetupPass').value = ''; document.getElementById('encSetupPassConfirm').value = '';
+      msg.style.color = '#1e8449'; msg.textContent = 'Encryption enabled. A copy of your passphrase was just downloaded — store it somewhere safe.';
+      renderEncSection();
+    }catch(e){
+      msg.style.color = 'var(--coral)'; msg.textContent = 'Could not enable encryption: ' + (e.message || e);
+      encSalt = ''; encKey = null;
+    }finally{ encEnableBtn.disabled = false; }
+  });
+  const encChangeBtn = document.getElementById('encChangeBtn');
+  if(encChangeBtn) encChangeBtn.addEventListener('click', async () => {
+    const msg = document.getElementById('encChangeMsg');
+    msg.style.color = 'var(--coral)';
+    const current = document.getElementById('encChangeCurrent').value;
+    const next = document.getElementById('encChangeNew').value;
+    const nextConfirm = document.getElementById('encChangeNewConfirm').value;
+    if(!current){ msg.textContent = 'Enter the current passphrase.'; return; }
+    if(next.length < 12){ msg.textContent = 'New passphrase: use at least 12 characters.'; return; }
+    if(next !== nextConfirm){ msg.textContent = 'New passphrases don\'t match.'; return; }
+    encChangeBtn.disabled = true;
+    msg.style.color = 'var(--ink-soft)'; msg.textContent = 'Verifying current passphrase…';
+    try{
+      const { data: hd, error: hdErr } = await sb.from('household_data').select('data').eq('household_id', householdId).maybeSingle();
+      if(hdErr) throw hdErr;
+      const currentWrapper = hd && hd.data;
+      if(!currentWrapper || !currentWrapper.enc) throw new Error('No encrypted data found to verify against.');
+      const oldKey = await encDeriveKey(current, encSalt);
+      await encDecryptObject(currentWrapper, oldKey); // throws if the current passphrase is wrong
+      msg.textContent = 'Re-encrypting…';
+      const newSalt = encNewSaltB64();
+      const newKey = await encDeriveKey(next, newSalt);
+      const { error: hhErr } = await sb.from('households').update({ enc_salt: newSalt }).eq('id', householdId);
+      if(hhErr) throw hhErr;
+      encSalt = newSalt; encKey = newKey;
+      await save();
+      encDownloadRecoveryFile(next);
+      ['encChangeCurrent', 'encChangeNew', 'encChangeNewConfirm'].forEach(id => { document.getElementById(id).value = ''; });
+      msg.style.color = '#1e8449'; msg.textContent = 'Passphrase changed. A copy of the new one was just downloaded.';
+    }catch(e){
+      msg.style.color = 'var(--coral)';
+      msg.textContent = e && e.name === 'OperationError' ? 'Current passphrase is incorrect.' : ('Could not change passphrase: ' + (e.message || e));
+    }finally{ encChangeBtn.disabled = false; }
+  });
+
   function renderAdmin(){
+    renderEncSection(); // must run even for non-admins so a prior admin's view doesn't stay visible after a different person signs in on the same tab
     if(!currentUser || currentUser.role !== 'admin') return;
     renderAdminRequests();
     const list = document.getElementById('userList');
