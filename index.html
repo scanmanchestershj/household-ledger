@@ -535,6 +535,7 @@
     <div class="top-row">
       <div class="eyebrow" id="dateLine">—</div>
       <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="add-btn ghost privacy-eye" id="globalPrivacyBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1;">🙈</button>
         <button type="button" class="add-btn ghost" id="darkModeToggleBtn" title="Switch to dark mode" aria-label="Switch to dark mode" style="padding:6px 10px; font-size:14px; line-height:1;">🌙</button>
         <select class="currency-picker" id="currencyPicker">
           <option value="AED">AED — UAE Dirham</option>
@@ -667,6 +668,7 @@
     <section class="cards-module" id="cardsModule" style="display:none;">
       <div class="cards-layout">
         <div class="cards-main">
+          <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;color:var(--ink-soft);">Amounts <button type="button" class="add-btn ghost privacy-eye" style="padding:6px 10px;font-size:14px;line-height:1;">🙈</button></div>
           <div class="form-grid">
             <div>
               <label class="field-label">Country</label>
@@ -1405,7 +1407,7 @@
           <option value="UAE">Resident Country report</option>
           <option value="India">Home Country report</option>
         </select>
-        <button type="button" class="add-btn ghost" id="privacyToggleBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1; flex:0 0 auto;">🙈</button>
+        <button type="button" class="add-btn ghost privacy-eye" id="privacyToggleBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1; flex:0 0 auto;">🙈</button>
       </div>
 
       <div class="report-grid">
@@ -1933,6 +1935,11 @@
           <button type="button" class="accordion-header"><span>Monthly closing summary</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
             <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Auto-calculated closing summary for every month you've logged — opening balance, income, expenses and closing balance, month by month.</div>
+            <div class="form-grid" style="margin-bottom:8px;align-items:end;">
+              <div><label class="field-label">From date</label><input type="date" id="uaeMcFrom"></div>
+              <div><label class="field-label">To date</label><input type="date" id="uaeMcTo"></div>
+              <div style="display:flex;gap:6px;"><button type="button" class="add-btn ghost" id="uaeMcClear" style="padding:8px 10px;font-size:12px;">All months</button><button type="button" class="add-btn ghost privacy-eye" style="padding:6px 10px;font-size:14px;line-height:1;">🙈</button></div>
+            </div>
             <div id="uaeMonthlyClosing"></div>
           </div>
         </div>
@@ -2514,6 +2521,11 @@
           <button type="button" class="accordion-header"><span>Monthly closing summary</span><span class="accordion-arrow">▸</span></button>
           <div class="accordion-body">
             <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">Auto-calculated closing summary for every month you've logged — opening balance, income, expenses and closing balance, month by month.</div>
+            <div class="form-grid" style="margin-bottom:8px;align-items:end;">
+              <div><label class="field-label">From date</label><input type="date" id="indiaMcFrom"></div>
+              <div><label class="field-label">To date</label><input type="date" id="indiaMcTo"></div>
+              <div style="display:flex;gap:6px;"><button type="button" class="add-btn ghost" id="indiaMcClear" style="padding:8px 10px;font-size:12px;">All months</button><button type="button" class="add-btn ghost privacy-eye" style="padding:6px 10px;font-size:14px;line-height:1;">🙈</button></div>
+            </div>
             <div id="indiaMonthlyClosing"></div>
           </div>
         </div>
@@ -3531,10 +3543,24 @@
   function setPrivacyMode(on){
     privacyMode = on;
     localStorage.setItem('shb_privacy_mode', on ? '1' : '0');
-    const btn = document.getElementById('privacyToggleBtn');
-    if(btn){ btn.textContent = on ? '🙈' : '👁️'; btn.title = on ? 'Show amounts' : 'Hide amounts'; btn.setAttribute('aria-label', btn.title); }
+    syncPrivacyButtons();
     renderPrivacySensitiveSections();
   }
+  // Every eye button on screen (top bar, Reports, Cards, Monthly closing) toggles the same
+  // global privacy mode, so amounts can be shown or hidden from any tab.
+  function syncPrivacyButtons(){
+    document.querySelectorAll('.privacy-eye').forEach(btn => {
+      btn.textContent = privacyMode ? '🙈' : '👁️';
+      btn.title = privacyMode ? 'Show amounts' : 'Hide amounts';
+      btn.setAttribute('aria-label', btn.title);
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.privacy-eye');
+    if(!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    setPrivacyMode(!privacyMode);
+  });
   // Toggling the eye only needs to redraw sections that actually display money
   // amounts (Budget, Overview, Report, UAE, India, Health). Chores, groceries,
   // cards list, devices, admin panels etc. never read privacyMode, so a full
@@ -3548,6 +3574,9 @@
     renderUAE();
     renderIndia();
     renderHealth();
+    // Cards, Devices and Groceries also display amounts via fmt(), so redraw them too —
+    // otherwise values stayed stuck on the hidden/old state after tapping the eye.
+    [renderCards, renderDevices, renderGroceries].forEach(fn => { try{ fn(); }catch(err){ console.warn('privacy redraw failed', err); } });
   }
 
   // ---- Per-field eye toggles: individual masked values that are hidden by
@@ -4236,13 +4265,7 @@
   }
 
   async function initApp(){
-    const privacyBtn = document.getElementById('privacyToggleBtn');
-    if(privacyBtn){
-      privacyBtn.textContent = privacyMode ? '🙈' : '👁️';
-      privacyBtn.title = privacyMode ? 'Show amounts' : 'Hide amounts';
-      privacyBtn.setAttribute('aria-label', privacyBtn.title);
-      privacyBtn.addEventListener('click', () => setPrivacyMode(!privacyMode));
-    }
+    syncPrivacyButtons();
     const darkBtn = document.getElementById('darkModeToggleBtn');
     if(darkBtn){
       darkBtn.textContent = darkMode ? '☀️' : '🌙';
@@ -5674,37 +5697,63 @@
     document.getElementById('overviewMonthNext').addEventListener('click', () => shiftOverviewMonth(1));
   })();
 
-  // ---- Monthly closing summary: auto-computed, month by month, running balance ----
-  function computeMonthlyClosing(countryKey){
+  // ---- Monthly closing summary: auto-computed, month by month, running balance.
+  // Optional From/To dates clip the summary: opening balance is the running balance
+  // just before From, and months are limited to transactions inside the range. ----
+  const monthlyClosingRange = { UAE: { from: '', to: '' }, India: { from: '', to: '' } };
+  function computeMonthlyClosing(countryKey, from, to){
     const data = currentData().countries[countryKey];
     const txs = [...(data.transactions || [])].filter(t => t.date).sort((a,b) => a.date.localeCompare(b.date));
     const months = [...new Set(txs.map(t => monthKey(t.date)))].sort();
+    const sums = (list) => {
+      const income = list.filter(t => t.type === 'income' && !t.linkedRemitId).reduce((s,t) => s + Number(t.amount), 0);
+      const remit = list.filter(t => t.linkedRemitId).reduce((s,t) => s + Number(t.amount), 0);
+      const expense = list.filter(t => t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
+      const lending = list.filter(t => t.type === 'lending').reduce((s,t) => s + Number(t.amount), 0);
+      const borrowing = list.filter(t => t.type === 'borrowing').reduce((s,t) => s + Number(t.amount), 0);
+      return { income, remit, expense, lending, borrowing, net: income + remit - expense - lending };
+    };
+    const ranged = !!(from || to);
     let running = 0;
     const rows = [];
     months.forEach(mk => {
-      const opening = running;
       const inMonth = txs.filter(t => monthKey(t.date) === mk);
-      const income = inMonth.filter(t => t.type === 'income' && !t.linkedRemitId).reduce((s,t) => s + Number(t.amount), 0);
-      const remit = inMonth.filter(t => t.linkedRemitId).reduce((s,t) => s + Number(t.amount), 0);
-      const expense = inMonth.filter(t => t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
-      const lending = inMonth.filter(t => t.type === 'lending').reduce((s,t) => s + Number(t.amount), 0);
-      const borrowing = inMonth.filter(t => t.type === 'borrowing').reduce((s,t) => s + Number(t.amount), 0);
-      const closing = opening + income + remit - expense - lending;
-      running = closing;
-      rows.push({ mk, opening, income, remit, expense, lending, borrowing, closing });
+      const before = from ? inMonth.filter(t => t.date < from) : [];
+      const inRange = inMonth.filter(t => (!from || t.date >= from) && (!to || t.date <= to));
+      const all = sums(inMonth);
+      if(!ranged || inRange.length){
+        const v = ranged ? sums(inRange) : all;
+        const opening = running + (ranged ? sums(before).net : 0);
+        rows.push({ mk, opening, income: v.income, remit: v.remit, expense: v.expense, lending: v.lending, borrowing: v.borrowing, closing: opening + v.net });
+      }
+      running += all.net;
     });
+    if(ranged && rows.length){
+      rows.totals = rows.reduce((t, r) => ({
+        opening: t.opening, income: t.income + r.income, remit: t.remit + r.remit, expense: t.expense + r.expense,
+        lending: t.lending + r.lending, borrowing: t.borrowing + r.borrowing, closing: r.closing
+      }), { opening: rows[0].opening, income: 0, remit: 0, expense: 0, lending: 0, borrowing: 0, closing: 0 });
+    }
     return rows.reverse();
   }
   function renderMonthlyClosing(countryKey){
     const prefix = budgetPrefix(countryKey);
     const el = document.getElementById(prefix + 'MonthlyClosing');
     if(!el) return;
-    const rows = computeMonthlyClosing(countryKey);
-    if(rows.length === 0){ el.innerHTML = '<div class="empty">Nothing to close yet — add some transactions first.</div>'; return; }
+    const rng = monthlyClosingRange[countryKey];
+    const rows = computeMonthlyClosing(countryKey, rng.from, rng.to);
+    if(rows.length === 0){ el.innerHTML = '<div class="empty">' + ((rng.from || rng.to) ? 'No transactions in the selected dates.' : 'Nothing to close yet — add some transactions first.') + '</div>'; return; }
+    const remitTh = countryKey === 'India' ? '<th>Remit. in</th>' : '';
+    const tot = rows.totals;
     el.innerHTML = `
+      ${tot ? `<div class="report-table-wrap" style="margin-bottom:8px;"><table class="report-table"><thead><tr><th>Selected dates</th><th>Opening</th><th>Income</th>${remitTh}<th>Expenses</th><th>Lending</th><th>Closing</th></tr></thead><tbody><tr>
+        <td><strong>${escapeHtml((rng.from || 'Start') + ' → ' + (rng.to || 'Today'))}</strong></td>
+        <td>${budgetFmt(tot.opening, countryKey)}</td><td>${budgetFmt(tot.income, countryKey)}</td>
+        ${countryKey === 'India' ? `<td>${budgetFmt(tot.remit, countryKey)}</td>` : ''}
+        <td>${budgetFmt(tot.expense, countryKey)}</td><td>${budgetFmt(tot.lending, countryKey)}</td><td><strong>${budgetFmt(tot.closing, countryKey)}</strong></td></tr></tbody></table></div>` : ''}
       <div class="report-table-wrap">
       <table class="report-table">
-        <thead><tr><th>Month</th><th>Opening</th><th>Income</th>${countryKey === 'India' ? '<th>Remit. in</th>' : ''}<th>Expenses</th><th>Lending</th><th>Closing</th></tr></thead>
+        <thead><tr><th>Month</th><th>Opening</th><th>Income</th>${remitTh}<th>Expenses</th><th>Lending</th><th>Closing</th></tr></thead>
         <tbody>
           ${rows.map(r => `<tr>
             <td>${escapeHtml(monthLabel(r.mk))}</td>
@@ -5720,6 +5769,17 @@
       </div>
     `;
   }
+  ['UAE', 'India'].forEach(countryKey => {
+    const pre = countryKey === 'UAE' ? 'uae' : 'india';
+    const fromEl = document.getElementById(pre + 'McFrom'), toEl = document.getElementById(pre + 'McTo'), clr = document.getElementById(pre + 'McClear');
+    const sync = () => {
+      monthlyClosingRange[countryKey] = { from: fromEl.value || '', to: toEl.value || '' };
+      renderMonthlyClosing(countryKey);
+    };
+    if(fromEl) fromEl.addEventListener('change', sync);
+    if(toEl) toEl.addEventListener('change', sync);
+    if(clr) clr.addEventListener('click', () => { fromEl.value = ''; toEl.value = ''; sync(); });
+  });
   function cardMapOptionsHtml(countryKey){
     const cards = [...(currentData().cards || [])].sort((a,b) => `${b.date||''}T${b.time||'00:00'}`.localeCompare(`${a.date||''}T${a.time||'00:00'}`));
     return '<option value="">— Choose a card —</option>' + cards.map(c => {
