@@ -1469,6 +1469,15 @@
         </div>
       </div>
 
+      <div class="accordion" data-key="yearly-plan">
+        <button type="button" class="accordion-header"><span>📅 Yearly budget plan <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(cumulative, pick any dates)</span></span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Plan the whole year per category, then pick any date range to see planned vs actual spend building up over time, how far ahead or behind you are, and where you're heading.</div>
+          <div id="ypForm"></div>
+          <div id="ypResults"></div>
+        </div>
+      </div>
+
       <div class="accordion" data-key="money-coach">
         <button type="button" class="accordion-header"><span>💬 Money Coach — ask about your budget</span><span class="accordion-arrow">▸</span></button>
         <div class="accordion-body">
@@ -10518,6 +10527,166 @@
     renderCategoryBudgets(r, scope, curFmt);
   });
 
+  // ---- Yearly budget plan: a yearly cap per category (same Tea/Lunch/Dinner/Groceries/
+  // Others taxonomy and card-spend basis as Category budgets above), spread across months
+  // by optional weights, shown as cumulative planned-vs-actual for any selectable dates. ----
+  const YP_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ypUI = { year: '', from: '', to: '', preset: 'ytd' };
+  function ypPad(n){ return String(n).padStart(2, '0'); }
+  function ypYmd(d){ return d.getFullYear() + '-' + ypPad(d.getMonth() + 1) + '-' + ypPad(d.getDate()); }
+  function ypParse(s){ const a = String(s).split('-').map(Number); return new Date(a[0], (a[1] || 1) - 1, a[2] || 1); }
+  function ypKey(scope, year, cat){ return 'yp_' + (scope || 'all') + '_' + year + '_' + cat; }
+  function ypFmtFor(scope){ return scope ? (amt) => fmtCountry(amt, scope) : fmt; }
+  function ypApplyPreset(p){
+    const y = Number(ypUI.year), today = ypParse(todayStr());
+    const ref = today.getFullYear() === y ? today : new Date(y, 11, 31);
+    let f, t;
+    if(p === 'month'){ f = new Date(y, ref.getMonth(), 1); t = new Date(y, ref.getMonth() + 1, 0); }
+    else if(p === 'quarter'){ const q = Math.floor(ref.getMonth() / 3) * 3; f = new Date(y, q, 1); t = new Date(y, q + 3, 0); }
+    else if(p === 'year'){ f = new Date(y, 0, 1); t = new Date(y, 11, 31); }
+    else { p = 'ytd'; f = new Date(y, 0, 1); t = ref; }
+    ypUI.preset = p; ypUI.from = ypYmd(f); ypUI.to = ypYmd(t);
+  }
+  function renderYearlyPlan(scope, curFmt){
+    const formEl = document.getElementById('ypForm');
+    const resEl = document.getElementById('ypResults');
+    if(!formEl || !resEl) return;
+    scope = scope || '';
+    curFmt = curFmt || ypFmtFor(scope);
+    if(!state.settings.yearlyBudgets) state.settings.yearlyBudgets = {};
+    if(!Array.isArray(state.settings.yearlyWeights) || state.settings.yearlyWeights.length !== 12) state.settings.yearlyWeights = Array(12).fill(1);
+    const thisYear = ypParse(todayStr()).getFullYear();
+    if(!ypUI.year){ ypUI.year = String(thisYear); ypApplyPreset('ytd'); }
+    const weights = state.settings.yearlyWeights;
+    const customW = weights.some(x => Number(x) !== 1);
+
+    const sig = (scope || 'all') + '|' + ypUI.year;
+    if(formEl.dataset.sig !== sig){
+      formEl.dataset.sig = sig;
+      const yrs = [thisYear - 2, thisYear - 1, thisYear, thisYear + 1];
+      formEl.innerHTML = `
+        <div class="form-grid" style="margin-bottom:8px;">
+          <div><label class="field-label">Budget year</label><select id="ypYear">${yrs.map(y => `<option value="${y}" ${String(y) === ypUI.year ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+          <div><label class="field-label">Range</label><select id="ypPreset">
+            <option value="month">This month</option><option value="quarter">This quarter</option>
+            <option value="ytd">Year to date</option><option value="year">Full year</option><option value="custom">Custom dates</option></select></div>
+          <div><label class="field-label">From</label><input type="date" id="ypFrom"></div>
+          <div><label class="field-label">To</label><input type="date" id="ypTo"></div>
+        </div>
+        <div style="font-size:12px;color:var(--ink-soft);margin:6px 0;">Yearly cap per category for ${ypUI.year} — leave blank to skip.</div>
+        <div class="form-grid" style="margin-bottom:8px;">${CATEGORY_BUDGET_CATS.map(cat => `
+          <div><label class="field-label">${escapeHtml(cat)}</label>
+          <input type="number" step="1" placeholder="e.g. 5000" data-yp-cat="${escapeHtml(cat)}" value="${state.settings.yearlyBudgets[ypKey(scope, ypUI.year, cat)] || ''}"></div>`).join('')}
+        </div>
+        <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:6px 0;"><input type="checkbox" id="ypCustomW" ${customW ? 'checked' : ''}> Custom monthly weights (heavier months get a bigger share)</label>
+        <div id="ypWeights" class="form-grid" style="margin-bottom:8px;${customW ? '' : 'display:none;'}">${YP_MONTHS.map((m, i) => `
+          <div><label class="field-label">${m}</label><input type="number" step="0.1" min="0" data-yp-w="${i}" value="${weights[i]}"></div>`).join('')}
+        </div>`;
+    }
+    const setVal = (id, v) => { const el = document.getElementById(id); if(el && el.value !== v) el.value = v; };
+    setVal('ypPreset', ypUI.preset); setVal('ypFrom', ypUI.from); setVal('ypTo', ypUI.to);
+
+    if(!formEl.dataset.bound){
+      formEl.dataset.bound = '1';
+      const onEdit = (e) => {
+        const sc = reportScopeVal(), t = e.target;
+        if(t.id === 'ypYear'){ ypUI.year = t.value; ypApplyPreset(ypUI.preset === 'custom' ? 'ytd' : ypUI.preset); }
+        else if(t.id === 'ypPreset'){ ypApplyPreset(t.value === 'custom' ? 'ytd' : t.value); if(t.value === 'custom') ypUI.preset = 'custom'; }
+        else if(t.id === 'ypFrom' || t.id === 'ypTo'){
+          if(t.id === 'ypFrom') ypUI.from = t.value; else ypUI.to = t.value;
+          ypUI.preset = 'custom';
+        }
+        else if(t.dataset.ypCat){ state.settings.yearlyBudgets[ypKey(sc, ypUI.year, t.dataset.ypCat)] = parseFloat(t.value) || 0; save(); }
+        else if(t.dataset.ypW !== undefined){ state.settings.yearlyWeights[Number(t.dataset.ypW)] = parseFloat(t.value) || 0; save(); }
+        else if(t.id === 'ypCustomW'){
+          document.getElementById('ypWeights').style.display = t.checked ? '' : 'none';
+          if(!t.checked){
+            state.settings.yearlyWeights = Array(12).fill(1); save();
+            formEl.querySelectorAll('[data-yp-w]').forEach(i => { i.value = 1; });
+          }
+        }
+        else return;
+        renderYearlyPlan(sc, ypFmtFor(sc));
+      };
+      formEl.addEventListener('input', onEdit);
+      formEl.addEventListener('change', onEdit);
+    }
+
+    // ---- Compute ----
+    const f = ypParse(ypUI.from), t = ypParse(ypUI.to), today = ypParse(todayStr());
+    if(isNaN(f) || isNaN(t) || f > t){ resEl.innerHTML = '<div class="empty">Pick a valid From / To range.</div>'; return; }
+    const cats = CATEGORY_BUDGET_CATS;
+    const sw = weights.reduce((s, x) => s + (Number(x) || 0), 0) || 12;
+    const spendByDay = {};
+    const mapped = mappedCardIds();
+    const scopeCountryName = scope === 'UAE' ? state.countryConfig.country1.name : (scope === 'India' ? state.countryConfig.country2.name : null);
+    const cardsAll = scopeCountryName ? currentData().cards.filter(c => (c.country || 'United Arab Emirates') === scopeCountryName) : currentData().cards;
+    cardsAll.forEach(c => {
+      if(!c.date || mapped.has(c.id)) return;
+      const label = (c.desc || '').trim();
+      const cat = cats.includes(label) ? label : 'Others';
+      if(!spendByDay[c.date]) spendByDay[c.date] = {};
+      spendByDay[c.date][cat] = (spendByDay[c.date][cat] || 0) + Number(c.amount || 0);
+    });
+    const tot = {}; cats.forEach(c => { tot[c] = { plan: 0, act: 0 }; });
+    const cp = [], ca = [];
+    let p = 0, a = 0, n = 0, el = 0, planToDate = 0;
+    for(let d = new Date(f); d <= t; d.setDate(d.getDate() + 1)){
+      n++;
+      const dm = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const sp = spendByDay[ypYmd(d)] || {};
+      let dp = 0, da = 0;
+      cats.forEach(cat => {
+        const yearly = Number(state.settings.yearlyBudgets[ypKey(scope, d.getFullYear(), cat)]) || 0;
+        const pl = yearly * ((Number(weights[d.getMonth()]) || 0) / sw) / dm;
+        tot[cat].plan += pl; dp += pl;
+        if(d <= today){ const ac = sp[cat] || 0; tot[cat].act += ac; da += ac; }
+      });
+      p += dp; cp.push(p);
+      if(d <= today){ a += da; ca.push(a); el = n; planToDate = p; }
+    }
+    const proj = el ? (a / el) * n : 0;
+    const diff = a - planToDate;
+    const hasPlan = p > 0;
+
+    // ---- Render ----
+    const kpi = (label, val, color) => `<div class="breakdown-row"><span class="label">${label}</span><span><strong${color ? ` style="color:var(${color});"` : ''}>${val}</strong></span></div>`;
+    let html = '';
+    if(!hasPlan) html += '<div class="empty">Set a yearly cap for at least one category above to see your plan.</div>';
+    html += kpi('Planned for this range', curFmt(p))
+      + kpi('Actual so far', curFmt(a))
+      + kpi('Remaining of plan', curFmt(p - a), (p - a) < 0 ? '--coral' : '--teal-dark')
+      + (el ? kpi(diff > 0 ? 'Over plan to date by' : 'Under plan to date by', curFmt(Math.abs(diff)), diff > 0 ? '--coral' : '--teal-dark') : '')
+      + (el ? kpi('Projected for the range at this pace', curFmt(proj), proj > p && hasPlan ? '--coral' : '--teal-dark') : '');
+
+    const W = 640, H = 240, L = 10, B = 22, T = 18, R = 10;
+    const mx = Math.max(p, a, proj, 1) * 1.05;
+    const X = i => L + (n > 1 ? i / (n - 1) : 0) * (W - L - R);
+    const Y = v => H - B - (v / mx) * (H - B - T);
+    const path = arr => arr.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join('');
+    let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px;" role="img" aria-label="Cumulative planned vs actual spend">`;
+    svg += `<line x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--paper-deep)"/>`;
+    svg += `<text x="${L}" y="${T - 6}" font-size="10" fill="var(--ink-soft)">${escapeHtml(curFmt(mx / 1.05))}</text>`;
+    svg += `<text x="${L}" y="${H - 6}" font-size="10" fill="var(--ink-soft)">${ypUI.from}</text><text x="${W - R}" y="${H - 6}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${ypUI.to}</text>`;
+    svg += `<path d="${path(cp)}" fill="none" stroke="var(--ink-soft)" stroke-width="2" stroke-dasharray="6 4"/>`;
+    if(el){
+      svg += `<path d="${path(ca)}" fill="none" stroke="var(--teal-dark)" stroke-width="2.5"/>`;
+      if(el < n) svg += `<path d="M${X(el - 1).toFixed(1)} ${Y(a).toFixed(1)}L${X(n - 1).toFixed(1)} ${Y(proj).toFixed(1)}" fill="none" stroke="var(--teal-dark)" stroke-width="2" stroke-dasharray="2 4"/>`;
+    }
+    svg += '</svg><div style="font-size:11px;color:var(--ink-soft);">Solid: actual · Dashed: plan · Dotted: projection at current pace</div>';
+    html += svg;
+
+    html += '<div style="overflow-x:auto;margin-top:10px;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="text-align:right;color:var(--ink-soft);font-size:11px;"><th style="text-align:left;padding:4px;">Category</th><th style="padding:4px;">Planned</th><th style="padding:4px;">Actual</th><th style="padding:4px;">Remaining</th><th style="padding:4px;min-width:90px;">Used</th></tr>';
+    cats.forEach(cat => {
+      const x = tot[cat]; if(x.plan <= 0 && x.act <= 0) return;
+      const u = x.plan > 0 ? x.act / x.plan : (x.act > 0 ? 1.01 : 0);
+      const cls = u > 1 ? 'over' : (u > 0.8 ? 'warn' : '');
+      html += `<tr style="text-align:right;border-top:1px solid var(--paper-deep);"><td style="text-align:left;padding:5px 4px;">${escapeHtml(cat)}</td><td style="padding:5px 4px;">${curFmt(x.plan)}</td><td style="padding:5px 4px;">${curFmt(x.act)}</td><td style="padding:5px 4px;${x.plan - x.act < 0 ? 'color:var(--coral);' : ''}">${curFmt(x.plan - x.act)}</td><td style="padding:5px 4px;"><div class="catbudget-track"><div class="catbudget-fill ${cls}" style="width:${Math.min(100, u * 100)}%"></div></div></td></tr>`;
+    });
+    html += '</table></div><div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">Actuals use card spend (same basis as Category budgets above). Each category\'s yearly cap is spread by month weight, then prorated by day for partial months.</div>';
+    resEl.innerHTML = html;
+  }
+
   function renderReport(){
     populateReportMonths();
     populateDueBankFilter();
@@ -10543,6 +10712,7 @@
 
     renderOverspendCheck(r, scope, curFmt);
     renderCategoryBudgets(r, scope, curFmt);
+    try{ renderYearlyPlan(scope, curFmt); }catch(err){ console.error('Yearly plan render failed', err); }
     renderSpendingAnomalies(scope, curFmt);
 
     const maxVal = Math.max(r.income, r.totalOutflow, 1);
