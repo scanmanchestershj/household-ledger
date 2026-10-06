@@ -5916,6 +5916,17 @@
     const dueLabel = document.getElementById(prefix + 'TxDueLabel');
     const sourceWrap = document.getElementById(prefix + 'TxBorrowSourceWrap');
     sourceWrap.style.display = type === 'borrowing' ? '' : 'none';
+    // Own spend / Returnable only applies to money going out, so hide it for Income
+    // and reset it so an income entry can never be saved as "returnable".
+    const spendForWrap = document.getElementById(prefix + 'TxSpendForWrap');
+    if(spendForWrap){
+      const isIncome = type === 'income';
+      spendForWrap.style.display = isIncome ? 'none' : '';
+      if(isIncome){
+        const sf = document.getElementById(prefix + 'TxSpendFor'); if(sf) sf.value = 'own';
+        const rw = document.getElementById(prefix + 'TxReturnNameWrap'); if(rw) rw.style.display = 'none';
+      }
+    }
     const purposeWrap = document.getElementById(prefix + 'TxPurposeWrap');
     if(purposeWrap) purposeWrap.style.display = type === 'borrowing' ? '' : 'none';
     if(type !== 'borrowing'){
@@ -6447,7 +6458,7 @@
     const existingRecurGroup = curEditId ? (data.transactions.find(x=>x.id===curEditId)||{}).recurringGroupId : null;
     const timeEl = document.getElementById(prefix + 'TxTime');
     const spendForEl = document.getElementById(prefix + 'TxSpendFor');
-    const spendForVal = spendForEl ? spendForEl.value : 'own';
+    const spendForVal = (spendForEl && type.value !== 'income') ? spendForEl.value : 'own';
     const returnSplits = spendForVal === 'returnable' ? collectReturnRows(countryKey) : [];
     const returnNameVal = returnSplits.map(r => r.name).join(', ');
     const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnSplits, returnName: returnNameVal };
