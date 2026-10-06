@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yearly Budget Plan</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--tx:#1B2A4A;--mut:#68739a;--ac:#1B2A4A;--pl:#8e9bbd;--ok:#1d8f5a;--bad:#cf3f3f;--bd:#dfe3ee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1424;--card:#172038;--tx:#e8ecf7;--mut:#93a0c4;--ac:#86abff;--pl:#5a6890;--bd:#28335a;--ok:#46c98a;--bad:#ff7b7b}}
+:root[data-theme="dark"]{--bg:#0e1424;--card:#172038;--tx:#e8ecf7;--mut:#93a0c4;--ac:#86abff;--pl:#5a6890;--bd:#28335a;--ok:#46c98a;--bad:#ff7b7b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 2px}h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--mut);margin:0 0 14px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+input,select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px 9px;min-width:0}
+button{font:inherit;cursor:pointer;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px 11px}
+button.on{background:var(--ac);color:var(--card);border-color:var(--ac)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.k{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
+.k b{display:block;font-size:19px;font-variant-numeric:tabular-nums}.k span{font-size:12px;color:var(--mut)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}
+th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--bd);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{color:var(--mut);font-weight:600;font-size:12px}
+.bar{height:6px;background:var(--bd);border-radius:3px;min-width:70px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}
+svg{width:100%;height:auto;display:block}
+details summary{cursor:pointer;font-weight:600}
+.w{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px}.w input{width:100%}
+.note{font-size:12px;color:var(--mut);margin-top:8px}
+</style></head><body><main>
+<h1>Yearly budget plan</h1>
+<p class="sub">Cumulative planned vs actual spend for any date range.</p>
+
+<div class="card">
+ <div class="row">
+  <label>Budget year<select id="year"></select></label>
+  <label>From<input type="date" id="from"></label>
+  <label>To<input type="date" id="to"></label>
+  <button data-p="month">This month</button><button data-p="quarter">This quarter</button><button data-p="ytd">Year to date</button><button data-p="year">Full year</button>
+ </div>
+</div>
+
+<div class="card">
+ <details><summary>Yearly budget per category</summary>
+  <div class="row" style="margin-top:10px" id="budgets"></div>
+  <div class="row" style="margin-top:10px">
+   <label>Currency<input id="cur" size="5"></label>
+   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="custom"> Custom monthly weights (e.g. heavier months)</label>
+   <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="sample"> Use sample spending data</label>
+  </div>
+  <div class="w" id="weights" hidden></div>
+  <p class="note">Each category's yearly budget is spread across months by weight (all 1 = even), then prorated by day for partial months.</p>
+ </details>
+</div>
+
+<div class="kpis" id="kpis"></div>
+<div class="card" style="margin-top:12px"><h2>Cumulative spend</h2><div id="chart"></div>
+ <div class="note">Solid line: actual. Dashed: plan. Dotted: projection at the current pace.</div></div>
+<div class="card"><h2>By category</h2><div class="scroll"><table id="tbl"></table></div></div>
+
+<script>
+const CATS=['Tea','Lunch','Dinner','Groceries','Others'];
+const D0={year:new Date().getFullYear(),from:'',to:'',cur:'AED',budget:{Tea:600,Lunch:3000,Dinner:4000,Groceries:9000,Others:5000},w:Array(12).fill(1),custom:false,sample:true};
+let S=Object.assign({},D0);
+try{const s=localStorage.getItem('ybp');if(s)S=Object.assign({},D0,JSON.parse(s))}catch(e){}
+const $=id=>document.getElementById(id),pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const P=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
+const dim=(y,m)=>new Date(y,m+1,0).getDate();
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+const save=()=>{try{localStorage.setItem('ybp',JSON.stringify(S))}catch(e){}};
+
+/* ADAPTER: replace this with your app's real transactions: [{date:'YYYY-MM-DD',category:'Tea',amount:12.5}] */
+function getExpenses(){
+ if(!S.sample)return[];
+ const out=[],base={Tea:600,Lunch:3000,Dinner:4000,Groceries:9000,Others:5000};let seed=7;
+ const r=()=>(seed=(seed*9301+49297)%233280)/233280;
+ const y=S.year,end=new Date(Math.min(new Date(y,11,31),new Date()));
+ for(let d=new Date(y,0,1);d<=end;d.setDate(d.getDate()+1))
+  CATS.forEach(c=>{if(r()<.55){const avg=base[c]/365/.55*1.08;out.push({date:ymd(d),category:c,amount:avg*(.3+1.4*r())})}});
+ return out;
+}
+
+function calc(){
+ const f=P(S.from),t=P(S.to),today=new Date();today.setHours(0,0,0,0);
+ const sw=S.w.reduce((a,b)=>a+(+b||0),0)||12,ex=getExpenses(),act={};
+ ex.forEach(e=>{(act[e.date]=act[e.date]||{})[e.category]=((act[e.date]||{})[e.category]||0)+e.amount});
+ const tot=Object.fromEntries(CATS.map(c=>[c,{plan:0,act:0}])),cp=[],ca=[];let p=0,a=0,pT=0,aT=0,el=0,n=0;
+ for(let d=new Date(f);d<=t;d.setDate(d.getDate()+1)){
+  n++;const m=d.getMonth(),dm_=dim(d.getFullYear(),m);let dp=0,da=0;
+  CATS.forEach(c=>{const pl=(+S.budget[c]||0)*(S.w[m]/sw)/dm_;tot[c].plan+=pl;dp+=pl;
+   const ac=(act[ymd(d)]||{})[c]||0;if(d<=today){tot[c].act+=ac;da+=ac}});
+  p+=dp;cp.push(p);
+  if(d<=today){a+=da;ca.push(a);el=n;pT=p}
+ }
+ aT=a;return{n,cp,ca,tot,plan:p,act:aT,planToDate:pT,el,proj:el?aT/el*n:0};
+}
+
+function render(){
+ const R=calc(),cur=S.cur,sgn=R.act-R.planToDate;
+ $('kpis').innerHTML=[
+  ['Planned (range)',fmt(R.plan)+' '+cur,''],
+  ['Actual so far',fmt(R.act)+' '+cur,''],
+  ['Remaining',fmt(R.plan-R.act)+' '+cur,R.plan-R.act<0?'bad':'ok'],
+  [R.el?(sgn<=0?'Under plan to date':'Over plan to date'):'Not started',R.el?fmt(Math.abs(sgn))+' '+cur:'-',sgn>0?'bad':'ok'],
+  ['Projected for range',R.el?fmt(R.proj)+' '+cur:'-',R.proj>R.plan?'bad':'ok']
+ ].map(k=>`<div class="k"><span>${k[0]}</span><b class="${k[2]}">${k[1]}</b></div>`).join('');
+ // chart
+ const W=640,H=250,L=48,B=24,T=10,Rr=10,mx=Math.max(R.plan,R.proj,R.act,1)*1.05;
+ const X=i=>L+(R.n>1?i/(R.n-1):0)*(W-L-Rr),Y=v=>H-B-(v/mx)*(H-B-T);
+ const path=arr=>arr.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join('');
+ let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative planned vs actual">`;
+ for(let i=0;i<=4;i++){const v=mx*i/4,y=Y(v);s+=`<line x1="${L}" x2="${W-Rr}" y1="${y}" y2="${y}" stroke="var(--bd)"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--mut)">${fmt(v)}</text>`}
+ s+=`<text x="${L}" y="${H-6}" font-size="10" fill="var(--mut)">${S.from}</text><text x="${W-Rr}" y="${H-6}" text-anchor="end" font-size="10" fill="var(--mut)">${S.to}</text>`;
+ s+=`<path d="${path(R.cp)}" fill="none" stroke="var(--pl)" stroke-width="2" stroke-dasharray="6 4"/>`;
+ if(R.el){s+=`<path d="${path(R.ca)}" fill="none" stroke="var(--ac)" stroke-width="2.5"/>`;
+  if(R.el<R.n)s+=`<path d="M${X(R.el-1)} ${Y(R.act)}L${X(R.n-1)} ${Y(R.proj)}" stroke="var(--ac)" stroke-width="2" stroke-dasharray="2 4" fill="none"/><line x1="${X(R.el-1)}" x2="${X(R.el-1)}" y1="${T}" y2="${H-B}" stroke="var(--mut)" stroke-dasharray="2 3"/>`}
+ $('chart').innerHTML=s+'</svg>';
+ // table
+ let h='<tr><th>Category</th><th>Yearly</th><th>Planned</th><th>Actual</th><th>Remaining</th><th>Used</th></tr>';
+ CATS.forEach(c=>{const t=R.tot[c],u=t.plan?t.act/t.plan:0;
+  h+=`<tr><td>${c}</td><td>${fmt(+S.budget[c]||0)}</td><td>${fmt(t.plan)}</td><td>${fmt(t.act)}</td><td class="${t.plan-t.act<0?'bad':''}">${fmt(t.plan-t.act)}</td><td><div class="bar"><i style="width:${Math.min(u,1)*100}%;${u>1?'background:var(--bad)':''}"></i></div>${Math.round(u*100)}%</td></tr>`});
+ const yt=CATS.reduce((a,c)=>a+(+S.budget[c]||0),0);
+ h+=`<tr><td><b>Total</b></td><td><b>${fmt(yt)}</b></td><td><b>${fmt(R.plan)}</b></td><td><b>${fmt(R.act)}</b></td><td><b>${fmt(R.plan-R.act)}</b></td><td></td></tr>`;
+ $('tbl').innerHTML=h;save();
+}
+
+function preset(p){
+ const n=new Date(),y=S.year,cap=d=>d>new Date(y,11,31)?new Date(y,11,31):d;
+ const ref=n.getFullYear()===y?n:new Date(y,11,31);let f,t;
+ if(p==='month'){f=new Date(y,ref.getMonth(),1);t=new Date(y,ref.getMonth()+1,0)}
+ else if(p==='quarter'){const q=Math.floor(ref.getMonth()/3)*3;f=new Date(y,q,1);t=new Date(y,q+3,0)}
+ else if(p==='ytd'){f=new Date(y,0,1);t=cap(ref)}
+ else{f=new Date(y,0,1);t=new Date(y,11,31)}
+ S.from=ymd(f);S.to=ymd(t);$('from').value=S.from;$('to').value=S.to;
+ document.querySelectorAll('[data-p]').forEach(b=>b.classList.toggle('on',b.dataset.p===p));
+}
+
+// init UI
+const cy=new Date().getFullYear();
+$('year').innerHTML=[cy-2,cy-1,cy,cy+1].map(y=>`<option ${y===S.year?'selected':''}>${y}</option>`).join('');
+$('budgets').innerHTML=CATS.map(c=>`<label>${c}<input type="number" min="0" data-c="${c}" value="${S.budget[c]||0}" style="width:100px"></label>`).join('');
+$('weights').innerHTML=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i)=>`<label>${m}<input type="number" min="0" step="0.1" data-w="${i}" value="${S.w[i]}"></label>`).join('');
+$('cur').value=S.cur;$('custom').checked=S.custom;$('sample').checked=S.sample;$('weights').hidden=!S.custom;
+if(!S.from||P(S.from).getFullYear()!==S.year)preset('ytd');else{$('from').value=S.from;$('to').value=S.to}
+$('year').onchange=e=>{S.year=+e.target.value;preset('ytd');render()};
+$('from').onchange=e=>{S.from=e.target.value;if(S.from>S.to){S.to=S.from;$('to').value=S.to}document.querySelectorAll('[data-p]').forEach(b=>b.classList.remove('on'));render()};
+$('to').onchange=e=>{S.to=e.target.value;if(S.to<S.from){S.from=S.to;$('from').value=S.from}document.querySelectorAll('[data-p]').forEach(b=>b.classList.remove('on'));render()};
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{preset(b.dataset.p);render()});
+$('budgets').oninput=e=>{S.budget[e.target.dataset.c]=+e.target.value||0;render()};
+$('weights').oninput=e=>{S.w[+e.target.dataset.w]=+e.target.value||0;render()};
+$('cur').oninput=e=>{S.cur=e.target.value;render()};
+$('custom').onchange=e=>{S.custom=e.target.checked;$('weights').hidden=!S.custom;if(!S.custom)S.w=Array(12).fill(1);render()};
+$('sample').onchange=e=>{S.sample=e.target.checked;render()};
+render();
+</script></main></body></html>
