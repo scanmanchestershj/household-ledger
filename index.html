@@ -432,6 +432,10 @@
   .subpanel{ display:none; }
   .subpanel.active{ display:block; animation: fadeIn 0.2s ease; }
 
+  .panel-locked{ position:relative; min-height:260px; }
+  .panel-lock-cover{ display:none; }
+  .panel-locked > *:not(.panel-lock-cover){ filter:blur(12px); pointer-events:none; user-select:none; }
+  .panel-locked > .panel-lock-cover{ display:flex; position:absolute; inset:0; z-index:20; justify-content:center; align-items:flex-start; padding-top:110px; }
   /* Accounting (Zoho Books-style) status badges + helpers */
   .acct-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; text-transform:uppercase; padding:2px 8px; border-radius:10px; display:inline-block; }
   .acct-badge-draft{ background:var(--paper-deep); color:var(--ink-soft); }
@@ -557,7 +561,7 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab active" draggable="true" data-panel="overview">Overview</button>
-    <button class="tab" draggable="true" data-panel="accounting">Accounting</button>
+    <button class="tab" draggable="true" data-panel="accounting">Business books</button>
     <button class="tab" draggable="true" data-panel="uae">Resident Country</button>
     <button class="tab" draggable="true" data-panel="india" id="homeCountryTabBtn">Home Country</button>
     <button class="tab" draggable="true" data-panel="health">Health</button>
@@ -568,6 +572,10 @@
   <main>
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview">
+      <div id="backupBanner" style="display:none;background:var(--paper-deep);border-left:4px solid var(--coral);border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:13px;"><strong>Back up your data.</strong> <span id="backupBannerText"></span> If end-to-end encryption is on, keep your passphrase somewhere safe — it can't be recovered, and encrypted data can't be opened without it.</div>
+        <div class="add-row" style="margin-top:8px;"><button type="button" class="add-btn" id="backupBannerNow">⬇ Back up now</button><button type="button" class="add-btn ghost" id="backupBannerLater">Remind me later</button></div>
+      </div>
       <div id="dailyBriefing" class="daily-briefing"></div>
       <div id="notifyPromptBox" style="display:none;margin-bottom:14px;">
         <button type="button" class="add-btn full-width" id="notifyEnableBtn" style="background:var(--navbar-bg);color:var(--navbar-ink);">🔔 Enable notifications for bills, budget alerts & documents</button>
@@ -658,6 +666,7 @@
             <input type="file" id="restoreBackupFile" accept=".json" style="flex:1;">
             <button class="add-btn ghost" id="restoreBackupBtn">⬆ Restore from backup</button>
           </div>
+          <div id="backupStatus" style="font-size:12px;margin-top:6px;"></div>
           <div id="backupMsg" style="font-size:12px;color:var(--teal-dark);display:none;margin-top:4px;"></div>
         </div>
       </div>
@@ -1014,7 +1023,7 @@
          elsewhere in the app. -->
     <section class="panel" id="panel-accounting">
       <div class="country-header">
-        <div class="country-flag-title">Accounting</div>
+        <div class="country-flag-title">Business books</div>
       </div>
       <div class="subtabs" id="subtabsAcct">
         <button class="subtab active" draggable="true" data-acct-sub="home">Home</button>
@@ -1467,6 +1476,7 @@
         <div class="accordion-body">
           <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a cap per category — leave blank for categories you don't want to track.</div>
           <div id="categoryBudgetForm" class="form-grid" style="margin-bottom:8px;"></div>
+          <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:8px 0;"><input type="checkbox" id="catIncludeExpenses"> Also count cash &amp; bank expenses from the Budget tab (matched by their label)</label>
           <div id="categoryBudgetBars"></div>
         </div>
       </div>
@@ -1478,6 +1488,23 @@
           <div id="ypForm"></div>
           <div id="ypResults"></div>
         </div>
+      </div>
+
+      <div class="accordion" data-key="debt-planner">
+        <button type="button" class="accordion-header"><span>💳 Debt payoff planner</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body"><div id="dpBody"></div></div>
+      </div>
+      <div class="accordion" data-key="bills-calendar">
+        <button type="button" class="accordion-header"><span>🗓️ Bills calendar</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body"><div id="bcBody"></div></div>
+      </div>
+      <div class="accordion" data-key="cashflow-forecast">
+        <button type="button" class="accordion-header"><span>📈 Cash-flow forecast (next 3 months)</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body"><div id="cfBody"></div></div>
+      </div>
+      <div class="accordion" data-key="private-sections">
+        <button type="button" class="accordion-header"><span>🔒 Private sections</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body"><div id="psBody"></div></div>
       </div>
 
       <div class="accordion" data-key="money-coach">
@@ -10414,6 +10441,14 @@
     const barsEl = document.getElementById('categoryBudgetBars');
     if(!formEl || !barsEl) return;
     if(!state.settings.categoryBudgets) state.settings.categoryBudgets = {};
+    const incEl = document.getElementById('catIncludeExpenses');
+    if(incEl){
+      incEl.checked = !!state.settings.catBudgetIncludeExpenses;
+      if(!incEl.dataset.bound){
+        incEl.dataset.bound = '1';
+        incEl.addEventListener('change', () => { state.settings.catBudgetIncludeExpenses = incEl.checked; save(); renderReport(); });
+      }
+    }
 
     // Build the input row once per scope change (avoid re-rendering over an active input).
     if(formEl.dataset.scope !== String(scope || 'all')){
@@ -10446,6 +10481,12 @@
       if(spend.hasOwnProperty(label)) spend[label] += Number(c.amount);
       else spend.Others += Number(c.amount);
     });
+    if(state.settings.catBudgetIncludeExpenses){
+      (r.regularExpenseItems || []).forEach(t => {
+        const label = (t.label || '').trim();
+        if(spend.hasOwnProperty(label)) spend[label] += Number(t.amount); else spend.Others += Number(t.amount);
+      });
+    }
     const rows = CATEGORY_BUDGET_CATS.map(cat => {
       const target = state.settings.categoryBudgets[categoryBudgetKey(scope, cat)] || 0;
       const spent = spend[cat] || 0;
@@ -10700,6 +10741,14 @@
       if(!spendByDay[c.date]) spendByDay[c.date] = {};
       spendByDay[c.date][cat] = (spendByDay[c.date][cat] || 0) + Number(c.amount || 0);
     });
+    if(state.settings.catBudgetIncludeExpenses){
+      xCountries(scope).forEach(ck => xTx(ck).forEach(t => {
+        if(t.type !== 'expense' || !t.date) return;
+        const label = (t.label || '').trim(), cat = cats.includes(label) ? label : 'Others';
+        if(!spendByDay[t.date]) spendByDay[t.date] = {};
+        spendByDay[t.date][cat] = (spendByDay[t.date][cat] || 0) + Number(t.amount || 0);
+      }));
+    }
     const tot = {}; cats.forEach(c => { tot[c] = { plan: 0, act: 0 }; });
     const cp = [], ca = [];
     let p = 0, a = 0, n = 0, el = 0, planToDate = 0;
@@ -10755,9 +10804,267 @@
       const cls = u > 1 ? 'over' : (u > 0.8 ? 'warn' : '');
       html += `<tr style="text-align:right;border-top:1px solid var(--paper-deep);"><td style="text-align:left;padding:5px 4px;">${escapeHtml(cat)}</td><td style="padding:5px 4px;">${curFmt(x.plan)}</td><td style="padding:5px 4px;">${curFmt(x.act)}</td><td style="padding:5px 4px;${x.plan - x.act < 0 ? 'color:var(--coral);' : ''}">${curFmt(x.plan - x.act)}</td><td style="padding:5px 4px;"><div class="catbudget-track"><div class="catbudget-fill ${cls}" style="width:${Math.min(100, u * 100)}%"></div></div></td></tr>`;
     });
-    html += '</table></div><div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">Actuals use card spend (same basis as Category budgets above). Each category\'s yearly cap is spread by month weight, then prorated by day for partial months.</div>';
+    html += '</table></div><div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">Actuals use card spend' + (state.settings.catBudgetIncludeExpenses ? ' plus Budget-tab expenses' : '') + ' (same basis as Category budgets above). Each category\'s yearly cap is spread by month weight, then prorated by day for partial months.</div>';
     resEl.innerHTML = html;
   }
+
+  // ======== Extras: debt payoff planner, bills calendar, cash-flow forecast,
+  // private sections and backup reminder. ========
+  function xCountries(scope){ return scope ? [scope] : ['UAE', 'India']; }
+  function xTx(ck){ const d = currentData().countries[ck]; return (d && d.transactions) || []; }
+  function xFmt(ck){ return (amt) => fmtCountry(amt, ck); }
+  function xDaysBetween(aStr, bStr){ return Math.round((ypParse(bStr) - ypParse(aStr)) / 86400000); }
+  function xTable(head, rows){
+    return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="color:var(--ink-soft);font-size:11px;">'
+      + head.map((h, i) => `<th style="padding:4px;text-align:${i ? 'right' : 'left'};">${h}</th>`).join('') + '</tr>'
+      + rows.map(r => '<tr style="border-top:1px solid var(--paper-deep);">' + r.map((c, i) => `<td style="padding:5px 4px;text-align:${i ? 'right' : 'left'};">${c}</td>`).join('') + '</tr>').join('')
+      + '</table></div>';
+  }
+  function xUnpaidCards(ck){
+    const mapped = mappedCardIds(), cn = countryNameOf(ck);
+    return (currentData().cards || []).filter(c => (c.country || 'United Arab Emirates') === cn && !c.paid && c.dueDate && !mapped.has(c.id));
+  }
+
+  // ---- 10. Debt payoff planner (personal borrowings you still owe) ----
+  function debtList(ck){
+    return xTx(ck).filter(t => t.type === 'borrowing' && !t.repaid && t.borrowSource !== 'card')
+      .map(t => ({ who: t.person || t.label || 'Borrowing', amount: Number(t.amount) || 0, due: t.dueDate || '' }))
+      .filter(d => d.amount > 0)
+      .sort((a, b) => ((a.due || '9999-99-99').localeCompare(b.due || '9999-99-99')) || (a.amount - b.amount));
+  }
+  function debtSimulate(debts, monthly){
+    const out = debts.map(d => Object.assign({}, d, { left: d.amount, paidMonth: null }));
+    if(!(monthly > 0)) return out;
+    let m = 0;
+    while(m < 240 && out.some(d => d.paidMonth === null)){
+      m++; let pool = monthly;
+      for(const d of out){
+        if(d.paidMonth !== null) continue;
+        const pay = Math.min(pool, d.left); d.left -= pay; pool -= pay;
+        if(d.left <= 0.005) d.paidMonth = m;
+        if(pool <= 0.005) break;
+      }
+    }
+    return out;
+  }
+  function renderDebtResult(ck){
+    const el = document.getElementById('dpRes_' + ck); if(!el) return;
+    const f = xFmt(ck), today = todayStr();
+    const debts = debtList(ck);
+    if(!debts.length){ el.innerHTML = '<div class="empty">No unpaid personal borrowings. 🎉</div>'; return; }
+    const monthly = Number(state.settings.debtMonthly[ck]) || 0;
+    const sim = debtSimulate(debts, monthly);
+    const total = debts.reduce((s, d) => s + d.amount, 0);
+    const rows = sim.map(d => {
+      let need = '—', due = d.due || 'No due date';
+      if(d.due){
+        if(d.due < today){ due = d.due + ' ⚠ overdue'; need = 'Pay now'; }
+        else need = f(d.amount / Math.max(1, Math.ceil(xDaysBetween(today, d.due) / 30)));
+      }
+      let by = '—';
+      if(monthly > 0){
+        if(d.paidMonth){
+          const mk = monthKey(addMonthsToDate(today, d.paidMonth - 1));
+          by = monthLabel(mk) + ((d.due && mk > d.due.slice(0, 7)) ? ' ⚠ after due date' : '');
+        } else by = '20+ years';
+      }
+      return [escapeHtml(d.who), f(d.amount), escapeHtml(due), need, by];
+    });
+    const done = sim.every(d => d.paidMonth);
+    const last = Math.max(...sim.map(d => d.paidMonth || 0));
+    el.innerHTML = xTable(['Who', 'Owed', 'Due', 'Needs / month', 'Paid off by'], rows)
+      + `<div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Total owed ${f(total)}. ` + (monthly > 0
+        ? (done ? `At ${f(monthly)} a month you're debt-free in ${last} month${last === 1 ? '' : 's'} (earliest due date paid first).` : 'Not cleared within 20 years at this amount.')
+        : 'Enter a monthly amount to see payoff dates.') + '</div>';
+  }
+  function renderDebtPlanner(scope){
+    const host = document.getElementById('dpBody'); if(!host) return;
+    scope = scope || '';
+    if(!state.settings.debtMonthly) state.settings.debtMonthly = {};
+    const sig = scope || 'all';
+    if(host.dataset.sig !== sig){
+      host.dataset.sig = sig;
+      host.innerHTML = xCountries(scope).map(ck => `
+        <div style="margin-bottom:12px;">
+          <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(countryNameOf(ck))}</div>
+          <label class="field-label">Monthly amount I can put toward debts</label>
+          <input type="number" step="1" class="dp-monthly" data-ck="${ck}" placeholder="e.g. 500" value="${state.settings.debtMonthly[ck] || ''}" style="margin-bottom:8px;">
+          <div id="dpRes_${ck}"></div>
+        </div>`).join('');
+    }
+    if(!host.dataset.bound){
+      host.dataset.bound = '1';
+      host.addEventListener('input', e => {
+        const t = e.target;
+        if(!t.classList || !t.classList.contains('dp-monthly')) return;
+        state.settings.debtMonthly[t.dataset.ck] = parseFloat(t.value) || 0; save(); renderDebtResult(t.dataset.ck);
+      });
+    }
+    xCountries(scope).forEach(renderDebtResult);
+  }
+
+  // ---- 5. Bills calendar ----
+  const bcUI = { ym: '' };
+  function billEvents(scope){
+    const evs = [], today = todayStr();
+    xCountries(scope).forEach(ck => {
+      const txs = xTx(ck), groups = {};
+      txs.forEach(t => {
+        if(t.type === 'borrowing' && !t.repaid && t.borrowSource !== 'card' && t.dueDate)
+          evs.push({ date: t.dueDate, ck, kind: 'repay', text: 'Repay ' + (t.person || t.label || ''), amount: Number(t.amount) || 0, sign: -1 });
+        if(t.type === 'lending' && t.dueDate)
+          evs.push({ date: t.dueDate, ck, kind: 'collect', text: 'Expected from ' + (t.person || t.label || ''), amount: Number(t.amount) || 0, sign: 1 });
+        if(t.recurring && t.recurringGroupId && (!groups[t.recurringGroupId] || t.date > groups[t.recurringGroupId].date)) groups[t.recurringGroupId] = t;
+      });
+      Object.values(groups).forEach(l => {
+        for(let k = 1; k <= 24; k++){
+          const d = addMonthsToDate(l.date, k);
+          if(d < today) continue;
+          evs.push({ date: d, ck, kind: 'recurring', text: (l.label || 'Recurring') + ' 🔁', amount: Number(l.amount) || 0, sign: l.type === 'income' ? 1 : -1 });
+        }
+      });
+      xUnpaidCards(ck).forEach(c => evs.push({ date: c.dueDate, ck, kind: 'card', text: 'Card due · ' + ([c.bank, c.label].filter(Boolean).join(' ') || 'Card'), amount: Number(c.amount) || 0, sign: -1 }));
+    });
+    return evs.sort((a, b) => a.date.localeCompare(b.date));
+  }
+  function renderBillsCalendar(scope){
+    const host = document.getElementById('bcBody'); if(!host) return;
+    scope = scope || '';
+    const today = todayStr();
+    if(!bcUI.ym) bcUI.ym = today.slice(0, 7);
+    if(!host.dataset.bound){
+      host.dataset.bound = '1';
+      host.addEventListener('click', e => {
+        const b = e.target.closest('[data-bc]'); if(!b) return;
+        const [yy, mm] = bcUI.ym.split('-').map(Number);
+        if(b.dataset.bc === 'today') bcUI.ym = todayStr().slice(0, 7);
+        else { const d = new Date(yy, mm - 1 + (b.dataset.bc === 'next' ? 1 : -1), 1); bcUI.ym = d.getFullYear() + '-' + ypPad(d.getMonth() + 1); }
+        renderBillsCalendar(reportScopeVal());
+      });
+    }
+    const evs = billEvents(scope);
+    const [y, m] = bcUI.ym.split('-').map(Number);
+    const dim = new Date(y, m, 0).getDate(), first = new Date(y, m - 1, 1).getDay();
+    const byDate = {}; evs.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+    const wk = ypYmd(new Date(ypParse(today).getTime() + 7 * 86400000));
+    const line = e => {
+      const dl = xDaysBetween(today, e.date);
+      const when = dl < 0 ? `<span style="color:var(--coral);">overdue ${-dl}d</span>` : (dl === 0 ? 'today' : `in ${dl}d`);
+      const tag = scope ? '' : ` <span style="color:var(--ink-soft);font-size:11px;">(${escapeHtml(countryNameOf(e.ck))})</span>`;
+      return `<div class="breakdown-row"><span class="label">${e.date.slice(5)} · ${escapeHtml(e.text)}${tag} <span style="font-size:11px;color:var(--ink-soft);">${when}</span></span><span style="color:${e.sign < 0 ? 'var(--coral)' : 'var(--teal-dark)'};">${e.sign < 0 ? '−' : '+'}${xFmt(e.ck)(e.amount)}</span></div>`;
+    };
+    const soon = evs.filter(e => e.date <= wk && e.kind !== 'recurring' || (e.kind === 'recurring' && e.date >= today && e.date <= wk));
+    let cells = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div style="font-size:10px;color:var(--ink-soft);text-align:center;">${d}</div>`).join('');
+    for(let i = 0; i < first; i++) cells += '<div></div>';
+    for(let d = 1; d <= dim; d++){
+      const ds = y + '-' + ypPad(m) + '-' + ypPad(d), list = byDate[ds] || [];
+      const out = list.filter(e => e.sign < 0).length, inn = list.length - out;
+      cells += `<div style="min-height:44px;border:1px solid var(--paper-deep);border-radius:6px;padding:3px;font-size:11px;${ds === today ? 'background:var(--paper-deep);font-weight:700;' : ''}">${d}<div>${out ? `<span style="color:var(--coral);">●${out > 1 ? out : ''}</span> ` : ''}${inn ? `<span style="color:var(--teal-dark);">●${inn > 1 ? inn : ''}</span>` : ''}</div></div>`;
+    }
+    const monthEvs = evs.filter(e => e.date.slice(0, 7) === bcUI.ym);
+    host.innerHTML = `
+      <div style="font-weight:600;margin-bottom:4px;">Due in the next 7 days (and overdue)</div>
+      ${soon.length ? soon.map(line).join('') : '<div class="empty">Nothing due this week.</div>'}
+      <div class="add-row" style="margin:12px 0 6px;align-items:center;">
+        <button type="button" class="add-btn ghost" data-bc="prev">‹</button>
+        <div style="flex:1;text-align:center;font-weight:600;">${escapeHtml(monthLabel(bcUI.ym))}</div>
+        <button type="button" class="add-btn ghost" data-bc="today">Today</button>
+        <button type="button" class="add-btn ghost" data-bc="next">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${cells}</div>
+      <div style="font-size:11px;color:var(--ink-soft);margin:4px 0 8px;"><span style="color:var(--coral);">●</span> money going out · <span style="color:var(--teal-dark);">●</span> money coming in. Includes borrowings you owe, lending due back, unpaid card dues and recurring entries.</div>
+      ${monthEvs.length ? monthEvs.map(line).join('') : '<div class="empty">Nothing scheduled this month.</div>'}`;
+  }
+
+  // ---- 6. Cash-flow forecast (next 3 months) ----
+  function renderCashflow(scope){
+    const host = document.getElementById('cfBody'); if(!host) return;
+    const today = todayStr(), curMk = monthKey(today);
+    const keys = [1, 2, 3].map(n => monthKey(addMonthsToDate(today, n)));
+    host.innerHTML = xCountries(scope).map(ck => {
+      const f = xFmt(ck), title = `<div style="font-weight:600;margin:4px 0 6px;">${escapeHtml(countryNameOf(ck))}</div>`;
+      const rowsAll = computeMonthlyClosing(ck);
+      const hist = rowsAll.filter(r => r.mk < curMk).slice(0, 3);
+      if(!hist.length) return title + '<div class="empty">Needs at least one completed month of transactions to forecast.</div>';
+      const avg = k => hist.reduce((s, r) => s + r[k], 0) / hist.length;
+      const typical = avg('income') + avg('remit') - avg('expense') - avg('lending');
+      const sched = { [keys[0]]: 0, [keys[1]]: 0, [keys[2]]: 0 }, notes = { [keys[0]]: [], [keys[1]]: [], [keys[2]]: [] };
+      const put = (date, amt, label) => {
+        const mk = date < today ? keys[0] : monthKey(date);
+        if(sched[mk] === undefined) return;
+        sched[mk] += amt; notes[mk].push(label);
+      };
+      xTx(ck).forEach(t => {
+        if(t.type === 'borrowing' && !t.repaid && t.borrowSource !== 'card' && t.dueDate) put(t.dueDate, -(Number(t.amount) || 0), 'Repay ' + (t.person || ''));
+        if(t.type === 'lending' && t.dueDate) put(t.dueDate, Number(t.amount) || 0, 'From ' + (t.person || ''));
+      });
+      xUnpaidCards(ck).forEach(c => put(c.dueDate, -(Number(c.amount) || 0), 'Card due'));
+      let bal = rowsAll.length ? rowsAll[0].closing : 0;
+      const rows = keys.map(mk => {
+        const open = bal; bal = open + typical + sched[mk];
+        return [escapeHtml(monthLabel(mk)), f(open), (typical >= 0 ? '+' : '−') + f(Math.abs(typical)),
+          `<span title="${escapeHtml(notes[mk].join(', '))}">${sched[mk] === 0 ? '—' : (sched[mk] > 0 ? '+' : '−') + f(Math.abs(sched[mk]))}</span>`,
+          `<strong style="${bal < 0 ? 'color:var(--coral);' : ''}">${f(bal)}</strong>`];
+      });
+      return title + xTable(['Month', 'Opening', 'Typical net', 'Scheduled', 'Closing'], rows)
+        + `<div style="font-size:11px;color:var(--ink-soft);margin:4px 0 10px;">Starts from your balance today (${f(rowsAll[0].closing)}). Typical net = average of your last ${hist.length} full month${hist.length === 1 ? '' : 's'} (income + remittances − expenses − lending). Scheduled = borrowings due, lending coming back and unpaid card dues. A forecast, not a promise.</div>`;
+    }).join('');
+  }
+
+  // ---- 9. Private sections: keep chosen tabs blurred until you tap to reveal ----
+  const psRevealed = {};
+  function panelLabel(key){
+    return { overview: 'Overview', accounting: 'Business books', report: 'Reports', health: 'Health' }[key]
+      || (key === 'uae' ? countryNameOf('UAE') : countryNameOf('India'));
+  }
+  function applyPanelLocks(){
+    const locked = (state.settings && state.settings.lockedPanels) || {};
+    ['overview', 'accounting', 'report', 'uae', 'india', 'health'].forEach(key => {
+      const el = document.getElementById('panel-' + key); if(!el) return;
+      let cover = el.querySelector(':scope > .panel-lock-cover');
+      if(!cover){
+        cover = document.createElement('div'); cover.className = 'panel-lock-cover';
+        cover.innerHTML = '<button type="button" class="add-btn">🔒 Private section — tap to reveal</button>';
+        cover.querySelector('button').addEventListener('click', () => { psRevealed[key] = true; applyPanelLocks(); });
+        el.appendChild(cover);
+      }
+      el.classList.toggle('panel-locked', !!locked[key] && !psRevealed[key]);
+    });
+  }
+  function renderPrivateSections(){
+    const host = document.getElementById('psBody'); if(!host) return;
+    if(!state.settings.lockedPanels) state.settings.lockedPanels = {};
+    host.innerHTML = `<div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Tick the sections you want kept private. They stay blurred until you tap "reveal", even when the eye is set to show amounts, and lock again when you reload.</div>`
+      + ['overview', 'report', 'uae', 'india', 'accounting', 'health'].map(k => `<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin:4px 0;"><input type="checkbox" data-ps="${k}" ${state.settings.lockedPanels[k] ? 'checked' : ''}> ${escapeHtml(panelLabel(k))}</label>`).join('')
+      + '<button type="button" class="add-btn ghost" id="psRelock" style="margin-top:8px;">Lock everything again now</button>';
+    host.querySelectorAll('[data-ps]').forEach(cb => cb.addEventListener('change', () => {
+      state.settings.lockedPanels[cb.dataset.ps] = cb.checked; if(cb.checked) delete psRevealed[cb.dataset.ps];
+      save(); applyPanelLocks();
+    }));
+    host.querySelector('#psRelock').addEventListener('click', () => { Object.keys(psRevealed).forEach(k => delete psRevealed[k]); applyPanelLocks(); });
+  }
+
+  // ---- 8. Backup reminder ----
+  let backupBannerDismissed = false;
+  function markBackupDone(){ state.settings.lastBackupAt = Date.now(); save(); renderBackupReminder(); }
+  function renderBackupReminder(){
+    const last = (state.settings || {}).lastBackupAt;
+    const days = last ? Math.floor((Date.now() - last) / 86400000) : null;
+    const stale = days === null || days >= 30;
+    const status = document.getElementById('backupStatus');
+    if(status) status.textContent = days === null ? 'No backup saved yet.' : (days === 0 ? 'Last backup: today.' : `Last backup: ${days} day${days === 1 ? '' : 's'} ago.`);
+    const banner = document.getElementById('backupBanner');
+    if(banner){
+      banner.style.display = (stale && !backupBannerDismissed) ? '' : 'none';
+      const tx = document.getElementById('backupBannerText');
+      if(tx) tx.textContent = days === null ? 'You have not saved a backup yet.' : `Your last backup was ${days} days ago.`;
+    }
+  }
+  (function(){
+    const now = document.getElementById('backupBannerNow'), later = document.getElementById('backupBannerLater');
+    if(now) now.addEventListener('click', () => saveBackupNow());
+    if(later) later.addEventListener('click', () => { backupBannerDismissed = true; renderBackupReminder(); });
+  })();
 
   function renderReport(){
     populateReportMonths();
@@ -10785,6 +11092,8 @@
     renderOverspendCheck(r, scope, curFmt);
     renderCategoryBudgets(r, scope, curFmt);
     try{ renderYearlyPlan(scope, curFmt); }catch(err){ console.error('Yearly plan render failed', err); }
+    [renderDebtPlanner, renderBillsCalendar, renderCashflow].forEach(fn => { try{ fn(scope); }catch(err){ console.error('Report extras failed', err); } });
+    try{ renderPrivateSections(); }catch(err){ console.error('Private sections failed', err); }
     renderSpendingAnomalies(scope, curFmt);
 
     const maxVal = Math.max(r.income, r.totalOutflow, 1);
@@ -12226,7 +12535,7 @@
         <div class="perm-grid">
           ${ALL_TABS.map(t => {
             const on = state.permissions[u.id] && state.permissions[u.id][t];
-            return `<button type="button" class="perm-chip ${on ? 'on' : ''}" data-user="${u.id}" data-tab="${t}">${t}</button>`;
+            return `<button type="button" class="perm-chip ${on ? 'on' : ''}" data-user="${u.id}" data-tab="${t}">${t === 'accounting' ? 'business books' : t}</button>`;
           }).join('')}
         </div>`;
       const isSelf = currentUser && currentUser.id === u.id;
@@ -13565,6 +13874,7 @@
         await writable.write(dataStr);
         await writable.close();
         showBackupMsg('Backup saved to the location you chose.');
+        markBackupDone();
         return;
       }catch(err){
         if(err && err.name === 'AbortError') return; // user cancelled the picker
@@ -13578,6 +13888,7 @@
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    markBackupDone();
     showBackupMsg('Backup downloaded. (Your browser controls the save-location prompt — enable "Ask where to save each file" in its settings if you want to be asked every time.)');
   }
   function showBackupMsg(text){
@@ -15961,7 +16272,7 @@
     const { from, to, tagId, pnl, bs, pbi } = acctExportBundle();
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    acctPdfHeader(doc, 'ACCOUNTING REPORT', '');
+    acctPdfHeader(doc, 'BUSINESS BOOKS REPORT', '');
     doc.setFontSize(11);
     const tag = tagId ? acctData().tags.find(t => t.id === tagId) : null;
     doc.text(`Period: ${from || 'start'} to ${to}${tag ? ' · Tag: ' + acctTagLabel(tag) : ''}`, 14, 36);
@@ -15988,7 +16299,7 @@
       { Account: 'Retained earnings', Type: 'Equity', Amount: acctMoney(bs.retainedEarnings) }
     ], fields);
     doc.autoTable({ startY: y + 3, head: table.head, body: table.body, ...style });
-    doc.save(`Accounting_Report_${to}.pdf`);
+    doc.save(`Business_Books_Report_${to}.pdf`);
   });
   const acctExportExcelBtn = document.getElementById('acctExportExcel');
   if(acctExportExcelBtn) acctExportExcelBtn.addEventListener('click', () => {
@@ -16009,10 +16320,11 @@
     sheet('Aged Receivables', [['Invoice', 'Customer', 'Due', 'Outstanding'], ...acc.invoices.filter(i => acctIsPosted(i) && acctOutstanding(i) > 0.005).map(i => [i.invoiceNo, i.customer, i.dueDate || i.date, acctOutstanding(i)])]);
     sheet('Aged Payables', [['Bill', 'Vendor', 'Due', 'Outstanding'], ...acc.bills.filter(b => acctIsPosted(b) && acctOutstanding(b) > 0.005).map(b => [b.billNo, b.vendor, b.dueDate || b.date, acctOutstanding(b)])]);
     sheet('Audit trail', [['When', 'Who', 'Action', 'Detail'], ...acc.activity.map(a => [a.ts, a.user, a.action, a.detail])]);
-    XLSX.writeFile(wb, `Accounting_Report_${to}.xlsx`);
+    XLSX.writeFile(wb, `Business_Books_Report_${to}.xlsx`);
   });
 
   function renderAll(){
+    try{ renderBackupReminder(); applyPanelLocks(); }catch(err){ console.warn('backup/lock refresh failed', err); }
     updateTxPersonVisibilityCountry('UAE');
     updateTxPersonVisibilityCountry('India');
     updateCardSpendForUI();
