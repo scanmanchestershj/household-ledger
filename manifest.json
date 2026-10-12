@@ -1,42 +1,94 @@
 {
-  "name": "The Household Ledger",
-  "short_name": "Ledger",
-  "description": "Household finance, chores, and budget dashboard",
-  "start_url": "./index.html",
-  "scope": "./",
+  "name": "Smart AI Assistant",
+  "short_name": "Smart AI",
+  "description": "Household finance, budget, investments and chores dashboard",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#EDF0E8",
   "theme_color": "#1B2A4A",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
     {
       "name": "Resident Budget",
       "short_name": "Budget",
-      "url": "./index.html?panel=uae&sub=budget",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "/?panel=uae&sub=budget",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Resident Investment",
       "short_name": "Investment",
-      "url": "./index.html?panel=uae&sub=investment",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "/?panel=uae&sub=investment",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Home Budget",
       "short_name": "Home Budget",
-      "url": "./index.html?panel=india&sub=budget",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "/?panel=india&sub=budget",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Home Investment",
       "short_name": "Home Invest",
-      "url": "./index.html?panel=india&sub=investment",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "/?panel=india&sub=investment",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
-  ]
+  ],
+  "id": "/",
+  "lang": "en",
+  "dir": "ltr",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "categories": [
+    "finance",
+    "productivity",
+    "lifestyle"
+  ],
+  "prefer_related_applications": false
 }

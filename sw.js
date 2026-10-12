@@ -1,13 +1,12 @@
-// Household Ledger — service worker
+// Smart AI Assistant — service worker
 // Purpose: make the app installable (PWA) and load instantly on repeat visits.
 // It deliberately does NOT cache anything from your Supabase project — auth
 // and your live household data always go straight to the network so you
 // never see stale or out-of-sync figures.
 
-const CACHE_NAME = 'household-ledger-shell-v2';
+const CACHE_NAME = 'smart-ai-assistant-shell-v3';
 const SHELL_FILES = [
   './',
-  './index.html',
   './config.js',
   './manifest.json',
   './icons/icon-192.png',
@@ -32,7 +31,15 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only ever handle plain GETs.
+  if(event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+
+  // Never cache or intercept the app's own data endpoints (/api/*): market and
+  // portfolio responses always come live from the network and are never stored.
+  if(url.origin === self.location.origin && url.pathname.startsWith('/api/')){
+    return;
+  }
 
   // Never touch Supabase (auth/data) — always live network.
   if(url.hostname.endsWith('supabase.co')){
@@ -45,11 +52,17 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          if(res && res.ok && !res.redirected){
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return res;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() =>
+          caches.match(event.request).then((hit) =>
+            hit || (event.request.mode === 'navigate' ? caches.match('./') : undefined)
+          )
+        )
     );
     return;
   }

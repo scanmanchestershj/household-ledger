@@ -6,6 +6,8 @@
 <title>Smart AI Assistant</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1B2A4A">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -116,11 +118,11 @@
   header.top .subline{ color:var(--navbar-ink); opacity:0.65; }
   header.top .add-btn.ghost{ border-color:rgba(255,255,255,0.28); color:var(--navbar-ink); background:rgba(255,255,255,0.08); }
   header.top .currency-picker{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.28); color:var(--navbar-ink); }
-  .top-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .top-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; min-width:0; }
   .eyebrow{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--teal-dark); font-weight:600; }
   h1{ font-family:'Fraunces', serif; font-optical-sizing:auto; font-weight:600; font-size:32px; margin:4px 0 2px 0; letter-spacing:-0.01em; }
   .subline{ color:var(--ink-soft); font-size:14px; margin-bottom:18px; }
-  .currency-picker{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:6px 8px; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); flex:0 0 auto; }
+  .currency-picker{ width:auto; max-width:76px; min-width:0; text-overflow:ellipsis; font-family:'IBM Plex Mono', monospace; font-size:12px; padding:6px 8px; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); flex:0 0 auto; }
 
   .tabs{ display:flex; flex-wrap:wrap; gap:4px; padding:0 20px 12px 20px; background:var(--navbar-bg); border-radius:0 0 18px 18px; margin-bottom:14px; backdrop-filter:blur(16px) saturate(1.3); -webkit-backdrop-filter:blur(16px) saturate(1.3); position:relative; z-index:2; }
   .tab{ flex:0 0 auto; font-family:'IBM Plex Mono', monospace; font-size:12.5px; letter-spacing:0.03em; padding:9px 14px 10px 14px; background:transparent; color:var(--navbar-ink); opacity:0.62; border:none; border-bottom:2px solid transparent; cursor:pointer; position:relative; transition: opacity 0.15s ease, border-color 0.15s ease, transform 0.15s ease; }
@@ -432,6 +434,7 @@
   .subpanel{ display:none; }
   .subpanel.active{ display:block; animation: fadeIn 0.2s ease; }
 
+  #officeModeBtn.on{ background:var(--teal-dark); color:#fff; border-color:var(--teal-dark); }
   .panel-locked{ position:relative; min-height:260px; }
   .panel-lock-cover{ display:none; }
   .panel-locked > *:not(.panel-lock-cover){ filter:blur(12px); pointer-events:none; user-select:none; }
@@ -539,15 +542,16 @@
     <div class="top-row">
       <div class="eyebrow" id="dateLine">—</div>
       <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="add-btn ghost" id="officeModeBtn" title="Office mode: off" aria-label="Office mode" aria-pressed="false" style="padding:6px 10px; font-size:14px; line-height:1;">🕶️</button>
         <button type="button" class="add-btn ghost privacy-eye" id="globalPrivacyBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1;">🙈</button>
         <button type="button" class="add-btn ghost" id="darkModeToggleBtn" title="Switch to dark mode" aria-label="Switch to dark mode" style="padding:6px 10px; font-size:14px; line-height:1;">🌙</button>
-        <select class="currency-picker" id="currencyPicker">
-          <option value="AED">AED — UAE Dirham</option>
-          <option value="INR">INR — Indian Rupee</option>
-          <option value="USD">USD — US Dollar</option>
-          <option value="GBP">GBP — British Pound</option>
-          <option value="EUR">EUR — Euro</option>
-          <option value="SAR">SAR — Saudi Riyal</option>
+        <select class="currency-picker" id="currencyPicker" title="Display currency" aria-label="Display currency">
+          <option value="AED" title="UAE Dirham">AED</option>
+          <option value="INR" title="Indian Rupee">INR</option>
+          <option value="USD" title="US Dollar">USD</option>
+          <option value="GBP" title="British Pound">GBP</option>
+          <option value="EUR" title="Euro">EUR</option>
+          <option value="SAR" title="Saudi Riyal">SAR</option>
         </select>
       </div>
     </div>
@@ -572,6 +576,7 @@
   <main>
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview">
+      <div id="encNudge" style="display:none;background:var(--paper-deep);border-left:4px solid var(--coral);border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px;"><strong>End-to-end encryption is off.</strong> Anyone who can read this app's traffic (for example a network that inspects HTTPS) or who has access to the database could read your data. An admin can turn on end-to-end encryption in the Encryption settings; after that your data is unreadable to everyone without your passphrase.</div>
       <div id="backupBanner" style="display:none;background:var(--paper-deep);border-left:4px solid var(--coral);border-radius:10px;padding:12px;margin-bottom:10px;">
         <div style="font-size:13px;"><strong>Back up your data.</strong> <span id="backupBannerText"></span> If end-to-end encryption is on, keep your passphrase somewhere safe — it can't be recovered, and encrypted data can't be opened without it.</div>
         <div class="add-row" style="margin-top:8px;"><button type="button" class="add-btn" id="backupBannerNow">⬇ Back up now</button><button type="button" class="add-btn ghost" id="backupBannerLater">Remind me later</button></div>
@@ -4294,6 +4299,7 @@
 
   async function initApp(){
     syncPrivacyButtons();
+    try{ setOfficeMode(officeMode); }catch(err){ console.warn('office mode init failed', err); }
     const darkBtn = document.getElementById('darkModeToggleBtn');
     if(darkBtn){
       darkBtn.textContent = darkMode ? '☀️' : '🌙';
@@ -11044,6 +11050,42 @@
     host.querySelector('#psRelock').addEventListener('click', () => { Object.keys(psRevealed).forEach(k => delete psRevealed[k]); applyPanelLocks(); });
   }
 
+  // ---- Office mode: for using the app on a shared / monitored network or screen ----
+  // Hides amounts, and covers the screen the moment the window loses focus, the tab is
+  // hidden or Esc is pressed, so nothing is readable in an app switcher, a screen share
+  // or by someone glancing over. Stored on this device only. It cannot hide traffic
+  // metadata (the site names you connect to) or defeat screen-recording software.
+  let officeMode = false;
+  try{ officeMode = localStorage.getItem('shb_office_mode') === '1'; }catch(e){}
+  function ensureScreenCover(){
+    let c = document.getElementById('screenCover');
+    if(c) return c;
+    c = document.createElement('div');
+    c.id = 'screenCover';
+    c.style.cssText = 'display:none;position:fixed;inset:0;z-index:99999;background:#1B2A4A;color:#fff;align-items:center;justify-content:center;flex-direction:column;gap:14px;';
+    c.innerHTML = '<div style="font-size:15px;">🔒 Screen hidden</div><button type="button" class="add-btn" id="screenCoverBtn">Tap to show</button>';
+    document.body.appendChild(c);
+    c.querySelector('#screenCoverBtn').addEventListener('click', () => { c.style.display = 'none'; });
+    return c;
+  }
+  function coverScreen(){ if(officeMode) ensureScreenCover().style.display = 'flex'; }
+  function setOfficeMode(on){
+    officeMode = !!on;
+    try{ localStorage.setItem('shb_office_mode', officeMode ? '1' : '0'); }catch(e){}
+    const btn = document.getElementById('officeModeBtn');
+    if(btn){ btn.classList.toggle('on', officeMode); btn.setAttribute('aria-pressed', String(officeMode)); btn.title = officeMode ? 'Office mode: on (amounts hidden, screen covers when you switch away)' : 'Office mode: off'; }
+    if(officeMode) setPrivacyMode(true);
+    else { const c = document.getElementById('screenCover'); if(c) c.style.display = 'none'; }
+    try{ renderBackupReminder(); }catch(e){}
+  }
+  document.addEventListener('visibilitychange', () => { if(document.hidden) coverScreen(); });
+  window.addEventListener('blur', coverScreen);
+  window.addEventListener('pagehide', coverScreen);
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') coverScreen(); });
+  document.addEventListener('click', (e) => {
+    if(e.target.closest('#officeModeBtn')){ e.preventDefault(); setOfficeMode(!officeMode); }
+  });
+
   // ---- 8. Backup reminder ----
   let backupBannerDismissed = false;
   function markBackupDone(){ state.settings.lastBackupAt = Date.now(); save(); renderBackupReminder(); }
@@ -11053,6 +11095,8 @@
     const stale = days === null || days >= 30;
     const status = document.getElementById('backupStatus');
     if(status) status.textContent = days === null ? 'No backup saved yet.' : (days === 0 ? 'Last backup: today.' : `Last backup: ${days} day${days === 1 ? '' : 's'} ago.`);
+    const nudge = document.getElementById('encNudge');
+    if(nudge) nudge.style.display = (officeMode && !encSalt && currentUser && currentUser.role === 'admin') ? '' : 'none';
     const banner = document.getElementById('backupBanner');
     if(banner){
       banner.style.display = (stale && !backupBannerDismissed) ? '' : 'none';
