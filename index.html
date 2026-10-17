@@ -576,6 +576,7 @@
   <main>
     <!-- OVERVIEW -->
     <section class="panel active" id="panel-overview">
+      <div id="devNewBanner" style="display:none;background:var(--paper-deep);border-left:4px solid var(--coral);border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px;"><strong>🆕 New device signed in:</strong> <span id="devNewBannerText"></span>. Not you? Open Admin → Trusted devices and untick it.<div class="add-row" style="margin-top:8px;"><button type="button" class="add-btn" id="devNewReview">Review devices</button><button type="button" class="add-btn ghost" id="devNewDismiss">It was me</button></div></div>
       <div id="encNudge" style="display:none;background:var(--paper-deep);border-left:4px solid var(--coral);border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px;"><strong>End-to-end encryption is off.</strong> Anyone who can read this app's traffic (for example a network that inspects HTTPS) or who has access to the database could read your data. An admin can turn on end-to-end encryption in the Encryption settings; after that your data is unreadable to everyone without your passphrase.</div>
       <div id="backupBanner" style="display:none;background:var(--paper-deep);border-left:4px solid var(--coral);border-radius:10px;padding:12px;margin-bottom:10px;">
         <div style="font-size:13px;"><strong>Back up your data.</strong> <span id="backupBannerText"></span> If end-to-end encryption is on, keep your passphrase somewhere safe — it can't be recovered, and encrypted data can't be opened without it.</div>
@@ -3290,6 +3291,14 @@
         </div>
       </div>
 
+      <div class="section-title" id="devSectionTitle" style="display:none;">Trusted devices</div>
+      <div id="devSection" style="display:none;">
+        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Every browser or phone that signs in is listed here. A <strong>ticked</strong> device remembers the encryption passphrase for 24 hours after you type it once. <strong>Untick a device</strong> if you have any doubt about it: it is asked for the passphrase again straight away and stops remembering it. If you think someone has your passphrase, change it under Data encryption — that locks every other device out.</div>
+        <div id="devList"></div>
+        <div class="add-row" style="margin-top:8px;"><button type="button" class="add-btn ghost" id="devRefreshBtn">↻ Refresh</button><button type="button" class="add-btn ghost" id="devSignOutOthersBtn">Sign out my other devices</button></div>
+        <div id="devMsg" style="font-size:12px;margin-top:6px;"></div>
+      </div>
+
       <div class="section-title">Appearance</div>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Pick whatever color feels right — this changes instantly and applies for everyone in this household.</div>
       <div id="themeSwatches" class="theme-swatch-row"></div>
@@ -3446,6 +3455,245 @@
       input.addEventListener('keydown', onKey);
     });
   }
+
+  // ======== Trusted devices & remembered encryption key ========
+  // After the passphrase is typed once on a TRUSTED device, that device keeps the derived
+  // key (non-extractable, in this browser's IndexedDB) for 24 hours, so it isn't asked again.
+  // The admin sees every signed-in device in Admin → Trusted devices and can untick one at any
+  // time: that device immediately forgets the key and must type the passphrase again.
+  // (Changing the passphrase, under Data encryption, locks every other device out for good.)
+  const ENC_REMEMBER_MS = 24 * 60 * 60 * 1000;
+  let encKeyFromRemembered = false;
+  let deviceWatchTimer = null;
+  let devLastRender = 0;
+  function getDeviceId(){
+    let id = '';
+    try{ id = localStorage.getItem('shb_device_id') || ''; }catch(e){}
+    if(!id){
+      id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+      try{ localStorage.setItem('shb_device_id', id); }catch(e){}
+    }
+    return id;
+  }
+  function deviceGuessName(){
+    const ua = navigator.userAgent || '';
+    const os = /Windows/i.test(ua) ? 'Windows' : /iPhone|iPad|iPod/i.test(ua) ? 'iPhone/iPad' : /Android/i.test(ua) ? 'Android' : /Macintosh|Mac OS X/i.test(ua) ? 'Mac' : /Linux/i.test(ua) ? 'Linux' : 'Unknown OS';
+    const br = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+    const installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+    return br + ' on ' + os + (installed ? ' (installed app)' : '');
+  }
+  function encIdb(){
+    return new Promise((resolve, reject) => {
+      const r = indexedDB.open('shb_secure', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('keys');
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  }
+  async function encIdbOp(mode, fn){
+    const db = await encIdb();
+    try{
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction('keys', mode), req = fn(tx.objectStore('keys'));
+        tx.oncomplete = () => resolve(req && req.result);
+        tx.onerror = () => reject(tx.error);
+      });
+    } finally { db.close(); }
+  }
+  async function encRememberedSave(userId, key){ await encIdbOp('readwrite', st => st.put({ key, userId, exp: Date.now() + ENC_REMEMBER_MS }, 'enc')); }
+  async function encRememberedClear(){ try{ await encIdbOp('readwrite', st => st.delete('enc')); }catch(e){} }
+  async function encRememberedLoad(userId){
+    let rec = null;
+    try{ rec = await encIdbOp('readonly', st => st.get('enc')); }catch(e){ return null; }
+    if(!rec) return null;
+    if(rec.userId !== userId || !rec.key || rec.exp < Date.now()){ await encRememberedClear(); return null; }
+    return rec;
+  }
+  function deviceVerifiedAt(){ try{ return Number(localStorage.getItem('shb_enc_verified_at')) || 0; }catch(e){ return 0; } }
+  function deviceMarkVerified(){ try{ localStorage.setItem('shb_enc_verified_at', String(Date.now())); }catch(e){} }
+  async function deviceFetchRow(userId){
+    const { data, error } = await sb.from('devices').select('*').eq('user_id', userId).eq('device_id', getDeviceId()).maybeSingle();
+    if(error) throw error;
+    return data;
+  }
+  // Fail closed: the saved key is only used when the server positively says "trusted".
+  async function deviceIsTrusted(userId){
+    try{ const r = await deviceFetchRow(userId); return !!(r && r.trusted === true); }catch(e){ return false; }
+  }
+  async function encUnlockSmart(authUser, wrapper){
+    encKeyFromRemembered = false;
+    try{
+      const rec = await encRememberedLoad(authUser.id);
+      if(rec){
+        if(await deviceIsTrusted(authUser.id)){
+          const decrypted = await encDecryptObject(wrapper, rec.key);
+          encKey = rec.key; encKeyFromRemembered = true;
+          return decrypted;
+        }
+        await encRememberedClear();
+      }
+    }catch(e){ await encRememberedClear(); }
+    const decrypted = await waitForEncUnlock(encSalt, wrapper);
+    deviceMarkVerified();
+    return decrypted;
+  }
+  async function deviceSyncKeyStorage(userId, row){
+    if(!encSalt) return;
+    if(row && row.trusted === true){
+      if(encKey && !encKeyFromRemembered && !(await encRememberedLoad(userId))){
+        try{ await encRememberedSave(userId, encKey); }catch(e){ console.warn('Could not remember the key on this device', e); }
+      }
+    } else {
+      await encRememberedClear();
+    }
+  }
+  async function deviceRegisterAndRemember(authUser, profile){
+    let row = null;
+    try{ row = await deviceFetchRow(authUser.id); }catch(e){ return; } // table unreachable: just skip
+    const nowIso = new Date().toISOString();
+    if(!row){
+      const { data, error } = await sb.from('devices').insert({
+        user_id: authUser.id, household_id: profile.household_id, device_id: getDeviceId(),
+        name: deviceGuessName(), user_agent: (navigator.userAgent || '').slice(0, 300),
+        trusted: profile.role === 'admin'
+      }).select().maybeSingle();
+      if(error) return;
+      row = data;
+    } else {
+      await sb.from('devices').update({ last_seen: nowIso, last_login_at: nowIso }).eq('id', row.id);
+    }
+    await deviceSyncKeyStorage(authUser.id, row);
+    startDeviceWatch(authUser, profile);
+  }
+  function startDeviceWatch(authUser, profile){
+    if(deviceWatchTimer) clearInterval(deviceWatchTimer);
+    const check = async () => {
+      if(document.hidden || !householdId) return;
+      let row = null;
+      try{ row = await deviceFetchRow(authUser.id); }catch(e){ return; }
+      if(!row){
+        // The admin removed this device from the list: forget the key and ask again.
+        await encRememberedClear();
+        if(encSalt && encKeyFromRemembered){ encKey = null; location.reload(); }
+        return;
+      }
+      if(row.trusted === false){
+        await encRememberedClear();
+        const revoked = row.revoked_at ? new Date(row.revoked_at).getTime() : 0;
+        const stamp = row.revoked_at || '';
+        if(encSalt && revoked > deviceVerifiedAt() && sessionStorage.getItem('shb_reauth_stamp') !== stamp){
+          sessionStorage.setItem('shb_reauth_stamp', stamp);
+          encKey = null;
+          location.reload(); // start-up now asks for the passphrase
+          return;
+        }
+      } else {
+        await deviceSyncKeyStorage(authUser.id, row);
+      }
+      if(Date.now() - new Date(row.last_seen).getTime() > 10 * 60 * 1000){
+        sb.from('devices').update({ last_seen: new Date().toISOString() }).eq('id', row.id).then(() => {});
+      }
+      if(profile.role === 'admin') deviceCheckNew(authUser);
+    };
+    deviceWatchTimer = setInterval(check, 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) check(); });
+    check();
+  }
+  // Admin alert: a device signed in that the admin hasn't seen yet.
+  async function deviceCheckNew(authUser){
+    const banner = document.getElementById('devNewBanner');
+    if(!banner) return;
+    let ack = 0;
+    try{ ack = Number(localStorage.getItem('shb_dev_ack')) || 0; }catch(e){}
+    if(!ack){ try{ localStorage.setItem('shb_dev_ack', String(Date.now())); }catch(e){} return; }
+    try{
+      const { data, error } = await sb.from('devices').select('name,user_id,first_seen,device_id').eq('household_id', householdId).gt('first_seen', new Date(ack).toISOString());
+      if(error) throw error;
+      const fresh = (data || []).filter(d => !(d.device_id === getDeviceId() && d.user_id === authUser.id));
+      if(!fresh.length){ banner.style.display = 'none'; return; }
+      document.getElementById('devNewBannerText').textContent = fresh.map(d => d.name || 'A new device').join(', ');
+      banner.style.display = '';
+    }catch(e){ /* ignore */ }
+  }
+  function devAgo(iso){
+    const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    if(m < 2) return 'just now';
+    if(m < 60) return m + ' min ago';
+    if(m < 1440) return Math.round(m / 60) + ' h ago';
+    return Math.round(m / 1440) + ' d ago';
+  }
+  async function renderDevicesSection(force){
+    const title = document.getElementById('devSectionTitle'), sec = document.getElementById('devSection');
+    if(!title || !sec) return;
+    const isAdmin = !!(currentUser && currentUser.role === 'admin');
+    title.style.display = isAdmin ? '' : 'none';
+    sec.style.display = isAdmin ? '' : 'none';
+    if(!isAdmin || !householdId) return;
+    if(!force && Date.now() - devLastRender < 5000) return;
+    devLastRender = Date.now();
+    const list = document.getElementById('devList');
+    let rows = [];
+    try{
+      const { data, error } = await sb.from('devices').select('*').eq('household_id', householdId).order('last_seen', { ascending: false });
+      if(error) throw error;
+      rows = data || [];
+    }catch(e){ list.innerHTML = '<div class="empty">Could not load devices.</div>'; return; }
+    const me = getDeviceId();
+    const who = id => { const u = (state.users || []).find(x => x.id === id); return u ? (u.name || u.username || 'Member') : 'Member'; };
+    list.innerHTML = rows.length ? rows.map(r => {
+      const mine = r.device_id === me && r.user_id === myProfile.id;
+      const isNew = Date.now() - new Date(r.first_seen).getTime() < 24 * 3600 * 1000;
+      return `<div class="breakdown-row" style="align-items:center;gap:8px;">
+        <label style="display:flex;gap:8px;align-items:flex-start;flex:1;min-width:0;">
+          <input type="checkbox" data-dev-trust="${r.id}" ${r.trusted ? 'checked' : ''} style="margin-top:3px;">
+          <span><strong>${escapeHtml(r.name || 'Device')}</strong>${mine ? ' <span style="color:var(--teal-dark);">(this device)</span>' : ''}${isNew ? ' 🆕' : ''}<br>
+          <span style="font-size:11px;color:var(--ink-soft);">${escapeHtml(who(r.user_id))} · active ${devAgo(r.last_seen)} · first seen ${escapeHtml(new Date(r.first_seen).toLocaleDateString())} · ${r.trusted ? 'trusted (remembers key 24 h)' : 'asks for the passphrase every time'}</span></span>
+        </label>
+        <button type="button" class="add-btn ghost" data-dev-rename="${r.id}" style="padding:4px 8px;font-size:11px;">Rename</button>
+        ${mine ? '' : `<button type="button" class="add-btn ghost" data-dev-remove="${r.id}" style="padding:4px 8px;font-size:11px;">Remove</button>`}
+      </div>`;
+    }).join('') : '<div class="empty">No devices recorded yet.</div>';
+  }
+  (function bindDeviceSection(){
+    const sec = document.getElementById('devSection');
+    if(!sec) return;
+    const msg = (t, bad) => { const el = document.getElementById('devMsg'); el.style.color = bad ? 'var(--coral)' : 'var(--teal-dark)'; el.textContent = t; };
+    sec.addEventListener('change', async (e) => {
+      const cb = e.target.closest('[data-dev-trust]'); if(!cb) return;
+      const id = cb.dataset.devTrust;
+      if(!cb.checked && !confirm('Untick this device?\n\nIt will be asked for the encryption passphrase again straight away, and it will not remember it any more until you tick it again.')){ cb.checked = true; return; }
+      const patch = cb.checked ? { trusted: true } : { trusted: false, revoked_at: new Date().toISOString() };
+      const { error } = await sb.from('devices').update(patch).eq('id', id);
+      if(error){ msg('Could not update: ' + error.message, true); cb.checked = !cb.checked; return; }
+      msg(cb.checked ? 'Device trusted. It will remember the passphrase for 24 hours after it is typed once.' : 'Device untrusted. It will ask for the passphrase again within a minute.');
+      renderDevicesSection(true);
+    });
+    sec.addEventListener('click', async (e) => {
+      const ren = e.target.closest('[data-dev-rename]'), rem = e.target.closest('[data-dev-remove]');
+      if(ren){
+        const name = prompt('Name for this device (for example "Office laptop"):');
+        if(name && name.trim()){ await sb.from('devices').update({ name: name.trim().slice(0, 60) }).eq('id', ren.dataset.devRename); renderDevicesSection(true); }
+      } else if(rem){
+        if(!confirm('Remove this device from the list? It will have to type the passphrase again next time it opens the app.')) return;
+        await sb.from('devices').delete().eq('id', rem.dataset.devRemove);
+        renderDevicesSection(true);
+      } else if(e.target.closest('#devRefreshBtn')){
+        renderDevicesSection(true);
+      } else if(e.target.closest('#devSignOutOthersBtn')){
+        if(!confirm('Sign this account out on all your other devices? They will need your login password again.')) return;
+        const { error } = await sb.auth.signOut({ scope: 'others' });
+        msg(error ? 'Could not sign out other devices: ' + error.message : 'Your other devices were signed out.', !!error);
+      }
+    });
+  })();
+  (function bindDevBanner(){
+    const go = document.getElementById('devNewReview'), dismiss = document.getElementById('devNewDismiss');
+    if(go) go.addEventListener('click', () => { const t = document.getElementById('adminTabBtn'); if(t) t.click(); });
+    if(dismiss) dismiss.addEventListener('click', () => {
+      try{ localStorage.setItem('shb_dev_ack', String(Date.now())); }catch(e){}
+      document.getElementById('devNewBanner').style.display = 'none';
+    });
+  })();
 
   // ---- Theme (choosable colors, avoiding the default green/blue) ----
   const THEMES = {
@@ -4215,7 +4463,7 @@
     if(parsed && parsed.enc){
       if(!encSalt) throw new Error('This household\'s data is encrypted but has no encryption salt on record — something is wrong. Contact support before doing anything else.');
       if(!encAvailable()) throw new Error('Your browser doesn\'t support the encryption this household uses (Web Crypto). Try a current version of Chrome, Safari, Firefox, or Edge.');
-      parsed = await waitForEncUnlock(encSalt, parsed); // throws only if the person clicks "sign out"
+      parsed = await encUnlockSmart(authUser, parsed); // remembered key on a trusted device, else asks; throws only if the person clicks "sign out"
     } else {
       encKey = null;
     }
@@ -4228,6 +4476,7 @@
       await save();
     }
     setupRealtimeSync();
+    deviceRegisterAndRemember(authUser, profile).catch(err => console.warn('device registration failed', err));
     return state.users.find(u => u.id === authUser.id);
   }
 
@@ -4988,7 +5237,7 @@
     viewingUserId = null;
     householdId = null;
     myProfile = null;
-    encKey = null; encSalt = ''; // the encryption key only ever lives in memory — drop it on sign-out
+    encKey = null; encSalt = ''; encKeyFromRemembered = false; // memory copy dropped; a trusted device's saved key (24 h) stays until it expires or is revoked
     if(realtimeChannel){ try{ sb.removeChannel(realtimeChannel); }catch(e){} realtimeChannel = null; }
     document.getElementById('appRoot').style.display = 'none';
     document.getElementById('loginGate').style.display = '';
@@ -12526,6 +12775,7 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
   function renderEncSection(){
+    try{ renderDevicesSection(); }catch(err){ console.warn('devices render failed', err); }
     const title = document.getElementById('encSectionTitle');
     const section = document.getElementById('encSection');
     if(!title || !section) return;
@@ -12557,7 +12807,7 @@
       const key = await encDeriveKey(pass, salt);
       const { error: hhErr } = await sb.from('households').update({ enc_salt: salt }).eq('id', householdId);
       if(hhErr) throw hhErr;
-      encSalt = salt; encKey = key;
+      encSalt = salt; encKey = key; encKeyFromRemembered = false; deviceMarkVerified(); await encRememberedClear();
       await save(); // save() now encrypts automatically because encKey is set
       encDownloadRecoveryFile(pass);
       document.getElementById('encSetupPass').value = ''; document.getElementById('encSetupPassConfirm').value = '';
@@ -12592,7 +12842,7 @@
       const newKey = await encDeriveKey(next, newSalt);
       const { error: hhErr } = await sb.from('households').update({ enc_salt: newSalt }).eq('id', householdId);
       if(hhErr) throw hhErr;
-      encSalt = newSalt; encKey = newKey;
+      encSalt = newSalt; encKey = newKey; encKeyFromRemembered = false; deviceMarkVerified(); await encRememberedClear(); // every other device's remembered key is now useless
       await save();
       encDownloadRecoveryFile(next);
       ['encChangeCurrent', 'encChangeNew', 'encChangeNewConfirm'].forEach(id => { document.getElementById(id).value = ''; });

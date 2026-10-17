@@ -171,3 +171,53 @@ drop trigger if exists on_household_created on public.households;
 create trigger on_household_created
   after insert on public.households
   for each row execute function public.handle_new_household();
+
+-- ---------------------------------------------------------------------------
+-- devices: one row per (login account, browser/device) for the Trusted devices
+-- feature. Plain metadata only (name, last seen, trusted flag) - no financial
+-- data and no key material. Admins of a household see/manage all its devices.
+-- ---------------------------------------------------------------------------
+create table if not exists public.devices (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  household_id  uuid not null references public.households(id) on delete cascade,
+  device_id     text not null,
+  name          text,
+  user_agent    text,
+  trusted       boolean not null default false,
+  revoked_at    timestamptz,
+  first_seen    timestamptz not null default now(),
+  last_seen     timestamptz not null default now(),
+  last_login_at timestamptz not null default now(),
+  unique (user_id, device_id)
+);
+create index if not exists devices_household_idx on public.devices (household_id);
+alter table public.devices enable row level security;
+
+drop policy if exists "devices: select own or admin" on public.devices;
+create policy "devices: select own or admin" on public.devices
+  for select using (
+    user_id = auth.uid()
+    or household_id in (select household_id from public.profiles where id = auth.uid() and role = 'admin')
+  );
+drop policy if exists "devices: insert own" on public.devices;
+create policy "devices: insert own" on public.devices
+  for insert with check (
+    user_id = auth.uid()
+    and household_id in (select household_id from public.profiles where id = auth.uid())
+  );
+drop policy if exists "devices: update own or admin" on public.devices;
+create policy "devices: update own or admin" on public.devices
+  for update using (
+    user_id = auth.uid()
+    or household_id in (select household_id from public.profiles where id = auth.uid() and role = 'admin')
+  ) with check (
+    user_id = auth.uid()
+    or household_id in (select household_id from public.profiles where id = auth.uid() and role = 'admin')
+  );
+drop policy if exists "devices: delete own or admin" on public.devices;
+create policy "devices: delete own or admin" on public.devices
+  for delete using (
+    user_id = auth.uid()
+    or household_id in (select household_id from public.profiles where id = auth.uid() and role = 'admin')
+  );
