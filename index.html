@@ -1483,6 +1483,7 @@
           <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Set a cap per category — leave blank for categories you don't want to track.</div>
           <div id="categoryBudgetForm" class="form-grid" style="margin-bottom:8px;"></div>
           <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:8px 0;"><input type="checkbox" id="catIncludeExpenses"> Also count cash &amp; bank expenses from the Budget tab (matched by their label)</label>
+          <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:8px 0;"><input type="checkbox" id="catRollover"> Roll over unspent budget: leftover from last month is added to this month's cap (monthly view only)</label>
           <div id="categoryBudgetBars"></div>
         </div>
       </div>
@@ -10705,6 +10706,15 @@
       }
     }
 
+    const rollEl = document.getElementById('catRollover');
+    if(rollEl){
+      rollEl.checked = !!state.settings.catBudgetRollover;
+      if(!rollEl.dataset.bound){
+        rollEl.dataset.bound = '1';
+        rollEl.addEventListener('change', () => { state.settings.catBudgetRollover = rollEl.checked; save(); renderReport(); });
+      }
+    }
+
     // Build the input row once per scope change (avoid re-rendering over an active input).
     if(formEl.dataset.scope !== String(scope || 'all')){
       formEl.dataset.scope = String(scope || 'all');
@@ -10730,25 +10740,43 @@
   function renderCategoryBudgetBars(r, scope, curFmt){
     const barsEl = document.getElementById('categoryBudgetBars');
     if(!barsEl) return;
-    const spend = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, Others: 0 };
-    r.cardsBySpend.forEach(c => {
-      const label = (c.desc || '').trim();
-      if(spend.hasOwnProperty(label)) spend[label] += Number(c.amount);
-      else spend.Others += Number(c.amount);
-    });
-    if(state.settings.catBudgetIncludeExpenses){
-      (r.regularExpenseItems || []).forEach(t => {
-        const label = (t.label || '').trim();
-        if(spend.hasOwnProperty(label)) spend[label] += Number(t.amount); else spend.Others += Number(t.amount);
+    const catSpendFor = (rr) => {
+      const sp = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, Others: 0 };
+      rr.cardsBySpend.forEach(c => {
+        const label = (c.desc || '').trim();
+        if(sp.hasOwnProperty(label)) sp[label] += Number(c.amount);
+        else sp.Others += Number(c.amount);
       });
-    }
+      if(state.settings.catBudgetIncludeExpenses){
+        (rr.regularExpenseItems || []).forEach(t => {
+          const label = (t.label || '').trim();
+          if(sp.hasOwnProperty(label)) sp[label] += Number(t.amount); else sp.Others += Number(t.amount);
+        });
+      }
+      return sp;
+    };
+    const spend = catSpendFor(r);
+    // Rollover: only unspent money carries (never a deficit), and only from the previous
+    // month, so the cap can't snowball. Applies to the monthly Report view only.
+    let carry = null;
+    try{
+      const period = currentPeriod();
+      if(state.settings.catBudgetRollover && period.type === 'monthly'){
+        const [py, pm] = period.key.split('-').map(Number);
+        const pd = new Date(py, pm - 2, 1);
+        const prevKey = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
+        carry = catSpendFor(computeReportData({ type: 'monthly', key: prevKey }, scope));
+      }
+    }catch(e){ carry = null; }
     const rows = CATEGORY_BUDGET_CATS.map(cat => {
-      const target = state.settings.categoryBudgets[categoryBudgetKey(scope, cat)] || 0;
+      const base = state.settings.categoryBudgets[categoryBudgetKey(scope, cat)] || 0;
+      const rolled = (carry && base > 0) ? Math.max(0, base - (carry[cat] || 0)) : 0;
+      const target = base + rolled;
       const spent = spend[cat] || 0;
-      return { cat, target, spent };
+      return { cat, target, spent, rolled };
     }).filter(x => x.target > 0 || x.spent > 0);
     if(!rows.length){ barsEl.innerHTML = '<div class="empty">Set a cap above for any category to start tracking it.</div>'; return; }
-    barsEl.innerHTML = rows.map(({cat, target, spent}) => {
+    barsEl.innerHTML = rows.map(({cat, target, spent, rolled}) => {
       if(target <= 0){
         return `<div class="catbudget-row"><div class="catbudget-head"><span>${escapeHtml(cat)}</span><span>${curFmt(spent)} spent — no cap set</span></div></div>`;
       }
@@ -10756,7 +10784,7 @@
       const cls = spent > target ? 'over' : (pct >= 80 ? 'warn' : '');
       return `
         <div class="catbudget-row">
-          <div class="catbudget-head"><span>${escapeHtml(cat)}</span><span>${curFmt(spent)} of ${curFmt(target)}${spent > target ? ' — over' : ''}</span></div>
+          <div class="catbudget-head"><span>${escapeHtml(cat)}</span><span>${curFmt(spent)} of ${curFmt(target)}${rolled > 0 ? ' (incl. ' + curFmt(rolled) + ' rolled over)' : ''}${spent > target ? ' — over' : ''}</span></div>
           <div class="catbudget-track"><div class="catbudget-fill ${cls}" style="width:${pct}%;"></div></div>
         </div>
       `;
