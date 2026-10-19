@@ -1962,6 +1962,7 @@
             </div>
             <div id="uaeTxSpendAnalysisChart"></div>
             <div id="uaeTxSpendAnalysisCategorySummary" class="sa-cat-summary"></div>
+            <div id="uaeTxSpendAnalysisCatAvg" style="margin-top:10px;"></div>
             <div id="uaeTxSpendAnalysisTotal" class="spend-analysis-total"></div>
           </div>
         </div>
@@ -2548,6 +2549,7 @@
             </div>
             <div id="indiaTxSpendAnalysisChart"></div>
             <div id="indiaTxSpendAnalysisCategorySummary" class="sa-cat-summary"></div>
+            <div id="indiaTxSpendAnalysisCatAvg" style="margin-top:10px;"></div>
             <div id="indiaTxSpendAnalysisTotal" class="spend-analysis-total"></div>
           </div>
         </div>
@@ -6429,6 +6431,8 @@
       chartEl.innerHTML = '<div class="empty" style="padding:10px 0;">No expenses in this range.</div>';
       totalEl.style.display = 'none';
       if(summaryEl) summaryEl.innerHTML = '';
+      const avgBox0 = document.getElementById(prefix + 'TxSpendAnalysisCatAvg');
+      if(avgBox0) avgBox0.innerHTML = '';
       return;
     }
     totalEl.style.display = '';
@@ -6453,10 +6457,60 @@
         if(buckets.hasOwnProperty(label)) buckets[label] += r.amount;
         else buckets.Others += r.amount;
       });
-      summaryEl.innerHTML = Object.entries(buckets)
-        .filter(([,amt]) => amt > 0)
-        .map(([label, amt]) => `<div class="sa-cat-chip"><span>${escapeHtml(label)}</span><span>${privacyMode ? PRIVACY_MASK : fmt(amt)}</span></div>`)
-        .join('');
+      // Per-category stats so ticked categories can show exact averages.
+      const stats = {};
+      Object.keys(buckets).forEach(k => { stats[k] = { total: 0, count: 0, days: new Set() }; });
+      txs.forEach(t => {
+        const cleanLabel = (t.label || 'Uncategorized').trim() || 'Uncategorized';
+        const gLabel = groups[cleanLabel.toLowerCase()].label.trim();
+        const b = buckets.hasOwnProperty(gLabel) ? gLabel : 'Others';
+        stats[b].total += Number(t.amount) || 0;
+        stats[b].count += 1;
+        stats[b].days.add(t.date);
+      });
+      const present = Object.keys(buckets).filter(k => buckets[k] > 0);
+      const store = (window.__saTickedBudget = window.__saTickedBudget || {});
+      const ticked = (store[prefix] = store[prefix] || new Set());
+      const isOn = (k) => ticked.has(k);
+      const allOn = present.length > 0 && present.every(isOn);
+      const money = (v) => privacyMode ? PRIVACY_MASK : fmt(v);
+      const chip = (label, amt, checked, attr) => `<div class="sa-cat-chip"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="checkbox" ${attr} ${checked ? 'checked' : ''}> <span>${escapeHtml(label)}</span></label><span>${money(amt)}</span></div>`;
+      summaryEl.innerHTML = chip('ALL', total, allOn, 'data-sa-all="1"')
+        + present.map(k => chip(k, buckets[k], isOn(k), `data-sa-cat="${escapeHtml(k)}"`)).join('');
+      if(!summaryEl.dataset.saBound){
+        summaryEl.dataset.saBound = '1';
+        summaryEl.addEventListener('change', (e) => {
+          const t = e.target, set = ((window.__saTickedBudget = window.__saTickedBudget || {})[prefix] = (window.__saTickedBudget[prefix] || new Set()));
+          if(t.dataset.saAll){
+            summaryEl.querySelectorAll('[data-sa-cat]').forEach(i => { if(t.checked) set.add(i.dataset.saCat); else set.delete(i.dataset.saCat); });
+          } else if(t.dataset.saCat){
+            if(t.checked) set.add(t.dataset.saCat); else set.delete(t.dataset.saCat);
+          } else return;
+          renderBudgetSpendAnalysis(countryKey);
+        });
+      }
+      const avgBox = document.getElementById(prefix + 'TxSpendAnalysisCatAvg');
+      if(avgBox){
+        const sel = present.filter(isOn);
+        if(!sel.length){
+          avgBox.innerHTML = '<div style="font-size:12px;color:var(--ink-soft);">Tick one or more categories to see your exact average spend for just those.</div>';
+        } else {
+          const tot = sel.reduce((a,k) => a + stats[k].total, 0);
+          const cnt = sel.reduce((a,k) => a + stats[k].count, 0);
+          const dayset = new Set(); sel.forEach(k => stats[k].days.forEach(d => dayset.add(d)));
+          const toUtc = (str) => { const a = str.split('-').map(Number); return Date.UTC(a[0], a[1]-1, a[2]); };
+          const rangeDays = Math.max(1, Math.round((toUtc(to) - toUtc(from)) / 86400000) + 1);
+          const spendDays = dayset.size;
+          avgBox.innerHTML = `
+            <div style="background:var(--paper-deep);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;">
+              <strong>${sel.map(escapeHtml).join(' + ')}</strong><br>
+              Total: <strong>${money(tot)}</strong> (${cnt} transaction${cnt === 1 ? '' : 's'})<br>
+              Avg per day (all ${rangeDays} days in range): <strong>${money(tot / rangeDays)}</strong><br>
+              Avg per day you spent (${spendDays} day${spendDays === 1 ? '' : 's'}): <strong>${money(spendDays ? tot / spendDays : 0)}</strong><br>
+              Avg per transaction: <strong>${money(cnt ? tot / cnt : 0)}</strong>
+            </div>`;
+        }
+      }
     }
   }
   ['uae', 'india'].forEach(prefix => {
