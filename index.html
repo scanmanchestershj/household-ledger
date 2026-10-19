@@ -1489,6 +1489,14 @@
         </div>
       </div>
 
+      <div class="accordion" data-key="member-spending" id="memberSpendAccordion" style="display:none;">
+        <button type="button" class="accordion-header"><span>Spending by household member <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(admin view, report period above)</span></span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Each member's total spending for the period selected at the top of this report, using the same rules as the report itself (cards not double-counted). Pick UAE or India as the report scope to compare in a single currency.</div>
+          <div id="memberSpendBox"></div>
+        </div>
+      </div>
+
       <div class="accordion" data-key="yearly-plan">
         <button type="button" class="accordion-header"><span>📅 Yearly budget plan <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(cumulative, pick any dates)</span></span><span class="accordion-arrow">▸</span></button>
         <div class="accordion-body">
@@ -11031,6 +11039,47 @@
     renderCategoryBudgets(r, scope, curFmt);
   });
 
+  // ---- Spending by household member (admin only): runs the normal report calculation
+  // against each member's own books, so totals match what that member sees in Report. ----
+  function renderMemberSpending(scope, curFmt){
+    const acc = document.getElementById('memberSpendAccordion');
+    const box = document.getElementById('memberSpendBox');
+    if(!acc || !box) return;
+    const users = (state.users || []).filter(u => u && u.id);
+    const isAdmin = !!(currentUser && currentUser.role === 'admin');
+    if(!isAdmin || users.length < 2){ acc.style.display = 'none'; return; }
+    acc.style.display = '';
+    const period = currentPeriod();
+    const savedView = viewingUserId;
+    const rows = [];
+    try{
+      users.forEach(u => {
+        viewingUserId = u.id;
+        const rr = computeReportData(period, scope);
+        rows.push({ name: u.name || u.username || 'Member', spent: Number(rr.totalOutflow) || 0, income: Number(rr.income) || 0 });
+      });
+    }catch(err){
+      console.error('Member spending failed', err);
+    }finally{
+      viewingUserId = savedView;
+    }
+    rows.sort((a,b) => b.spent - a.spent);
+    const total = rows.reduce((a,r) => a + r.spent, 0);
+    if(!rows.length || total <= 0){ box.innerHTML = '<div class="empty" style="padding:10px 0;">No spending recorded for this period.</div>'; return; }
+    const money = (v) => privacyMode ? PRIVACY_MASK : curFmt(v);
+    box.innerHTML = rows.map(r => {
+      const pct = total > 0 ? (r.spent / total * 100) : 0;
+      return `
+        <div class="spend-analysis-row">
+          <div class="spend-analysis-row-head">
+            <span class="sa-label">${escapeHtml(r.name)}</span>
+            <span class="sa-figs">${pct.toFixed(1)}% · ${money(r.spent)}${r.income > 0 ? ' <span style="color:var(--ink-soft);font-size:11px;">(income ' + money(r.income) + ')</span>' : ''}</span>
+          </div>
+          <div class="spend-analysis-bar-track"><div class="spend-analysis-bar-fill" style="width:${pct.toFixed(1)}%;"></div></div>
+        </div>`;
+    }).join('') + `<div class="spend-analysis-total"><span>Household total</span><span>${money(total)}</span></div>`;
+  }
+
   // ---- Yearly budget plan: a yearly cap per category (same Tea/Lunch/Dinner/Groceries/
   // Others taxonomy and card-spend basis as Category budgets above), spread across months
   // by optional weights, shown as cumulative planned-vs-actual for any selectable dates. ----
@@ -11557,6 +11606,7 @@
 
     renderOverspendCheck(r, scope, curFmt);
     renderCategoryBudgets(r, scope, curFmt);
+    try{ renderMemberSpending(scope, curFmt); }catch(err){ console.error('Member spending render failed', err); }
     try{ renderYearlyPlan(scope, curFmt); }catch(err){ console.error('Yearly plan render failed', err); }
     [renderDebtPlanner, renderBillsCalendar, renderCashflow].forEach(fn => { try{ fn(scope); }catch(err){ console.error('Report extras failed', err); } });
     try{ renderPrivateSections(); }catch(err){ console.error('Private sections failed', err); }
