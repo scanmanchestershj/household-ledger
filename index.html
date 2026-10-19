@@ -708,6 +708,7 @@
                 <option value="Lunch">Lunch</option>
                 <option value="Dinner">Dinner</option>
                 <option value="Groceries">Groceries</option>
+                <option value="Groceries Mess">Groceries Mess</option>
                 <option value="Others">Others</option>
               </select>
               <input type="text" id="cardDesc" placeholder="Type it here" style="display:none;margin-top:8px;">
@@ -7014,7 +7015,7 @@
   document.getElementById('cardCountry').addEventListener('change', populateCardBankOptions);
   document.getElementById('cardBank').addEventListener('change', toggleCardBankOther);
 
-  const CARD_DESC_PRESETS = ['Tea', 'Lunch', 'Dinner', 'Groceries'];
+  const CARD_DESC_PRESETS = ['Tea', 'Lunch', 'Dinner', 'Groceries', 'Groceries Mess'];
   function setCardDescValue(desc){
     const sel = document.getElementById('cardDescSelect');
     const box = document.getElementById('cardDesc');
@@ -7826,7 +7827,7 @@
     // shown individually (matching the Cards description presets), everything
     // else rolled up into one "Others" figure.
     if(summaryEl){
-      const buckets = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, Others: 0 };
+      const buckets = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, 'Groceries Mess': 0, Others: 0 };
       rows.forEach(r => {
         const label = r.label.trim();
         if(buckets.hasOwnProperty(label)) buckets[label] += r.amount;
