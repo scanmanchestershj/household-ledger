@@ -2995,8 +2995,10 @@
                 <div class="add-row" style="margin-bottom:8px;">
                   <input type="text" id="scrWatchlistAddInput" placeholder="e.g. Wipro" style="flex:1;">
                   <input type="number" id="scrWatchlistTargetInput" placeholder="Target ₹" step="0.01" style="width:100px;">
+                  <button type="button" class="add-btn ghost" id="scrWatchlistFetchBtn" title="Look up the exact stock, its live price and a quick verdict">🔍 Live fetch</button>
                   <button type="button" class="add-btn" id="scrWatchlistAddBtn">+ Add</button>
                 </div>
+                <div id="scrWatchlistFetchStatus" style="font-size:11px;color:var(--ink-soft);margin:-4px 0 8px 0;line-height:1.5;"></div>
                 <div style="font-size:10.5px;color:var(--ink-soft);margin:-4px 0 8px 0;">Tap 🎯 on a stock below to set or change its target price — you'll get a notification when the live price reaches it.</div>
                 <div id="scrWatchlistItems" style="margin-bottom:8px;"></div>
                 <button type="button" class="add-btn full-width" id="scrCustomRescan">🔄 Rescan now</button>
@@ -10795,18 +10797,82 @@
       renderWatchlistItems();
     }));
   }
+  // ---- Watchlist "Live fetch": type a name or ticker (e.g. "wipro"), tap Live
+  // fetch, and it resolves the exact NSE/BSE stock, shows the live price and
+  // (best-effort) today's verdict + entry/stop/target from the playbook. Adding
+  // it afterwards saves the exact symbol so scans never mis-match the name. ----
+  let watchlistPending = null; // { name, symbol, price } from the last Live fetch
+  async function watchlistLiveFetch(){
+    const input = document.getElementById('scrWatchlistAddInput');
+    const statusEl = document.getElementById('scrWatchlistFetchStatus');
+    const btn = document.getElementById('scrWatchlistFetchBtn');
+    if(!input || !statusEl) return;
+    const query = input.value.trim();
+    if(!query){ statusEl.textContent = 'Type a stock name or ticker first, then tap Live fetch.'; return; }
+    btn.disabled = true;
+    statusEl.textContent = `Looking up "${query}"\u2026`;
+    try{
+      const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=IN`);
+      const data = await res.json();
+      if(!res.ok || data.error || data.price == null){
+        watchlistPending = null;
+        statusEl.textContent = data.error || "Couldn't fetch live data \u2014 try the exact ticker (e.g. WIPRO.NS).";
+        return;
+      }
+      watchlistPending = { name: data.name || query, symbol: data.symbol, price: data.price };
+      input.value = watchlistPending.name;
+      const fmt = v => '\u20b9' + Number(v).toFixed(2);
+      statusEl.innerHTML = `\u2713 <b>${escapeHtml(watchlistPending.name)}</b> (${escapeHtml(data.symbol)}) \u00b7 live <b>${fmt(data.price)}</b>${data.exchange ? ' \u00b7 ' + escapeHtml(data.exchange) : ''}<br><span id="scrWatchlistFetchRead" style="color:var(--ink-soft);">Checking today's signals\u2026</span>`;
+      try{
+        const tr = await fetch(`/api/technical-analysis?q=${encodeURIComponent(data.symbol)}&market=IN`);
+        const t = await tr.json();
+        const readEl = document.getElementById('scrWatchlistFetchRead');
+        if(readEl && tr.ok && !t.error){
+          const pb = t.playbook;
+          let line = `Verdict: <b>${escapeHtml(t.overallVerdict)}</b>`;
+          if(pb){
+            line += ` \u00b7 ${escapeHtml(pb.setup)} (${escapeHtml(pb.confidence)} confidence)`;
+            if(pb.plan) line += `<br>Entry ${fmt(pb.plan.entryLow)}\u2013${fmt(pb.plan.entryHigh)} \u00b7 Stop ${fmt(pb.plan.stop)} \u00b7 Target ${fmt(pb.plan.target1)}`;
+            else if(pb.pullback != null && pb.setup && pb.setup.indexOf('extended') > -1) line += `<br>Already run up \u2014 better entry near ${fmt(pb.pullback)}`;
+          }
+          readEl.innerHTML = line;
+        } else if(readEl){ readEl.textContent = ''; }
+      }catch(e){ const r = document.getElementById('scrWatchlistFetchRead'); if(r) r.textContent = ''; }
+      statusEl.insertAdjacentHTML('beforeend', '<br><span style="color:var(--teal-dark);">Tap + Add to put it on your watchlist.</span>');
+    }catch(e){
+      watchlistPending = null;
+      statusEl.textContent = 'Network error \u2014 try again.';
+    }finally{
+      btn.disabled = false;
+    }
+  }
+  const scrWatchlistFetchBtn = document.getElementById('scrWatchlistFetchBtn');
+  if(scrWatchlistFetchBtn) scrWatchlistFetchBtn.addEventListener('click', watchlistLiveFetch);
+  const scrWatchlistAddInputEl = document.getElementById('scrWatchlistAddInput');
+  if(scrWatchlistAddInputEl) scrWatchlistAddInputEl.addEventListener('keydown', ev => {
+    if(ev.key === 'Enter'){ ev.preventDefault(); watchlistLiveFetch(); }
+  });
   const scrWatchlistAddBtn = document.getElementById('scrWatchlistAddBtn');
   if(scrWatchlistAddBtn){
     scrWatchlistAddBtn.addEventListener('click', () => {
       const input = document.getElementById('scrWatchlistAddInput');
       const targetInput = document.getElementById('scrWatchlistTargetInput');
+      const statusEl = document.getElementById('scrWatchlistFetchStatus');
       const name = input.value.trim();
       if(!name) return;
       if(!state.customWatchlist) state.customWatchlist = [];
+      normalizeWatchlist();
+      const pending = (watchlistPending && watchlistPending.name === name) ? watchlistPending : null;
+      const dup = state.customWatchlist.some(w => (pending && w.symbol && w.symbol === pending.symbol) || (w.name || '').trim().toLowerCase() === name.toLowerCase());
+      if(dup){ if(statusEl) statusEl.textContent = `${name} is already on your watchlist.`; return; }
       const targetVal = targetInput ? parseFloat(targetInput.value) : NaN;
-      state.customWatchlist.push({ name, target: isNaN(targetVal) ? null : targetVal });
+      const item = { name, target: isNaN(targetVal) ? null : targetVal };
+      if(pending) item.symbol = pending.symbol;
+      state.customWatchlist.push(item);
+      watchlistPending = null;
       input.value = '';
       if(targetInput) targetInput.value = '';
+      if(statusEl) statusEl.textContent = `Added ${name}. Tap Rescan now to refresh its verdict.`;
       save();
       renderWatchlistItems();
     });
@@ -10815,7 +10881,7 @@
     const scan = state.screenerScans && state.screenerScans.custom;
     const statusEl = document.getElementById('scrCustomStatus');
     normalizeWatchlist();
-    const list = (state.customWatchlist || []).map(item => ({ name: item.name, symbol: item.name, target: item.target }));
+    const list = (state.customWatchlist || []).map(item => ({ name: item.name, symbol: item.symbol || item.name, target: item.target }));
     if(!list.length){ if(statusEl) statusEl.textContent = 'Add at least one stock to your watchlist first.'; return; }
     if(scan && scan.date === todayStr() && !force){
       renderBatchResults('custom', 'scrCustomResult');
@@ -17119,7 +17185,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.1.1', APP_VERSION_DATE = '23 Oct 2026';
+    const APP_VERSION = '1.2.0', APP_VERSION_DATE = '23 Oct 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
