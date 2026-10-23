@@ -14384,8 +14384,6 @@
   }
   wireStocksAutoFill('UAE');
   wireStocksAutoFill('India');
-  fillBrokerSelect('UAE');
-  fillBrokerSelect('India');
 
   // ---- All Stocks Overview + Rescan Now: a single consolidated table across
   // every held stock (qty, avg buy price, LTP, current value, return) sitting
@@ -14454,6 +14452,10 @@
     save(); renderInvestmentCountry(countryKey);
     return hit.length;
   }
+
+  // Run only after the broker constants above are defined (calling earlier throws and stops the whole page script).
+  fillBrokerSelect('UAE');
+  fillBrokerSelect('India');
 
   function renderBrokerSection(countryKey){
     const entries = investmentEntriesList(countryKey, 'stocks');
@@ -17117,7 +17119,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.1.0', APP_VERSION_DATE = '23 Oct 2026';
+    const APP_VERSION = '1.1.1', APP_VERSION_DATE = '23 Oct 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
