@@ -10329,6 +10329,11 @@
     const mas = (data.movingAverages || []).filter(m => m.value != null);
     const below = mas.filter(m => m.value < price).sort((a, b) => b.value - a.value);
     const above = mas.filter(m => m.value > price).sort((a, b) => a.value - b.value);
+    if(data.playbook && data.playbook.setup === 'Dip-Buy Setup' && v !== 'Strong Buy' && v !== 'Buy'){
+      return { icon: '🟠', color: '#b9770e',
+        label: 'Reversal watch — trend still weak, but it is bouncing',
+        detail: 'The trend score is still negative because price has not yet recovered its averages, but the reversal checklist below is met. If you act, use a small, staged entry with the stop shown — not a full position.' };
+    }
     if(v === 'Strong Buy' || v === 'Buy'){
       const support = below[0] ? below[0].value : price * 0.97;
       return { icon: '🟢', color: 'var(--teal-dark)',
@@ -10346,6 +10351,73 @@
       detail: `Price is mixed relative to its key averages — neither a clear dip to buy nor a breakdown to exit. It's time to hold and wait for a clearer signal.` };
   }
 
+  // ---- Entry/Exit playbook: setup type, confidence, the reasons behind it,
+  // concrete entry/stop/target levels (from /api/technical-analysis `playbook`)
+  // and a position-size calculator so a stop-loss translates into a share
+  // count. Formula-based, not advice. ----
+  function renderPlaybook(data){
+    const el = document.getElementById('stockChartPlaybook');
+    if(!el) return;
+    const pb = data && data.playbook;
+    if(!pb){ el.innerHTML = ''; return; }
+    const confColor = pb.confidence === 'High' ? '#1e8449' : pb.confidence === 'Medium' ? '#b9770e' : '#c0392b';
+    const fmt = v => v != null ? '₹' + Number(v).toFixed(2) : '—';
+    const reasons = (pb.reasons || []).map(r => `<li style="margin:2px 0;">${escapeHtml(r)}</li>`).join('');
+    const plan = pb.plan;
+    let planHtml = '';
+    if(plan){
+      planHtml = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;font-size:12px;">
+          <div>Entry zone<br><b>${fmt(plan.entryLow)} – ${fmt(plan.entryHigh)}</b></div>
+          <div>Stop-loss<br><b style="color:#c0392b;">${fmt(plan.stop)} (${plan.stopPct}%)</b></div>
+          <div>Target 1 (nearest resistance)<br><b style="color:#1e8449;">${fmt(plan.target1)}</b></div>
+          <div>Target 2 (2× the risk)<br><b style="color:#1e8449;">${fmt(plan.target2)}</b></div>
+        </div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">${escapeHtml(plan.scaleIn)} ${escapeHtml(plan.exitRule)}</div>
+        <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px;">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Position size</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;">
+            <label>Capital ₹ <input type="number" id="posCapital" min="0" step="1000" style="width:100px;"></label>
+            <label>Risk % <input type="number" id="posRiskPct" min="0.1" max="5" step="0.1" value="1" style="width:56px;"></label>
+          </div>
+          <div id="posResult" style="font-size:12px;margin-top:6px;color:var(--ink-soft);">Enter your investing capital to see how many shares keep your loss within the risk %.</div>
+        </div>`;
+    }
+    el.innerHTML = `<div style="border:1px solid var(--line);border-radius:8px;padding:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div style="font-weight:700;">🧭 Entry/Exit playbook — ${escapeHtml(pb.setup)}</div>
+          <div style="font-size:11px;font-weight:700;color:${confColor};">Confidence: ${escapeHtml(pb.confidence)}</div>
+        </div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">Why this verdict</div>
+        <ul style="margin:4px 0 0 16px;padding:0;font-size:12px;">${reasons}</ul>
+        ${planHtml}
+        <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">52-wk range ${fmt(pb.low52)} – ${fmt(pb.high52)}. Formula-based on price history only; it does not know news, results or fundamentals. No setup wins every time — the stop-loss is what protects you when it is wrong.</div>
+      </div>`;
+    if(!plan) return;
+    const capEl = document.getElementById('posCapital');
+    const riskEl = document.getElementById('posRiskPct');
+    const out = document.getElementById('posResult');
+    try{ const saved = localStorage.getItem('ledgerPosCapital'); if(saved) capEl.value = saved; }catch(e){}
+    const recalc = () => {
+      const cap = parseFloat(capEl.value), riskPct = parseFloat(riskEl.value);
+      try{ if(cap > 0) localStorage.setItem('ledgerPosCapital', String(cap)); }catch(e){}
+      if(!(cap > 0) || !(riskPct > 0)){ out.textContent = 'Enter your investing capital to see how many shares keep your loss within the risk %.'; return; }
+      const entry = plan.entryHigh, perShare = entry - plan.stop;
+      if(!(perShare > 0)){ out.textContent = 'Stop-loss is not below the entry price, so size cannot be computed.'; return; }
+      const maxLoss = cap * riskPct / 100;
+      const qty = Math.floor(maxLoss / perShare);
+      const value = qty * entry;
+      const weight = value / cap * 100;
+      let msg = `Max loss ${fmt(maxLoss)} → buy about <b>${qty} shares</b> (${fmt(value)}, ${weight.toFixed(0)}% of capital) if you exit at the stop.`;
+      if(qty < 1) msg = `Even 1 share risks more than ${fmt(maxLoss)} at this stop — skip it or accept a higher risk %.`;
+      else if(weight > 25) msg += ` <span style="color:#c0392b;">That is a large single position — consider less than 25% of capital in one stock.</span>`;
+      out.innerHTML = msg;
+    };
+    capEl.addEventListener('input', recalc);
+    riskEl.addEventListener('input', recalc);
+    recalc();
+  }
+
   async function loadStockActionAndHistory(symbol){
     renderVerdictHistory(symbol);
     const actionEl = document.getElementById('stockChartAction');
@@ -10360,6 +10432,7 @@
           <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">${escapeHtml(a.detail)}</div>
         </div>`;
       renderScoreBreakdown(data);
+      renderPlaybook(data);
       if(data.price != null) renderVerdictHistory(symbol, data.price);
     }catch(e){
       if(actionEl) actionEl.innerHTML = '';
@@ -10384,6 +10457,7 @@
         <div id="stockChartArea" style="width:100%;min-height:180px;"></div>
         <div id="stockChartStatus" style="font-size:11px;color:var(--ink-soft);margin-top:6px;"></div>
         <div id="stockChartAction" style="margin-top:12px;"></div>
+        <div id="stockChartPlaybook" style="margin-top:12px;"></div>
         <div id="stockChartScoreBreakdown" style="margin-top:12px;"></div>
         <div id="stockChartHistory" style="margin-top:12px;"></div>
       </div>`;

@@ -147,6 +147,120 @@ function verdictFromCounts(buy, sell, total) {
   return 'Neutral';
 }
 
+
+// ---------------------------------------------------------------------------
+// Entry/Exit playbook — ADDITIVE (does not change overallVerdict).
+// The verdict above is trend-following: it only turns Buy AFTER price has
+// climbed back over its averages, so it misses quality stocks bouncing off a
+// fall. This adds a separate read for that case plus concrete price levels.
+// Formula-based, uses closes only (no highs/lows), so volatility is a
+// close-to-close proxy for ATR.
+// ---------------------------------------------------------------------------
+function buildPlaybook(closes, price, movingAverages, rsi14, macdResult, verdict, buy, total) {
+  const n = closes.length;
+  const round = v => (v == null || !isFinite(v)) ? null : Math.round(v * 100) / 100;
+  const pct = (a, b) => (b ? ((a - b) / b) * 100 : null);
+  const maVal = p => { const m = movingAverages.find(x => x.period === p); return m ? m.value : null; };
+
+  const yr = closes.slice(-252);
+  const high52 = Math.max(...yr);
+  const low52 = Math.min(...yr);
+  const drawdown = pct(price, high52);
+  const ret1m = n > 22 ? pct(price, closes[n - 23]) : null;
+  const sma5 = maVal(5), sma20 = maVal(20), sma50 = maVal(50), sma200 = maVal(200);
+
+  // Close-to-close "ATR" proxy over 14 days
+  let atr = 0;
+  for (let i = n - 14; i < n; i++) atr += Math.abs(closes[i] - closes[i - 1]);
+  atr /= 14;
+
+  // Is momentum turning? Compare today with 3 sessions ago.
+  const prev = closes.slice(0, -3);
+  const rsiPrev = rsi(prev, 14);
+  const macdPrev = macd(prev);
+  const rsiTurningUp = rsi14 != null && rsiPrev != null && rsi14 > rsiPrev && rsiPrev < 45;
+  const macdImproving = macdResult && macdPrev ? macdResult.histogram > macdPrev.histogram : false;
+
+  // Dip-buy checklist (each worth 1)
+  const checks = [
+    { ok: drawdown != null && drawdown <= -12, text: `Down ${drawdown != null ? Math.abs(drawdown).toFixed(1) : '—'}% from its 52-week high` },
+    { ok: ret1m != null && ret1m <= -5, text: `Fell ${ret1m != null ? Math.abs(ret1m).toFixed(1) : '—'}% over the last month` },
+    { ok: rsi14 != null && rsi14 <= 40, text: `RSI is low (${rsi14 != null ? rsi14.toFixed(0) : '—'}) — sellers look exhausted` },
+    { ok: rsiTurningUp, text: 'RSI has started turning up' },
+    { ok: macdImproving, text: 'MACD histogram is improving (selling pressure fading)' },
+    { ok: sma200 != null && price >= sma200 * 0.9, text: 'Still near/above its 200-day average (long-term trend not broken)' },
+    { ok: sma5 != null && price > sma5, text: 'Price back above its 5-day average (first bounce)' }
+  ];
+  const dipScore = checks.filter(c => c.ok).length;
+  // A dip is only actionable once the fall has visibly stopped: price back over
+  // its 5-day average AND momentum (RSI or MACD) improving. Oversold alone is
+  // not enough — a stock can stay oversold while it keeps falling.
+  const turnConfirmed = sma5 != null && price > sma5 && (rsiTurningUp || macdImproving);
+  const dipSetup = dipScore >= 4 && turnConfirmed && drawdown != null && drawdown <= -10 && verdict !== 'Strong Buy';
+
+  let setup, confidence;
+  if (verdict === 'Strong Buy' || verdict === 'Buy') {
+    setup = 'Trend Buy';
+    const strong = total && buy / total >= 0.8 && macdResult && macdResult.histogram > 0 && sma200 != null && price > sma200;
+    confidence = strong ? 'High' : 'Medium';
+    // Chasing check: very stretched above the 20-day average
+    if (sma20 && pct(price, sma20) > 8) { setup = 'Trend Buy (extended)'; confidence = 'Low'; }
+  } else if (dipSetup) {
+    setup = 'Dip-Buy Setup';
+    confidence = dipScore >= 6 ? 'Medium' : 'Low'; // dips are never High: catching a falling knife is riskier
+  } else if (verdict === 'Sell' || verdict === 'Strong Sell') {
+    setup = 'Falling — wait';
+    confidence = 'Medium';
+  } else {
+    setup = 'Neutral';
+    confidence = 'Low';
+  }
+
+  const reasons = [];
+  if (setup === 'Dip-Buy Setup') checks.filter(c => c.ok).forEach(c => reasons.push(c.text));
+  else if (setup.startsWith('Trend Buy')) {
+    reasons.push(`${buy} of ${total} trend signals are bullish`);
+    if (sma200 != null && price > sma200) reasons.push('Price is above its 200-day average');
+    if (macdResult && macdResult.histogram > 0) reasons.push('MACD is positive');
+    if (setup.includes('extended')) reasons.push('But price is >8% above its 20-day average — buying here is chasing; wait for a pullback');
+  } else if (setup === 'Falling — wait') {
+    reasons.push('Price is below most key averages — trend is still down');
+    if (dipScore > 0) reasons.push(`Reversal checklist: ${dipScore}/7 met — a dip-buy is flagged only at 4+ AND once price is back above its 5-day average with momentum improving`);
+    if (sma20) reasons.push(`A close above the 20-day average (₹${round(sma20)}) with MACD improving would be the first sign of a turn`);
+  } else reasons.push('Signals are mixed — no clear edge either way');
+
+  // Levels (only when there is something to buy)
+  let plan = null;
+  if (setup === 'Dip-Buy Setup' || setup.startsWith('Trend Buy')) {
+    const recentLow = Math.min(...closes.slice(-20));
+    const stop = Math.min(price - 2 * atr, recentLow * 0.99, price * 0.97); // never tighter than 3%
+    const risk = price - stop;
+    const above = [sma20, sma50, sma100(movingAverages), sma200].filter(v => v != null && v > price * 1.01).sort((a, b) => a - b);
+    const target2 = price + 2 * risk;
+    const nearestResistance = above[0] != null ? above[0] : price + risk;
+    plan = {
+      entryLow: round(Math.max(price - atr, stop + risk * 0.5)),
+      entryHigh: round(price),
+      stop: round(stop),
+      stopPct: round(pct(stop, price)),
+      target1: round(Math.min(nearestResistance, target2)),
+      target2: round(target2),
+      riskReward: 2,
+      scaleIn: 'Buy ~1/3 now, ~1/3 near the lower end of the zone, ~1/3 once price closes above its 20-day average.',
+      exitRule: 'Exit if it closes below the stop. After it gains the amount you risked, move the stop up to your entry price.'
+    };
+  }
+
+  return {
+    setup, confidence, reasons, dipScore,
+    drawdownFrom52wHighPct: round(drawdown), return1mPct: round(ret1m),
+    high52: round(high52), low52: round(low52),
+    rsiTurningUp, macdImproving, plan
+  };
+}
+
+function sma100(mas) { const m = mas.find(x => x.period === 100); return m ? m.value : null; }
+
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
   const { q, market } = req.query || {};
@@ -219,6 +333,7 @@ module.exports = async (req, res) => {
   const totalSignals = movingAverages.length + oscillators.length;
   const overallVerdict = verdictFromCounts(totalBuy, totalSell, totalSignals);
   const technicalScore = calculateTechnicalScore({ movingAverages, oscillators });
+  const playbook = buildPlaybook(closes, price, movingAverages, rsi14, macdResult, overallVerdict, totalBuy, totalSignals);
 
   res.status(200).json({
     symbol: resolved.symbol,
@@ -230,6 +345,7 @@ module.exports = async (req, res) => {
     oscillatorVerdict,
     overallVerdict,
     technicalScore,
+    playbook,
     buySignals: totalBuy,
     sellSignals: totalSell,
     totalSignals,
