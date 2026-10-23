@@ -257,6 +257,7 @@ function buildPlaybook(closes, price, movingAverages, rsi14, macdResult, verdict
     setup, confidence, reasons, dipScore,
     drawdownFrom52wHighPct: round(drawdown), return1mPct: round(ret1m),
     high52: round(high52), low52: round(low52),
+    pullback: round(sma20),
     rsiTurningUp, macdImproving, plan
   };
 }

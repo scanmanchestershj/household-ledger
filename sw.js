@@ -4,7 +4,7 @@
 // and your live household data always go straight to the network so you
 // never see stale or out-of-sync figures.
 
-const CACHE_NAME = 'smart-ai-assistant-shell-v3';
+const CACHE_NAME = 'smart-ai-assistant-shell-v4';
 const SHELL_FILES = [
   './',
   './config.js',

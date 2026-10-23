@@ -542,6 +542,7 @@
     <div class="top-row">
       <div class="eyebrow" id="dateLine">—</div>
       <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="add-btn ghost" id="appVersionBadge" title="App version — tap to load the latest" style="padding:4px 8px; font-size:10.5px; font-weight:700; line-height:1.2;">v…</button>
         <button type="button" class="add-btn ghost" id="officeModeBtn" title="Office mode: off" aria-label="Office mode" aria-pressed="false" style="padding:6px 10px; font-size:14px; line-height:1;">🕶️</button>
         <button type="button" class="add-btn ghost privacy-eye" id="globalPrivacyBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1;">🙈</button>
         <button type="button" class="add-btn ghost" id="darkModeToggleBtn" title="Switch to dark mode" aria-label="Switch to dark mode" style="padding:6px 10px; font-size:14px; line-height:1;">🌙</button>
@@ -2204,6 +2205,10 @@
                 <label class="field-label">Date</label>
                 <input type="date" id="uaeInvStocksDate">
               </div>
+              <div>
+                <label class="field-label">Broker</label>
+                <select id="uaeInvStocksBroker"></select>
+              </div>
               <div class="full" id="uaeInvStocksPreview"></div>
               <button class="add-btn full-width" id="uaeInvStocksAdd">Add entry</button>
               <button class="add-btn ghost full-width" id="uaeInvStocksCancelEdit" style="display:none;">Cancel edit</button>
@@ -2793,6 +2798,10 @@
               <div>
                 <label class="field-label">Date</label>
                 <input type="date" id="indiaInvStocksDate">
+              </div>
+              <div>
+                <label class="field-label">Broker</label>
+                <select id="indiaInvStocksBroker"></select>
               </div>
               <div class="full" id="indiaInvStocksPreview"></div>
               <button class="add-btn full-width" id="indiaInvStocksAdd">Add entry</button>
@@ -9525,7 +9534,7 @@
       const ma50 = (data.movingAverages || []).find(m => m.period === 50);
       const ma200 = (data.movingAverages || []).find(m => m.period === 200);
       const rsi = (data.oscillators || []).find(o => o.name === 'RSI (14)');
-      return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict, buySignals: data.buySignals, sellSignals: data.sellSignals, totalSignals: data.totalSignals, ma50: ma50 ? ma50.value : null, ma200: ma200 ? ma200.value : null, rsi: rsi ? rsi.value : null };
+      return { symbol: data.symbol, name: data.name || symbol, price: data.price, verdict: data.overallVerdict, buySignals: data.buySignals, sellSignals: data.sellSignals, totalSignals: data.totalSignals, ma50: ma50 ? ma50.value : null, ma200: ma200 ? ma200.value : null, rsi: rsi ? rsi.value : null, pb: compactPlaybook(data.playbook) };
     }catch(e){
       return { symbol, name: symbol, error: 'network error' };
     }
@@ -9602,28 +9611,56 @@
   //    narrowest, since those aren't really being suggested as buys).
   // Uses only price/ma50/verdict already captured per scan result — no
   // extra fetch, no extra storage. ----
+  // Compact (few-number) copy of the API playbook, small enough to store with
+  // every scan result: s=setup, c=confidence, pl=pullback level, and when
+  // there is an actionable plan: el/eh=entry zone, sl=stop, t1/t2=targets.
+  function compactPlaybook(pb){
+    if(!pb) return null;
+    const o = { s: pb.setup, c: pb.confidence, pl: pb.pullback };
+    if(pb.plan) Object.assign(o, { el: pb.plan.entryLow, eh: pb.plan.entryHigh, sl: pb.plan.stop, t1: pb.plan.target1, t2: pb.plan.target2 });
+    return o;
+  }
   function computeEntryExitPrice(r){
     if(r.price == null) return null;
+    const pb = r.pb;
+    // New logic (from the scan's playbook): real entry zone, stop-loss and
+    // targets instead of "today's price + a fixed % by verdict".
+    if(pb && pb.eh != null){
+      return { entry: pb.eh, entryLow: pb.el, exit: pb.t1, exit2: pb.t2, stop: pb.sl, canBuyNow: true, bearish: false, mode: 'plan', setup: pb.s, conf: pb.c };
+    }
+    if(pb && pb.s === 'Trend Buy (extended)'){
+      const entry = pb.pl != null ? pb.pl : r.price;
+      return { entry, exit: entry * 1.08, canBuyNow: false, bearish: false, mode: 'wait', setup: pb.s, conf: pb.c };
+    }
+    if(pb && pb.s === 'Falling \u2014 wait'){
+      return { entry: pb.pl != null ? pb.pl : r.price, exit: null, canBuyNow: false, bearish: true, mode: 'avoid', setup: pb.s, conf: pb.c };
+    }
+    // Older scans (no playbook yet) and Neutral: previous simple formula.
     const ma50 = r.ma50;
     const entry = (ma50 != null && r.price > ma50 * 1.03) ? ma50 : r.price;
     const targetPct = r.verdict === 'Strong Buy' ? 0.20 : r.verdict === 'Buy' ? 0.12 : (r.verdict === 'Sell' || r.verdict === 'Strong Sell') ? 0.05 : 0.08;
     const exit = entry * (1 + targetPct);
-    // A Sell/Strong Sell verdict must never be paired with a "Buy zone" label —
-    // the price-vs-50-day-average check below is a short-term technicality and
-    // used to be computed with no awareness of the verdict at all, which is why
-    // a Strong Sell stock could still show "Buy zone" (whenever its price wasn't
-    // running >3% above its own average, entry defaulted to today's price, and
-    // price <= price*1.02 is almost always true). Bearish verdicts are now
-    // force-flagged so the label always agrees with the verdict.
     const bearish = r.verdict === 'Sell' || r.verdict === 'Strong Sell';
     const canBuyNow = !bearish && r.price <= entry * 1.02;
-    return { entry, exit, canBuyNow, bearish };
+    return { entry, exit, canBuyNow, bearish, mode: 'legacy' };
   }
   function renderEntryExitCell(ee){
-    if(!ee) return '—';
+    if(!ee) return '\u2014';
+    const f = v => v != null ? Number(v).toFixed(2) : '\u2014';
+    if(ee.mode === 'plan'){
+      const dip = ee.setup === 'Dip-Buy Setup';
+      const color = dip ? '#b9770e' : '#1e8449';
+      return `<span style="font-size:10.5px;">Buy ${f(ee.entryLow)}\u2013${f(ee.entry)} \u2192 T ${f(ee.exit)}</span><br><span style="font-size:10px;color:#c0392b;">Stop ${f(ee.stop)}</span> <span style="font-size:9.5px;font-weight:600;color:${color};">${dip ? 'Dip-buy' : 'Buy zone'} \u00b7 ${escapeHtml(ee.conf || '')}</span>`;
+    }
+    if(ee.mode === 'wait'){
+      return `<span style="font-size:10.5px;">Pullback ~${f(ee.entry)}</span><br><span style="font-size:9.5px;font-weight:600;color:#b8860b;">Wait for dip (extended)</span>`;
+    }
+    if(ee.mode === 'avoid'){
+      return `<span style="font-size:10.5px;">Watch ~${f(ee.entry)}</span><br><span style="font-size:9.5px;font-weight:600;color:#c0392b;">Not a buy yet</span>`;
+    }
     const label = ee.bearish ? 'Not a buy' : (ee.canBuyNow ? 'Buy zone' : 'Wait for dip');
     const color = ee.bearish ? '#c0392b' : (ee.canBuyNow ? '#1e8449' : '#b8860b');
-    return `<span style="font-size:10.5px;">E ${ee.entry.toFixed(2)} · X ${ee.exit.toFixed(2)}</span><br><span style="font-size:9.5px;font-weight:600;color:${color};">${label}</span>`;
+    return `<span style="font-size:10.5px;">E ${ee.entry.toFixed(2)} \u2192 X ${ee.exit.toFixed(2)}</span><br><span style="font-size:9.5px;font-weight:600;color:${color};">${label}</span> <span style="font-size:9px;color:var(--ink-soft);">(rescan)</span>`;
   }
   function renderBatchResults(cacheKey, resultElId){
     const box = document.getElementById(resultElId);
@@ -9795,7 +9832,7 @@
         if(r.error) return;
         const n = normStockName(r.name);
         if(!n || map[n]) return; // first (highest-priority list) match wins
-        map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price, buySignals: r.buySignals, sellSignals: r.sellSignals, totalSignals: r.totalSignals, ma50: r.ma50 };
+        map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price, buySignals: r.buySignals, sellSignals: r.sellSignals, totalSignals: r.totalSignals, ma50: r.ma50, pb: r.pb };
       });
     });
     return map;
@@ -14038,6 +14075,8 @@
     document.getElementById(idBase + 'Qty').value = h.qty;
     document.getElementById(idBase + 'Avg').value = h.price;
     document.getElementById(idBase + 'Date').value = h.date || '';
+    const brokerSel = document.getElementById(idBase + 'Broker');
+    if(brokerSel) brokerSel.value = h.broker || '';
     investmentEditId[countryKey][catCfg.key] = h.id;
     const cancelBtn = document.getElementById(idBase + 'CancelEdit');
     if(cancelBtn) cancelBtn.style.display = '';
@@ -14079,17 +14118,21 @@
     const qty = parseFloat(document.getElementById(idBase + 'Qty').value);
     const price = parseFloat(document.getElementById(idBase + 'Avg').value);
     const date = document.getElementById(idBase + 'Date').value || todayStr();
+    const brokerEl = catCfg.key === 'stocks' ? document.getElementById(idBase + 'Broker') : null;
+    const broker = brokerEl && brokerEl.value ? brokerEl.value : '';
+    if(broker){ try{ localStorage.setItem('ledgerLastBroker_' + countryKey, broker); }catch(e){} }
     if(!name || isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) return;
     const entries = investmentEntriesList(countryKey, catCfg.key);
     const editId = investmentEditId[countryKey][catCfg.key];
     if(editId){
       const idx = entries.findIndex(x => x.id === editId);
       if(idx > -1){
-        entries[idx] = { id: editId, name, type, qty, price, date };
+        const keepBroker = broker || entries[idx].broker;
+        entries[idx] = Object.assign({ id: editId, name, type, qty, price, date }, keepBroker ? { broker: keepBroker } : {});
       }
       cancelEditInvestment(countryKey, catCfg);
     } else {
-      entries.push({ id: uid(), name, type, qty, price, date });
+      entries.push(Object.assign({ id: uid(), name, type, qty, price, date }, broker ? { broker } : {}));
       ['Name','Qty','Avg'].forEach(f => { document.getElementById(idBase+f).value = ''; });
       if(typeEl) typeEl.value = 'buy';
     }
@@ -14341,6 +14384,8 @@
   }
   wireStocksAutoFill('UAE');
   wireStocksAutoFill('India');
+  fillBrokerSelect('UAE');
+  fillBrokerSelect('India');
 
   // ---- All Stocks Overview + Rescan Now: a single consolidated table across
   // every held stock (qty, avg buy price, LTP, current value, return) sitting
@@ -14349,6 +14394,96 @@
   // opening each one individually. Average buy price is already computed from
   // your buy/sell entries (weighted average cost) and doesn't need refetching —
   // rescanning only refreshes the live LTP that Current Value/Return use. ----
+  // ---- Brokers (stocks only). Each buy/sell entry can carry a `broker`; entries
+  // without one are "Unassigned". Holdings stay consolidated per stock above;
+  // the broker view below replays the same moving-average costing per broker. ----
+  const BROKERS_BY_COUNTRY = {
+    India: ['Zerodha', 'Groww', 'Upstox', 'Angel One', 'ICICI Direct', 'HDFC Securities', 'Kotak Securities', 'Axis Direct', 'SBI Securities', 'Motilal Oswal', 'Sharekhan', 'IIFL Securities', '5paisa', 'Paytm Money', 'Dhan', 'Fyers', 'Other'],
+    UAE: ['Sarwa', 'Interactive Brokers', 'Emirates NBD Securities', 'ADCB Securities', 'Mashreq Securities', 'Other']
+  };
+  const BROKER_NONE = 'Unassigned';
+  function brokerListFor(countryKey){ return BROKERS_BY_COUNTRY[countryKey] || BROKERS_BY_COUNTRY.India; }
+  function entryBroker(e){ return (e && e.broker && String(e.broker).trim()) || BROKER_NONE; }
+  function fillBrokerSelect(countryKey){
+    const el = document.getElementById(invPrefix(countryKey) + 'InvStocksBroker');
+    if(!el) return;
+    let last = '';
+    try{ last = localStorage.getItem('ledgerLastBroker_' + countryKey) || ''; }catch(e){}
+    el.innerHTML = '<option value="">Broker (optional)</option>' + brokerListFor(countryKey).map(b => `<option value="${escapeHtml(b)}"${b === last ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
+  }
+  // Pure function (easy to test): entries + LTP map -> per-broker totals and holdings.
+  function investmentBrokerBreakdown(entries, prices){
+    const byBroker = {};
+    entries.forEach(e => {
+      const b = entryBroker(e), key = invKeyName(e.name);
+      byBroker[b] = byBroker[b] || {};
+      (byBroker[b][key] = byBroker[b][key] || { name: e.name, list: [] }).list.push(e);
+    });
+    const out = {};
+    Object.keys(byBroker).forEach(b => {
+      const row = { invested: 0, current: 0, holdings: [] };
+      Object.keys(byBroker[b]).forEach(key => {
+        const g = byBroker[b][key];
+        const sorted = g.list.slice().sort((x, y) => (x.date||'').localeCompare(y.date||'') || String(x.id).localeCompare(String(y.id)));
+        let qty = 0, invested = 0;
+        sorted.forEach(e => {
+          const eq = Number(e.qty) || 0, ep = Number(e.price) || 0;
+          if(e.type === 'sell'){ const sq = Math.min(eq, qty); const avg = qty > 0 ? invested / qty : 0; invested -= sq * avg; qty -= sq; }
+          else { invested += eq * ep; qty += eq; }
+        });
+        if(qty <= 0.0000001) return;
+        const avgPrice = invested / qty;
+        const cur = prices[key] != null ? Number(prices[key]) : avgPrice;
+        row.holdings.push({ name: g.name, qty, avgPrice, curPrice: cur, invested, current: qty * cur });
+        row.invested += invested; row.current += qty * cur;
+      });
+      if(row.holdings.length) out[b] = row;
+    });
+    return out;
+  }
+  function moveStockToBroker(countryKey, stockKey, broker){
+    const entries = investmentEntriesList(countryKey, 'stocks');
+    entries.forEach(e => { if(invKeyName(e.name) === stockKey){ if(broker && broker !== BROKER_NONE) e.broker = broker; else delete e.broker; } });
+    save(); renderInvestmentCountry(countryKey);
+  }
+  function moveAllBroker(countryKey, from, to){
+    const entries = investmentEntriesList(countryKey, 'stocks');
+    const hit = entries.filter(e => entryBroker(e) === from);
+    if(!hit.length || !to || from === to) return 0;
+    hit.forEach(e => { if(to === BROKER_NONE) delete e.broker; else e.broker = to; });
+    save(); renderInvestmentCountry(countryKey);
+    return hit.length;
+  }
+
+  function renderBrokerSection(countryKey){
+    const entries = investmentEntriesList(countryKey, 'stocks');
+    const prices = investmentPricesMap(countryKey, 'stocks');
+    const bb = investmentBrokerBreakdown(entries, prices);
+    const names = Object.keys(bb).sort((a, b) => bb[b].current - bb[a].current);
+    if(!names.length) return '';
+    const inUse = Array.from(new Set(entries.map(entryBroker)));
+    const fromOpts = inUse.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+    const toOpts = [BROKER_NONE].concat(brokerListFor(countryKey)).map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+    const rows = names.map(b => {
+      const r = bb[b], pnl = r.current - r.invested, pct = r.invested > 0 ? pnl / r.invested * 100 : 0;
+      const list = r.holdings.sort((x, y) => y.current - x.current).map(h => `${escapeHtml(h.name)} ${h.qty}`).join(' \u00b7 ');
+      return `<tr style="border-top:1px solid var(--hairline,#eee);vertical-align:top;">
+        <td style="padding:5px 6px 5px 0;"><b>${escapeHtml(b)}</b><div style="font-size:9.5px;color:var(--ink-soft);max-width:260px;">${list}</div></td>
+        <td style="padding:5px 6px;text-align:right;">${fmtCountry(r.invested, countryKey)}</td>
+        <td style="padding:5px 6px;text-align:right;">${fmtCountry(r.current, countryKey)}</td>
+        <td style="padding:5px 0 5px 6px;text-align:right;color:${pnl >= 0 ? '#1e8449' : '#c0392b'};">${pnl >= 0 ? '+' : '\u2212'}${Math.abs(pct).toFixed(1)}%</td></tr>`;
+    }).join('');
+    return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:8px;">
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px;">Broker-wise holdings</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;"><thead><tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;"><th>Broker</th><th style="text-align:right;">Invested</th><th style="text-align:right;">Current</th><th style="text-align:right;">Return</th></tr></thead><tbody>${rows}</tbody></table>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:11.5px;">
+        Move all stocks from <select id="${invPrefix(countryKey)}BrokerMoveFrom" style="font-size:11px;">${fromOpts}</select>
+        to <select id="${invPrefix(countryKey)}BrokerMoveTo" style="font-size:11px;">${toOpts}</select>
+        <button type="button" class="add-btn" id="${invPrefix(countryKey)}BrokerMoveBtn" style="padding:4px 10px;font-size:11px;">Move</button>
+      </div>
+      <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Moves existing entries to the broker \u2014 nothing needs retyping. You can also change a single stock with the Broker dropdown in its row.</div>
+    </div>`;
+  }
   function renderStocksOverview(countryKey){
     const box = document.getElementById(invPrefix(countryKey) + 'InvStocksOverview');
     const panel = document.getElementById(invPrefix(countryKey) + 'InvStocksOverviewPanel');
@@ -14360,10 +14495,11 @@
     const entries = investmentEntriesList(countryKey, 'stocks');
     const verdictMap = collectVerdictsForCountry(countryKey);
     box.innerHTML = `
-      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:620px;">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:760px;">
         <thead>
           <tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;">
             <th style="padding:4px 6px 4px 0;">Stock</th>
+            <th style="padding:4px 6px;">Broker</th>
             <th style="padding:4px 6px;text-align:right;">Qty</th>
             <th style="padding:4px 6px;text-align:right;">Avg</th>
             <th style="padding:4px 6px;text-align:right;">LTP</th>
@@ -14376,11 +14512,17 @@
         <tbody>
           ${sorted.map(g => {
             const v = verdictMap[normStockName(g.name)];
-            const ee = v ? computeEntryExitPrice({ price: g.curPrice, ma50: v.ma50, verdict: v.verdict }) : null;
+            const ee = v ? computeEntryExitPrice({ price: g.curPrice, ma50: v.ma50, verdict: v.verdict, pb: v.pb }) : null;
+            const stockBrokers = Array.from(new Set(entries.filter(e => invKeyName(e.name) === g.key).map(entryBroker)));
+            const brokerVal = stockBrokers.length === 1 ? (stockBrokers[0] === BROKER_NONE ? '' : stockBrokers[0]) : '__multi';
+            const brokerOpts = (stockBrokers.length > 1 ? '<option value="__multi" selected disabled>Multiple brokers</option>' : '') +
+              `<option value=""${brokerVal === '' ? ' selected' : ''}>Unassigned</option>` +
+              brokerListFor(countryKey).map(b => `<option value="${escapeHtml(b)}"${b === brokerVal ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
             const eeCell = ee ? renderEntryExitCell(ee) : '<span style="font-size:9.5px;color:var(--ink-soft);">Not scanned</span>';
             return `
             <tr style="border-top:1px solid var(--hairline, #eee);" data-stock-key="${escapeHtml(g.key)}">
               <td style="padding:5px 6px 5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${escapeHtml(g.name)}</td>
+              <td style="padding:5px 6px;"><select class="stock-broker-sel" data-key="${escapeHtml(g.key)}" style="font-size:10.5px;max-width:112px;padding:2px;">${brokerOpts}</select></td>
               <td style="padding:5px 6px;text-align:right;">${g.qty}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.avgPrice, countryKey)}</td>
               <td style="padding:5px 6px;text-align:right;">${fmtCountry(g.curPrice, countryKey)}</td>
@@ -14388,6 +14530,7 @@
               <td style="padding:5px 6px;text-align:right;color:${g.pnl >= 0 ? '#1e8449' : '#c0392b'};">${g.pnl >= 0 ? '+' : '−'}${Math.abs(g.pnlPct).toFixed(1)}%</td>
               <td style="padding:5px 6px;text-align:right;">${eeCell}</td>
               <td style="padding:5px 0 5px 6px;text-align:right;white-space:nowrap;">
+                ${countryKey === 'India' ? `<button type="button" class="edit-btn hold-chart-btn" data-name="${escapeHtml(g.name)}" title="Chart, reasons, entry/stop/target" aria-label="Open chart and playbook for ${escapeHtml(g.name)}">📈</button>` : ''}
                 <button type="button" class="edit-btn stock-row-edit" data-key="${escapeHtml(g.key)}" aria-label="Edit ${escapeHtml(g.name)}">✎</button>
                 <button type="button" class="del-btn stock-row-del" data-key="${escapeHtml(g.key)}" aria-label="Delete ${escapeHtml(g.name)}">×</button>
               </td>
@@ -14395,7 +14538,8 @@
           }).join('')}
         </tbody>
       </table>
-      <div style="font-size:10px;color:var(--ink-soft);margin-top:6px;">Entry/Exit uses your latest scan for each stock (Screener above) — rescan there if a holding shows "Not scanned" or looks stale.</div>`;
+      <div style="font-size:10px;color:var(--ink-soft);margin-top:6px;">Entry/Exit now uses the playbook from your latest scan: entry zone, stop-loss (Stop) and target (T). Rows marked "(rescan)" were scanned before this update \u2014 rescan to refresh them. Tap \U0001F4C8 to see the full reasons and position-size calculator.</div>
+      ${renderBrokerSection(countryKey)}`;
     const catCfg = INVESTMENT_CATS.find(c => c.key === 'stocks');
     function latestEntryFor(key){
       return entries.filter(e => invKeyName(e.name) === key)
@@ -14411,6 +14555,32 @@
       btn.addEventListener('click', () => {
         const h = latestEntryFor(btn.dataset.key);
         if(h) deleteInvestment(countryKey, catCfg, h.id);
+      });
+    });
+    box.querySelectorAll('.stock-broker-sel').forEach(sel => {
+      sel.addEventListener('change', () => { if(sel.value !== '__multi') moveStockToBroker(countryKey, sel.dataset.key, sel.value); });
+    });
+    const moveBtn = document.getElementById(invPrefix(countryKey) + 'BrokerMoveBtn');
+    if(moveBtn) moveBtn.addEventListener('click', () => {
+      const from = document.getElementById(invPrefix(countryKey) + 'BrokerMoveFrom').value;
+      const to = document.getElementById(invPrefix(countryKey) + 'BrokerMoveTo').value;
+      if(from === to){ alert('Pick a different broker to move to.'); return; }
+      if(!confirm(`Move every stock entry from "${from}" to "${to}"?`)) return;
+      moveAllBroker(countryKey, from, to);
+    });
+    box.querySelectorAll('.hold-chart-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.name;
+        const v = verdictMap[normStockName(name)];
+        if(v && v.symbol){ openStockChartModal(v.symbol, name); return; }
+        const old = btn.textContent; btn.disabled = true; btn.textContent = '…';
+        try{
+          const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(name)}&market=IN`);
+          const d = await res.json();
+          if(res.ok && d.symbol) openStockChartModal(d.symbol, d.name || name);
+          else alert(`Couldn't find a chart symbol for ${name}.`);
+        }catch(e){ alert('Network error — try again.'); }
+        btn.disabled = false; btn.textContent = old;
       });
     });
   }
@@ -16941,6 +17111,28 @@
   if(darkMode) applyDarkMode(true); // apply immediately, even on the login screen
   initApp();
 })();
+</script>
+<script>
+  // App version — bumped with every release (shown top-right on the home page).
+  // Tapping it clears the offline cache and reloads, so an installed app always
+  // picks up the newest deploy.
+  (function(){
+    const APP_VERSION = '1.1.0', APP_VERSION_DATE = '23 Oct 2026';
+    const el = document.getElementById('appVersionBadge');
+    if(!el) return;
+    el.textContent = 'v' + APP_VERSION;
+    el.title = 'Version ' + APP_VERSION + ' (' + APP_VERSION_DATE + ') — tap to load the latest';
+    el.addEventListener('click', async () => {
+      if(!confirm('Version ' + APP_VERSION + ' (' + APP_VERSION_DATE + ').\n\nReload to load the latest version?')) return;
+      try{
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }catch(e){}
+      location.reload();
+    });
+  })();
 </script>
 <script>
   if('serviceWorker' in navigator){
