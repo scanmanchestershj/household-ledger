@@ -222,7 +222,7 @@ function buildPlaybook(closes, price, movingAverages, rsi14, macdResult, verdict
     reasons.push(`${buy} of ${total} trend signals are bullish`);
     if (sma200 != null && price > sma200) reasons.push('Price is above its 200-day average');
     if (macdResult && macdResult.histogram > 0) reasons.push('MACD is positive');
-    if (setup.includes('extended')) reasons.push('But price is >8% above its 20-day average — buying here is chasing; wait for a pullback');
+    if (setup.includes('extended')) reasons.push(`But price is >8% above its 20-day average — buying here is chasing. Better to wait for a pullback toward ₹${round(sma20)} (20-day average) and a fresh bounce`);
   } else if (setup === 'Falling — wait') {
     reasons.push('Price is below most key averages — trend is still down');
     if (dipScore > 0) reasons.push(`Reversal checklist: ${dipScore}/7 met — a dip-buy is flagged only at 4+ AND once price is back above its 5-day average with momentum improving`);
@@ -231,9 +231,11 @@ function buildPlaybook(closes, price, movingAverages, rsi14, macdResult, verdict
 
   // Levels (only when there is something to buy)
   let plan = null;
-  if (setup === 'Dip-Buy Setup' || setup.startsWith('Trend Buy')) {
+  // No entry plan when price has already run well above its 20-day average: buying there is chasing.
+  if (setup === 'Dip-Buy Setup' || setup === 'Trend Buy') {
     const recentLow = Math.min(...closes.slice(-20));
-    const stop = Math.min(price - 2 * atr, recentLow * 0.99, price * 0.97); // never tighter than 3%
+    // stop: below the 2×volatility / 20-day-low level, but never tighter than 3% or wider than 12%
+    const stop = Math.max(Math.min(price - 2 * atr, recentLow * 0.99, price * 0.97), price * 0.88);
     const risk = price - stop;
     const above = [sma20, sma50, sma100(movingAverages), sma200].filter(v => v != null && v > price * 1.01).sort((a, b) => a - b);
     const target2 = price + 2 * risk;
