@@ -9804,18 +9804,8 @@
   }
 
   [
-    ['scrNifty50ExportCsv', () => exportScreenerCsv('nifty50', 'nifty50-screener')],
-    ['scrNifty50ShareWa', () => shareScreenerWhatsApp('nifty50', 'Nifty 50')],
     ['scrUaeExportCsv', () => exportScreenerCsv('uaeindex', 'uae-index-screener')],
     ['scrUaeShareWa', () => shareScreenerWhatsApp('uaeindex', 'UAE Index (DFM/ADX)')],
-    ['scrNifty100ExportCsv', () => exportScreenerCsv('nifty100', 'nifty100-screener')],
-    ['scrNifty100ShareWa', () => shareScreenerWhatsApp('nifty100', 'Nifty 100')],
-    ['scrNifty500ExportCsv', () => exportScreenerCsv('nifty500', 'nifty500-screener')],
-    ['scrNifty500ShareWa', () => shareScreenerWhatsApp('nifty500', 'Nifty 500')],
-    ['scrNiftyMidcapExportCsv', () => exportScreenerCsv('niftymidcap', 'nifty-midcap150-screener')],
-    ['scrNiftyMidcapShareWa', () => shareScreenerWhatsApp('niftymidcap', 'Nifty Midcap 150')],
-    ['scrNiftySmallcapExportCsv', () => exportScreenerCsv('niftysmallcap', 'nifty-smallcap250-screener')],
-    ['scrNiftySmallcapShareWa', () => shareScreenerWhatsApp('niftysmallcap', 'Nifty Smallcap 250')],
     ['scrHoldingsExportCsv', () => exportScreenerCsv('holdings', 'holdings-screener')],
     ['scrHoldingsShareWa', () => shareScreenerWhatsApp('holdings', 'My Holdings')],
     ['scrCustomExportCsv', () => exportScreenerCsv('custom', 'watchlist-screener')],
@@ -10617,152 +10607,6 @@
   const scrUaeRescanBtn = document.getElementById('scrUaeRescan');
   if(scrUaeRescanBtn) scrUaeRescanBtn.addEventListener('click', () => ensureUaeIndexScan(true));
 
-  let nifty50ListCache = null;
-  async function getNifty50List(){
-    if(nifty50ListCache) return { list: nifty50ListCache };
-    try{
-      const res = await fetch('/api/nifty50');
-      const data = await res.json();
-      nifty50ListCache = data.list || [];
-      return { list: nifty50ListCache, note: data.note };
-    }catch(e){
-      return { list: [], note: "Couldn't load the Nifty 50 list." };
-    }
-  }
-  async function ensureNifty50Scan(force){
-    const scan = state.screenerScans && state.screenerScans.nifty50;
-    const statusEl = document.getElementById('scrNifty50Status');
-    if(scan && scan.date === todayStr() && !force){
-      renderBatchResults('nifty50', 'scrNifty50Result');
-      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
-      return;
-    }
-    if(statusEl) statusEl.textContent = 'Loading Nifty 50 constituent list…';
-    const { list, note } = await getNifty50List();
-    if(note && statusEl) statusEl.textContent = note;
-    if(!list.length) return;
-    await runBatchScan(list, 'nifty50', 'scrNifty50Status', 'scrNifty50Result');
-  }
-  const scrNifty50RescanBtn = document.getElementById('scrNifty50Rescan');
-  if(scrNifty50RescanBtn) scrNifty50RescanBtn.addEventListener('click', () => ensureNifty50Scan(true));
-
-  let nifty100ListCache = null;
-  async function getNifty100List(){
-    if(nifty100ListCache) return nifty100ListCache;
-    try{
-      const res = await fetch('/api/nifty100');
-      const data = await res.json();
-      nifty100ListCache = data.list || [];
-      return { list: nifty100ListCache, note: data.note };
-    }catch(e){
-      return { list: [], note: "Couldn't load the Nifty 100 list." };
-    }
-  }
-  async function ensureNifty100Scan(force){
-    const scan = state.screenerScans && state.screenerScans.nifty100;
-    const statusEl = document.getElementById('scrNifty100Status');
-    if(scan && scan.date === todayStr() && !force){
-      renderBatchResults('nifty100', 'scrNifty100Result');
-      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
-      return;
-    }
-    if(statusEl) statusEl.textContent = 'Loading Nifty 100 constituent list…';
-    const { list, note } = await getNifty100List();
-    if(note && statusEl) statusEl.textContent = note;
-    if(!list.length) return;
-    await runBatchScan(list, 'nifty100', 'scrNifty100Status', 'scrNifty100Result');
-  }
-  const scrNifty100RescanBtn = document.getElementById('scrNifty100Rescan');
-  if(scrNifty100RescanBtn) scrNifty100RescanBtn.addEventListener('click', () => ensureNifty100Scan(true));
-
-  // ---- Nifty 500 / Midcap 150 / Smallcap 250 — same batch-scan pattern as
-  // Nifty 100 above, just a different constituent list + cache key. ----
-  let nifty500ListCache = null;
-  async function getNifty500List(){
-    if(nifty500ListCache) return { list: nifty500ListCache };
-    try{
-      const res = await fetch('/api/nifty500');
-      const data = await res.json();
-      nifty500ListCache = data.list || [];
-      return { list: nifty500ListCache, note: data.note };
-    }catch(e){
-      return { list: [], note: "Couldn't load the Nifty 500 list." };
-    }
-  }
-  async function ensureNifty500Scan(force){
-    const scan = state.screenerScans && state.screenerScans.nifty500;
-    const statusEl = document.getElementById('scrNifty500Status');
-    if(scan && scan.date === todayStr() && !force){
-      renderBatchResults('nifty500', 'scrNifty500Result');
-      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
-      return;
-    }
-    if(statusEl) statusEl.textContent = 'Loading Nifty 500 constituent list…';
-    const { list, note } = await getNifty500List();
-    if(note && statusEl) statusEl.textContent = note;
-    if(!list.length) return;
-    await runBatchScan(list, 'nifty500', 'scrNifty500Status', 'scrNifty500Result');
-  }
-  const scrNifty500RescanBtn = document.getElementById('scrNifty500Rescan');
-  if(scrNifty500RescanBtn) scrNifty500RescanBtn.addEventListener('click', () => ensureNifty500Scan(true));
-
-  let niftyMidcapListCache = null;
-  async function getNiftyMidcapList(){
-    if(niftyMidcapListCache) return { list: niftyMidcapListCache };
-    try{
-      const res = await fetch('/api/niftymidcap');
-      const data = await res.json();
-      niftyMidcapListCache = data.list || [];
-      return { list: niftyMidcapListCache, note: data.note };
-    }catch(e){
-      return { list: [], note: "Couldn't load the Nifty Midcap 150 list." };
-    }
-  }
-  async function ensureNiftyMidcapScan(force){
-    const scan = state.screenerScans && state.screenerScans.niftymidcap;
-    const statusEl = document.getElementById('scrNiftyMidcapStatus');
-    if(scan && scan.date === todayStr() && !force){
-      renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
-      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
-      return;
-    }
-    if(statusEl) statusEl.textContent = 'Loading Nifty Midcap 150 constituent list…';
-    const { list, note } = await getNiftyMidcapList();
-    if(note && statusEl) statusEl.textContent = note;
-    if(!list.length) return;
-    await runBatchScan(list, 'niftymidcap', 'scrNiftyMidcapStatus', 'scrNiftyMidcapResult');
-  }
-  const scrNiftyMidcapRescanBtn = document.getElementById('scrNiftyMidcapRescan');
-  if(scrNiftyMidcapRescanBtn) scrNiftyMidcapRescanBtn.addEventListener('click', () => ensureNiftyMidcapScan(true));
-
-  let niftySmallcapListCache = null;
-  async function getNiftySmallcapList(){
-    if(niftySmallcapListCache) return { list: niftySmallcapListCache };
-    try{
-      const res = await fetch('/api/niftysmallcap');
-      const data = await res.json();
-      niftySmallcapListCache = data.list || [];
-      return { list: niftySmallcapListCache, note: data.note };
-    }catch(e){
-      return { list: [], note: "Couldn't load the Nifty Smallcap 250 list." };
-    }
-  }
-  async function ensureNiftySmallcapScan(force){
-    const scan = state.screenerScans && state.screenerScans.niftysmallcap;
-    const statusEl = document.getElementById('scrNiftySmallcapStatus');
-    if(scan && scan.date === todayStr() && !force){
-      renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
-      if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
-      return;
-    }
-    if(statusEl) statusEl.textContent = 'Loading Nifty Smallcap 250 constituent list…';
-    const { list, note } = await getNiftySmallcapList();
-    if(note && statusEl) statusEl.textContent = note;
-    if(!list.length) return;
-    await runBatchScan(list, 'niftysmallcap', 'scrNiftySmallcapStatus', 'scrNiftySmallcapResult');
-  }
-  const scrNiftySmallcapRescanBtn = document.getElementById('scrNiftySmallcapRescan');
-  if(scrNiftySmallcapRescanBtn) scrNiftySmallcapRescanBtn.addEventListener('click', () => ensureNiftySmallcapScan(true));
 
   // customWatchlist entries were originally plain strings; normalize any of those
   // to {name, target} objects (in place, saved once) so older saved data keeps working.
@@ -11155,12 +10999,7 @@
     if(!header) return;
     const acc = header.closest('.accordion');
     if(!acc || !acc.classList.contains('open')) return; // only fires right after it was opened
-    if(acc.dataset.key === 'screen-nifty50') ensureNifty50Scan(false);
     if(acc.dataset.key === 'uae-inv-screener') ensureUaeIndexScan(false);
-    if(acc.dataset.key === 'screen-nifty100') ensureNifty100Scan(false);
-    if(acc.dataset.key === 'screen-nifty500') ensureNifty500Scan(false);
-    if(acc.dataset.key === 'screen-niftymidcap') ensureNiftyMidcapScan(false);
-    if(acc.dataset.key === 'screen-niftysmallcap') ensureNiftySmallcapScan(false);
     if(acc.dataset.key === 'screen-customwatch'){ renderWatchlistItems(); ensureCustomScan(false); }
     if(acc.dataset.key === 'screen-buffett') ensureBuffettScan(false);
     if(acc.dataset.key === 'screen-holdings') ensureHoldingsScan(false);
@@ -11168,12 +11007,7 @@
     if(acc.dataset.key === 'screen-earnings') ensureEarnings(false);
   });
   renderWatchlistItems();
-  renderBatchResults('nifty50', 'scrNifty50Result');
   renderBatchResults('uaeindex', 'scrUaeResult');
-  renderBatchResults('nifty100', 'scrNifty100Result');
-  renderBatchResults('nifty500', 'scrNifty500Result');
-  renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
-  renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
   renderBatchResults('custom', 'scrCustomResult');
   renderStrongBuyList();
     renderUndervaluedList();
@@ -13792,12 +13626,7 @@
     renderDebtSummary('India');
     renderInvestmentCountry('India');
     renderWatchlistItems();
-    renderBatchResults('nifty50', 'scrNifty50Result');
     renderBatchResults('uaeindex', 'scrUaeResult');
-    renderBatchResults('nifty100', 'scrNifty100Result');
-    renderBatchResults('nifty500', 'scrNifty500Result');
-    renderBatchResults('niftymidcap', 'scrNiftyMidcapResult');
-    renderBatchResults('niftysmallcap', 'scrNiftySmallcapResult');
     renderBatchResults('custom', 'scrCustomResult');
     renderStrongBuyList();
     renderUndervaluedList();
@@ -17443,7 +17272,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.5.0', APP_VERSION_DATE = '28 Oct 2026';
+    const APP_VERSION = '1.5.1', APP_VERSION_DATE = '28 Oct 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
