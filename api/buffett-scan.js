@@ -80,10 +80,12 @@ module.exports = async (req, res) => {
   try {
     if (qs.prefilter) {
       const syms = String(qs.prefilter).split(',').map(s => s.trim()).filter(Boolean).slice(0, 120);
-      const d = await getJson(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms.join(','))}`);
-      const keep = (d?.quoteResponse?.result || []).filter(x => x.trailingPE > 0 && x.trailingPE <= 25 && x.priceToBook > 0 && x.priceToBook <= 4).map(x => x.symbol);
-      // If the quote source returned nothing at all, don't silently drop everything: tell the client.
-      res.status(200).json({ keep, checked: (d?.quoteResponse?.result || []).length });
+      const sess = await session();   // Yahoo's batch quote needs the cookie+crumb session
+      const cr = sess.crumb ? '&crumb=' + encodeURIComponent(sess.crumb) : '';
+      const d = await getJson(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms.join(','))}${cr}`, sess.cookie ? { Cookie: sess.cookie } : {});
+      const rows = d?.quoteResponse?.result || [];
+      const keep = rows.filter(x => x.trailingPE > 0 && x.trailingPE <= 25 && x.priceToBook > 0 && x.priceToBook <= 4).map(x => x.symbol);
+      res.status(200).json({ keep, checked: rows.length, crumb: !!sess.crumb });
       return;
     }
     const syms = String(qs.symbols || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 4);
@@ -92,6 +94,7 @@ module.exports = async (req, res) => {
     const results = await Promise.all(syms.map(s => loadOne(s, sess).catch(e => ({ symbol: s, error: e.message || 'failed' }))));
     res.status(200).json({ results });
   } catch (e) {
+    console.error('buffett-scan failed:', e && e.message);
     res.status(502).json({ error: 'Data source unavailable: ' + (e.message || 'unknown') });
   }
 };

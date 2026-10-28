@@ -2971,6 +2971,27 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-toppicks" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🏅 Top Picks Today</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Stocks that are <b>both</b> cheap and in an uptrend: they pass the Buffett value gates, sit in the Entry or Watch zone, <b>and</b> have a Buy / Strong Buy technical verdict today. Built from the Warren Buffett screen above (it runs that scan first if it hasn't run today). An empty list is a valid answer — most days few stocks qualify.</div>
+                <button type="button" class="add-btn full-width" id="scrTopPicksRescan">🔄 Refresh picks</button>
+                <div id="scrTopPicksStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrTopPicksResult" style="margin-top:10px;max-height:520px;overflow-y:auto;"></div>
+                <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">A screening aid, not financial advice.</div>
+              </div>
+            </div>
+
+            <div class="accordion" data-key="screen-earnings" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>📅 Earnings & Results Calendar</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Next results date for your holdings, watchlist, today's Top Picks and CPCL. Results days move prices sharply, so it is safer not to add fresh money just before one. You get a notification when a results date is within 3 days. Dates come from Yahoo Finance and are sometimes estimates or missing for Indian stocks — confirm on BSE/NSE announcements.</div>
+                <button type="button" class="add-btn full-width" id="scrEarningsRescan">🔄 Refresh dates</button>
+                <div id="scrEarningsStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrEarningsResult" style="margin-top:10px;max-height:520px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-strongbuy" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>🚀 Strong Buy List — Today</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -10917,7 +10938,9 @@
       return `<details style="padding:6px 0;border-bottom:1px solid var(--line);"><summary style="cursor:pointer;font-size:12px;"><b>${escapeHtml(r.name)}</b> \u00b7 \u20b9${f(r.price)} \u00b7 Score ${r.score}/100 \u00b7 <span style="color:${z[1]};font-weight:600;">${z[0]}</span></summary>
         <div style="font-size:11px;line-height:1.6;margin-top:4px;">Value (5-yr normalised): <b>\u20b9${f(r.intrinsic)}</b> \u00b7 Margin of safety: <b>${r.mosPct}%</b><br>Buy in 3 parts at \u20b9${tr} \u00b7 Trim \u20b9${f(r.trimAt)} \u00b7 Exit \u20b9${f(r.exitAt)} \u00b7 Review-stop \u20b9${f(r.reviewStop)}<br><span style="color:var(--ink-soft);">${escapeHtml(r.why || '')}${r.industry ? ' \u00b7 ' + escapeHtml(r.industry) : ''}</span></div></details>`;
     }).join('');
-    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} \u00b7 ${scan.deepScanned || 0} stocks analysed in depth of ${scan.universe || 0} in the universe</div>${cards || '<div class="empty">Nothing passed the screen today.</div>'}`;
+    const hits = rows.filter(r => !r.error && (r.zone === 'ENTRY' || r.zone === 'WATCH')).length;
+    const note = hits ? '' : '<div style="font-size:11px;margin:4px 0 8px 0;padding:6px 8px;border:1px dashed var(--line);border-radius:8px;">No stock is in an Entry or Watch zone today \u2014 that is normal for a strict Buffett screen. Below are your tracked stocks (e.g. CPCL) and the closest candidates, with the reason for each.</div>';
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} \u00b7 ${scan.deepScanned || 0} stocks analysed in depth of ${scan.universe || 0} in the universe</div>${note}${cards || '<div class="empty">Nothing passed the screen today.</div>'}`;
   }
   async function ensureBuffettScan(force){
     const statusEl = document.getElementById('scrBuffettStatus');
@@ -10938,15 +10961,14 @@
       const universe = Object.keys(names);
       const must = new Set(extra.map(i => i.symbol));
       // 1) cheap pre-filter in chunks of 100
-      let keep = [], checked = 0;
+      let keep = [], checked = 0, preErr = '';
       for(let i = 0; i < universe.length; i += 100){
         if(statusEl) statusEl.textContent = `Pre-filtering ${Math.min(i + 100, universe.length)} of ${universe.length}\u2026`;
         try{
           const d = await buffettGet('/api/buffett-scan?prefilter=' + encodeURIComponent(universe.slice(i, i + 100).join(',')));
           keep = keep.concat(d.keep || []); checked += d.checked || 0;
-        }catch(e){ /* chunk failed — skipped, counted below */ }
+        }catch(e){ preErr = (e && e.message) || 'failed'; }
       }
-      if(!checked){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Market data source is unavailable right now \u2014 previous results kept. Try again later.'; renderBuffettResults(); return; }
       const deep = Array.from(new Set(keep.concat(Array.from(must)))).slice(0, 120);
       // 2) deep scan: 4 symbols per request, 3 requests in parallel
       const chunks = []; for(let i = 0; i < deep.length; i += 4) chunks.push(deep.slice(i, i + 4));
@@ -10967,9 +10989,13 @@
       const prevZones = {};
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error) prevZones[r.symbol] = r.zone; });
       if(!state.screenerScans) state.screenerScans = {};
-      state.screenerScans.buffett = { date: todayStr(), results, universe: universe.length, deepScanned: out.filter(r => !r.error).length };
+      const okCount = out.filter(r => !r.error).length, errCount = out.length - okCount;
+      const firstErr = (out.find(r => r.error) || {}).error || '';
+      state.screenerScans.buffett = { date: todayStr(), results, universe: universe.length, deepScanned: okCount };
       save();
-      if(statusEl) statusEl.textContent = `\u2713 Scanned ${universe.length} stocks \u2014 last updated ${todayStr()}.`;
+      if(statusEl) statusEl.textContent = checked
+        ? `\u2713 ${universe.length} stocks checked, ${keep.length} passed the cheap filter, ${okCount} analysed in depth` + (errCount ? `, ${errCount} had no data${firstErr ? ' (e.g. ' + firstErr + ')' : ''}` : '') + `. Updated ${todayStr()}.`
+        : `\u26a0\ufe0f The market-wide pre-filter failed (${preErr || 'no data'}), so only CPCL and your watchlist were analysed. Tap Rescan later for the full Nifty 500 scan.`;
       renderBuffettResults();
       // alerts: only on a zone CHANGE; trim/exit only for stocks you hold or watch
       const held = buffettHeldNames();
@@ -11012,6 +11038,115 @@
   if(scrHoldingsRescanBtn) scrHoldingsRescanBtn.addEventListener('click', () => ensureHoldingsScan(true));
   try{ renderBatchResults('holdings', 'scrHoldingsResult'); }catch(e){}
 
+  // ---- Top Picks Today: Buffett value gates + Entry/Watch zone + Buy/Strong Buy technical verdict ----
+  function renderTopPicks(){
+    const box = document.getElementById('scrTopPicksResult');
+    if(!box) return;
+    const s = state.screenerScans && state.screenerScans.toppicks;
+    if(!s){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Open this section or tap "Refresh picks".</div>'; return; }
+    const f = v => v != null ? Number(v).toLocaleString('en-IN') : '\u2014';
+    const card = r => `<details style="padding:6px 0;border-bottom:1px solid var(--line);"><summary style="cursor:pointer;font-size:12px;"><b>${escapeHtml(r.name)}</b> \u00b7 \u20b9${f(r.price)} \u00b7 Value score ${r.score}/100 \u00b7 Technical: <b>${escapeHtml(r.verdict || 'n/a')}</b></summary>
+      <div style="font-size:11px;line-height:1.6;margin-top:4px;">Value \u20b9${f(r.intrinsic)} \u00b7 Margin of safety ${r.mosPct}% \u00b7 Zone: ${escapeHtml(r.zone)}<br>Buy in 3 parts at \u20b9${(r.entryTranches || []).map(f).join(' / ')} \u00b7 Trim \u20b9${f(r.trimAt)} \u00b7 Exit \u20b9${f(r.exitAt)}<br><span style="color:var(--ink-soft);">${escapeHtml(r.why || '')}</span></div></details>`;
+    const picks = (s.picks || []).map(card).join('');
+    const near = (s.near || []).map(card).join('');
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Updated ${s.date} \u00b7 ${s.considered || 0} value candidates checked for a technical verdict</div>`
+      + (picks || '<div class="empty" style="padding:6px 0;">No stock is both cheap and in an uptrend today.</div>')
+      + (near ? `<div style="font-weight:600;font-size:12px;margin:12px 0 4px 0;">Close, but not both yet</div>${near}` : '');
+  }
+  async function ensureTopPicks(force){
+    const statusEl = document.getElementById('scrTopPicksStatus');
+    try{
+      const saved = state.screenerScans && state.screenerScans.toppicks;
+      if(saved && saved.date === todayStr() && !force){ renderTopPicks(); if(statusEl) statusEl.textContent = `Showing today's picks (cached). Updated ${saved.date}.`; return; }
+      if(statusEl) statusEl.textContent = 'Checking the Warren Buffett value screen\u2026';
+      await ensureBuffettScan(false);
+      const bs = state.screenerScans && state.screenerScans.buffett;
+      const cands = ((bs && bs.results) || []).filter(r => !r.error && r.gatesPass).sort((a, b) => b.score - a.score).slice(0, 15);
+      const done = [];
+      let i = 0;
+      async function worker(){
+        while(i < cands.length){
+          const c = cands[i++];
+          if(statusEl) statusEl.textContent = `Checking technical trend: ${c.name} (${i} of ${cands.length})\u2026`;
+          const v = await fetchOneVerdict(c.symbol, 'IN');
+          done.push(Object.assign({}, c, { verdict: v && !v.error ? v.verdict : null }));
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      const isPick = r => (r.zone === 'ENTRY' || r.zone === 'WATCH') && (r.verdict === 'Strong Buy' || r.verdict === 'Buy');
+      const rank = r => r.score + (r.verdict === 'Strong Buy' ? 10 : r.verdict === 'Buy' ? 5 : 0);
+      const picks = done.filter(isPick).sort((a, b) => rank(b) - rank(a));
+      const near = done.filter(r => !isPick(r)).sort((a, b) => b.score - a.score).slice(0, 5);
+      if(!state.screenerScans) state.screenerScans = {};
+      state.screenerScans.toppicks = { date: todayStr(), picks, near, considered: cands.length };
+      save();
+      renderTopPicks();
+      if(statusEl) statusEl.textContent = `\u2713 ${picks.length} top pick${picks.length === 1 ? '' : 's'} today. Updated ${todayStr()}.`;
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Top picks failed: ' + (e && e.message ? e.message : 'unknown error'); }
+  }
+  const scrTopPicksBtn = document.getElementById('scrTopPicksRescan');
+  if(scrTopPicksBtn) scrTopPicksBtn.addEventListener('click', () => ensureTopPicks(true));
+  try{ renderTopPicks(); }catch(e){}
+
+  // ---- Earnings & Results Calendar: holdings + watchlist + today's top picks + CPCL ----
+  function renderEarnings(){
+    const box = document.getElementById('scrEarningsResult');
+    if(!box) return;
+    const s = state.screenerScans && state.screenerScans.earnings;
+    if(!s){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Open this section or tap "Refresh dates".</div>'; return; }
+    const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const up = (s.rows || []).filter(r => r.date && r.daysAway >= 0).sort((a, b) => a.daysAway - b.daysAway);
+    const rows = up.map(r => {
+      const soon = r.daysAway <= 7;
+      const when = r.daysAway === 0 ? 'today' : (r.daysAway === 1 ? 'tomorrow' : `in ${r.daysAway} days`);
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;"><b>${escapeHtml(r.name)}</b> <span style="font-size:10px;color:var(--ink-soft);">${escapeHtml((r.tags || []).join(' \u00b7 '))}</span><br>${fmt(r.date)}${r.estimate ? ' (estimate)' : ''} \u00b7 <span style="font-weight:600;color:${soon ? '#c0392b' : 'var(--ink-soft)'};">${soon ? '\u26a0\ufe0f ' : ''}${when}</span>${soon ? '<div style="font-size:10.5px;color:#c0392b;">Results are close \u2014 avoid adding fresh money until they are out; review your stop.</div>' : ''}</div>`;
+    }).join('');
+    const none = (s.rows || []).filter(r => !r.date || r.daysAway < 0).map(r => r.name);
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Updated ${s.date} \u00b7 ${(s.rows || []).length} stocks checked</div>`
+      + (rows || '<div class="empty" style="padding:6px 0;">No upcoming results dates found.</div>')
+      + (none.length ? `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">No date available from the data source for: ${escapeHtml(none.join(', '))}. Check the company's BSE/NSE announcements.</div>` : '');
+  }
+  async function ensureEarnings(force){
+    const statusEl = document.getElementById('scrEarningsStatus');
+    try{
+      const saved = state.screenerScans && state.screenerScans.earnings;
+      if(saved && saved.date === todayStr() && !force){ renderEarnings(); if(statusEl) statusEl.textContent = `Showing today's dates (cached). Updated ${saved.date}.`; return; }
+      if(statusEl) statusEl.textContent = 'Scanning your holdings first\u2026';
+      try{ await ensureHoldingsScan(false); }catch(e){}
+      normalizeWatchlist();
+      const uni = {};
+      const add = (symbol, name, tag) => { if(!symbol) return; (uni[symbol] = uni[symbol] || { symbol, name: name || symbol, tags: [] }); if(uni[symbol].tags.indexOf(tag) < 0) uni[symbol].tags.push(tag); };
+      const scans = state.screenerScans || {};
+      ((scans.holdings && scans.holdings.results) || []).forEach(r => { if(!r.error) add(r.symbol, r.name, 'Holding'); });
+      (state.customWatchlist || []).forEach(i => add(i.symbol, i.name, 'Watchlist'));
+      ((scans.toppicks && scans.toppicks.picks) || []).forEach(r => add(r.symbol, r.name, 'Top pick'));
+      BUFFETT_SEEDS.forEach(i => add(i.symbol, i.name, 'Reference'));
+      const list = Object.values(uni);
+      const rows = [];
+      for(let i = 0; i < list.length; i += 8){
+        const chunk = list.slice(i, i + 8);
+        if(statusEl) statusEl.textContent = `Fetching results dates ${Math.min(i + 8, list.length)} of ${list.length}\u2026`;
+        try{
+          const d = await buffettGet('/api/earnings-calendar?symbols=' + encodeURIComponent(chunk.map(c => c.symbol).join(',')));
+          d.results.forEach(r => { const c = uni[r.symbol]; if(c) rows.push({ symbol: c.symbol, name: c.name, tags: c.tags, date: r.date, estimate: r.estimate, daysAway: r.daysAway }); });
+        }catch(e){ chunk.forEach(c => rows.push({ symbol: c.symbol, name: c.name, tags: c.tags, date: null, estimate: false, daysAway: null })); }
+      }
+      if(!state.screenerScans) state.screenerScans = {};
+      state.screenerScans.earnings = { date: todayStr(), rows };
+      save();
+      renderEarnings();
+      const withDate = rows.filter(r => r.date && r.daysAway >= 0).length;
+      if(statusEl) statusEl.textContent = `\u2713 ${withDate} of ${rows.length} stocks have an upcoming results date. Updated ${todayStr()}.`;
+      const banners = rows.filter(r => r.date && r.daysAway >= 0 && r.daysAway <= 3 && r.tags.some(t => t === 'Holding' || t === 'Watchlist')).map(r => ({
+        key: `earn_${r.symbol}_${r.date}`, title: `\ud83d\udcc5 ${r.name} \u2014 results ${r.daysAway === 0 ? 'today' : 'in ' + r.daysAway + ' day' + (r.daysAway === 1 ? '' : 's')}`, body: 'Avoid adding fresh money until results are out; review your stop.'
+      }));
+      if(banners.length) notifyForBanners(banners);
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Calendar failed: ' + (e && e.message ? e.message : 'unknown error'); }
+  }
+  const scrEarningsBtn = document.getElementById('scrEarningsRescan');
+  if(scrEarningsBtn) scrEarningsBtn.addEventListener('click', () => ensureEarnings(true));
+  try{ renderEarnings(); }catch(e){}
+
   // Auto-run once per day, the first time each section is actually opened —
   // not on every page load, so it doesn't hammer Yahoo for household
   // members who never look at this section.
@@ -11029,6 +11164,8 @@
     if(acc.dataset.key === 'screen-customwatch'){ renderWatchlistItems(); ensureCustomScan(false); }
     if(acc.dataset.key === 'screen-buffett') ensureBuffettScan(false);
     if(acc.dataset.key === 'screen-holdings') ensureHoldingsScan(false);
+    if(acc.dataset.key === 'screen-toppicks') ensureTopPicks(false);
+    if(acc.dataset.key === 'screen-earnings') ensureEarnings(false);
   });
   renderWatchlistItems();
   renderBatchResults('nifty50', 'scrNifty50Result');
@@ -17306,7 +17443,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.4.0', APP_VERSION_DATE = '28 Oct 2026';
+    const APP_VERSION = '1.5.0', APP_VERSION_DATE = '28 Oct 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
