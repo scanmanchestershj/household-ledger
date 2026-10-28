@@ -10755,7 +10755,7 @@
   // Alerts fire only when a stock's zone CHANGES vs the previous scan. Fully self-contained and
   // try/catch-wrapped so a failure here can never break the rest of the page. ----
   const BUFFETT_SEEDS = [{ name: 'Chennai Petroleum', symbol: 'CHENNPETRO.NS' }];
-  const BUFFETT_UNIVERSE_VER = 'allcap-750';   // bump to force one fresh rescan when the universe changes
+  const BUFFETT_UNIVERSE_VER = 'allcap-750-v2';   // bump to force one fresh rescan when the universe changes
   const BUFFETT_CAPS = { LARGECAP: 'Large', MIDCAP: 'Mid', SMALLCAP: 'Small', MICROCAP: 'Micro' };
   const BUFFETT_ZONES = {
     ENTRY: ['\ud83d\udfe2 Entry zone', '#1e8449', 0], WATCH: ['\ud83d\udfe1 Watch', '#b8860b', 1], TRIM: ['\ud83d\udfe0 Trim', '#b9770e', 2],
@@ -10770,23 +10770,34 @@
   function buffettHeldNames(){
     try{ return new Set(investmentGroupByName('India', 'stocks').filter(g => g.qty > 0.0000001).map(g => normStockName(g.name))); }catch(e){ return new Set(); }
   }
+  // Holdings-style table (Stock | Price | Entry/Exit | Verdict) shared by the Buffett screen and Top Picks.
+  // Entry zone = the 3 value-tranche prices, T = trim level, Exit = full value, Stop = thesis review level.
+  function buffettEntryExitCell(r){
+    const f = v => v != null ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '\u2014';
+    const z = BUFFETT_ZONES[r.zone] || BUFFETT_ZONES.NONE;
+    const tr = (r.entryTranches || []).filter(x => x != null);
+    const lo = tr.length ? Math.min.apply(null, tr) : null, hi = tr.length ? Math.max.apply(null, tr) : null;
+    return `<span style="font-size:10.5px;">Buy ${f(lo)}\u2013${f(hi)} \u2192 T ${f(r.trimAt)}</span><br><span style="font-size:10px;color:#c0392b;">Stop ${f(r.reviewStop)}</span> <span style="font-size:10px;color:var(--ink-soft);">Exit ${f(r.exitAt)}</span><br><span style="font-size:9.5px;font-weight:600;color:${z[1]};">${z[0]}</span>`;
+  }
+  function buffettTableHtml(rows){
+    const f = v => v != null ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '\u2014';
+    const body = rows.map(r => {
+      if(r.error) return `<tr><td>${escapeHtml(r.name || r.symbol)}</td><td colspan="3" style="color:var(--ink-soft);font-size:11px;">${escapeHtml(r.error)}</td></tr>`;
+      const cap = r.cap && BUFFETT_CAPS[r.cap] ? ` <span style="font-size:9px;color:var(--ink-soft);border:1px solid var(--line);border-radius:6px;padding:0 4px;">${BUFFETT_CAPS[r.cap]}</span>` : '';
+      const vb = r.verdict ? verdictBadge(r.verdict, { buy: r.buySignals, sell: r.sellSignals, total: r.totalSignals }) : '<span style="color:var(--ink-soft);font-size:11px;">\u2014</span>';
+      return `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}${cap}<br><span style="font-size:9.5px;color:var(--ink-soft);">Score ${r.score}/100 \u00b7 Value \u20b9${f(r.intrinsic)} \u00b7 MoS ${r.mosPct}%${r.industry ? ' \u00b7 ' + escapeHtml(r.industry) : ''}</span></td><td>${r.price != null ? Number(r.price).toFixed(2) : '\u2014'}</td><td style="text-align:right;">${buffettEntryExitCell(r)}</td><td>${vb}</td></tr>`;
+    }).join('');
+    return `<table style="width:100%;font-size:12px;border-collapse:collapse;">${body}</table><div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Buy = the 3-part entry range (25% / 33% / 40% below value), T = trim level (90% of value), Exit = full value, Stop = thesis review level. The right-hand badge is today's technical verdict. Tap a row for the chart and playbook.</div>`;
+  }
   function renderBuffettResults(){
     const box = document.getElementById('scrBuffettResult');
     if(!box) return;
     const scan = state.screenerScans && state.screenerScans.buffett;
     if(!scan || !scan.results){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No scan yet \u2014 tap "Rescan now".</div>'; return; }
     const rows = [...scan.results].sort((a, b) => (BUFFETT_ZONES[a.zone] || BUFFETT_ZONES.NONE)[2] - (BUFFETT_ZONES[b.zone] || BUFFETT_ZONES.NONE)[2] || (b.score || 0) - (a.score || 0));
-    const f = v => v != null ? Number(v).toLocaleString('en-IN') : '\u2014';
-    const cards = rows.map(r => {
-      if(r.error) return `<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--ink-soft);">${escapeHtml(r.name || r.symbol)} \u2014 ${escapeHtml(r.error)}</div>`;
-      const z = BUFFETT_ZONES[r.zone] || BUFFETT_ZONES.NONE;
-      const tr = (r.entryTranches || []).map(f).join(' / ');
-      return `<details style="padding:6px 0;border-bottom:1px solid var(--line);"><summary style="cursor:pointer;font-size:12px;"><b>${escapeHtml(r.name)}</b>${r.cap && BUFFETT_CAPS[r.cap] ? ' <span style="font-size:9.5px;color:var(--ink-soft);border:1px solid var(--line);border-radius:6px;padding:0 4px;">' + BUFFETT_CAPS[r.cap] + '</span>' : ''} \u00b7 \u20b9${f(r.price)} \u00b7 Score ${r.score}/100 \u00b7 <span style="color:${z[1]};font-weight:600;">${z[0]}</span></summary>
-        <div style="font-size:11px;line-height:1.6;margin-top:4px;">Value (5-yr normalised): <b>\u20b9${f(r.intrinsic)}</b> \u00b7 Margin of safety: <b>${r.mosPct}%</b><br>Buy in 3 parts at \u20b9${tr} \u00b7 Trim \u20b9${f(r.trimAt)} \u00b7 Exit \u20b9${f(r.exitAt)} \u00b7 Review-stop \u20b9${f(r.reviewStop)}<br><span style="color:var(--ink-soft);">${escapeHtml(r.why || '')}${r.industry ? ' \u00b7 ' + escapeHtml(r.industry) : ''}</span></div></details>`;
-    }).join('');
     const hits = rows.filter(r => !r.error && (r.zone === 'ENTRY' || r.zone === 'WATCH')).length;
-    const note = hits ? '' : '<div style="font-size:11px;margin:4px 0 8px 0;padding:6px 8px;border:1px dashed var(--line);border-radius:8px;">No stock is in an Entry or Watch zone today \u2014 that is normal for a strict Buffett screen. Below are your tracked stocks (e.g. CPCL) and the closest candidates, with the reason for each.</div>';
-    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} \u00b7 ${scan.deepScanned || 0} stocks analysed in depth of ${scan.universe || 0} in the universe (Nifty 500 + Midcap + Smallcap + Microcap)</div>${note}${cards || '<div class="empty">Nothing passed the screen today.</div>'}`;
+    const note = hits ? '' : '<div style="font-size:11px;margin:4px 0 8px 0;padding:6px 8px;border:1px dashed var(--line);border-radius:8px;">No stock is in an Entry or Watch zone today \u2014 that is normal for a strict Buffett screen. Below are your tracked stocks (e.g. CPCL) and the closest candidates.</div>';
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} \u00b7 ${scan.deepScanned || 0} stocks analysed in depth of ${scan.universe || 0} in the universe (Nifty 500 + Midcap + Smallcap + Microcap)</div>${note}${rows.length ? buffettTableHtml(rows) : '<div class="empty">Nothing passed the screen today.</div>'}`;
   }
   async function ensureBuffettScan(force){
     const statusEl = document.getElementById('scrBuffettStatus');
@@ -10839,6 +10850,19 @@
       const results = out.filter(r => r.error ? must.has(r.symbol) : (r.gatesPass || r.zone !== 'NONE' || must.has(r.symbol)));
       const prevZones = {};
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error) prevZones[r.symbol] = r.zone; });
+      // add today's technical verdict (holdings-style Verdict column) for the strongest 30 results
+      const vTargets = results.filter(r => !r.error && (r.gatesPass || r.zone !== 'NONE' || must.has(r.symbol))).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 30);
+      let vi = 0, vDone = 0;
+      async function vWorker(){
+        while(vi < vTargets.length){
+          const t = vTargets[vi++];
+          const v = await fetchOneVerdict(t.symbol, 'IN');
+          if(v && !v.error) Object.assign(t, { verdict: v.verdict, buySignals: v.buySignals, sellSignals: v.sellSignals, totalSignals: v.totalSignals });
+          vDone++;
+          if(statusEl) statusEl.textContent = `Adding technical verdicts ${vDone} of ${vTargets.length}\u2026`;
+        }
+      }
+      await Promise.all([vWorker(), vWorker(), vWorker()]);
       if(!state.screenerScans) state.screenerScans = {};
       const okCount = out.filter(r => !r.error).length, errCount = out.length - okCount;
       const firstErr = (out.find(r => r.error) || {}).error || '';
@@ -10895,11 +10919,8 @@
     if(!box) return;
     const s = state.screenerScans && state.screenerScans.toppicks;
     if(!s){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Open this section or tap "Refresh picks".</div>'; return; }
-    const f = v => v != null ? Number(v).toLocaleString('en-IN') : '\u2014';
-    const card = r => `<details style="padding:6px 0;border-bottom:1px solid var(--line);"><summary style="cursor:pointer;font-size:12px;"><b>${escapeHtml(r.name)}</b> \u00b7 \u20b9${f(r.price)} \u00b7 Value score ${r.score}/100 \u00b7 Technical: <b>${escapeHtml(r.verdict || 'n/a')}</b></summary>
-      <div style="font-size:11px;line-height:1.6;margin-top:4px;">Value \u20b9${f(r.intrinsic)} \u00b7 Margin of safety ${r.mosPct}% \u00b7 Zone: ${escapeHtml(r.zone)}<br>Buy in 3 parts at \u20b9${(r.entryTranches || []).map(f).join(' / ')} \u00b7 Trim \u20b9${f(r.trimAt)} \u00b7 Exit \u20b9${f(r.exitAt)}<br><span style="color:var(--ink-soft);">${escapeHtml(r.why || '')}</span></div></details>`;
-    const picks = (s.picks || []).map(card).join('');
-    const near = (s.near || []).map(card).join('');
+    const picks = (s.picks || []).length ? buffettTableHtml(s.picks) : '';
+    const near = (s.near || []).length ? buffettTableHtml(s.near) : '';
     box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Updated ${s.date} \u00b7 ${s.considered || 0} value candidates checked for a technical verdict</div>`
       + (picks || '<div class="empty" style="padding:6px 0;">No stock is both cheap and in an uptrend today.</div>')
       + (near ? `<div style="font-weight:600;font-size:12px;margin:12px 0 4px 0;">Close, but not both yet</div>${near}` : '');
@@ -10919,8 +10940,8 @@
         while(i < cands.length){
           const c = cands[i++];
           if(statusEl) statusEl.textContent = `Checking technical trend: ${c.name} (${i} of ${cands.length})\u2026`;
-          const v = await fetchOneVerdict(c.symbol, 'IN');
-          done.push(Object.assign({}, c, { verdict: v && !v.error ? v.verdict : null }));
+          const v = c.verdict ? c : await fetchOneVerdict(c.symbol, 'IN');
+          done.push(Object.assign({}, c, v && !v.error ? { verdict: v.verdict, buySignals: v.buySignals, sellSignals: v.sellSignals, totalSignals: v.totalSignals } : { verdict: null }));
         }
       }
       await Promise.all([worker(), worker(), worker()]);
@@ -17279,7 +17300,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.5.2', APP_VERSION_DATE = '28 Oct 2026';
+    const APP_VERSION = '1.5.3', APP_VERSION_DATE = '28 Oct 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
