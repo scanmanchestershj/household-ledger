@@ -2874,7 +2874,7 @@
               <div class="full">
                 <label class="field-label">Stock name or ticker</label>
                 <input type="text" id="scrName" placeholder="e.g. Wipro" style="width:100%;font-size:15px;padding:10px;">
-                <button type="button" class="add-btn full-width" id="scrAutoFill" style="margin-top:6px;">🔴 Live fetch (partial)</button>
+                <button type="button" class="add-btn full-width" id="scrAutoFill" style="margin-top:6px;">🔴 Live fetch (fills all fields below)</button>
                 <div id="scrAutoFillStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
               </div>
             </div>
@@ -2882,6 +2882,11 @@
             <div class="accordion" data-key="screen-fundamentals">
               <button type="button" class="accordion-header"><span>📋 Fundamentals — Market Cap to RSI</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
+                <div style="margin-bottom:10px;">
+                  <label class="field-label">Stock name or ticker</label>
+                  <div class="add-row"><input type="text" id="scrFundName" placeholder="e.g. Wipro" style="flex:1;font-size:15px;padding:10px;"><button type="button" class="add-btn" id="scrFundLiveFetch">🔴 Live fetch</button></div>
+                  <div id="scrFundStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;line-height:1.5;"></div>
+                </div>
                 <div class="form-grid">
                   <div><label class="field-label">Current price (₹)</label><input type="number" id="scrPrice" step="0.01"></div>
                   <div><label class="field-label">P/E</label><input type="number" id="scrPe" step="0.01"></div>
@@ -2918,73 +2923,17 @@
               </div>
             </div>
 
-            <div class="accordion" data-key="screen-nifty50" style="margin-top:12px;">
-              <button type="button" class="accordion-header"><span>🏆 Nifty 50 — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
+            <div class="accordion" data-key="screen-holdings" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>💼 My Holdings — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Scans all Nifty 50 stocks for a Strong Buy / Buy / Hold / Sell / Strong Sell verdict using the same technical engine above. Runs once automatically per day (first time you open this section that day) and caches the result — opening it again the same day just shows what was already scanned. The constituent list is fetched live from NSE Indices; if that's unreachable, a fallback list of well-known large caps is used instead.</div>
-                <button type="button" class="add-btn full-width" id="scrNifty50Rescan">🔄 Rescan now</button>
-                <div id="scrNifty50Status" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Scans the stocks you actually hold (Your Stocks) for a Strong Buy / Buy / Hold / Sell / Strong Sell verdict with entry, stop and target. Runs once automatically per day, the first time you open this section, and feeds Portfolio Rebalancing and the Portfolio Tracker.</div>
+                <button type="button" class="add-btn full-width" id="scrHoldingsRescan">🔄 Rescan now</button>
+                <div id="scrHoldingsStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
                 <div style="display:flex;gap:6px;margin-top:6px;">
-                  <button type="button" class="add-btn ghost" id="scrNifty50ExportCsv" style="flex:1;">⬇️ CSV</button>
-                  <button type="button" class="add-btn ghost" id="scrNifty50ShareWa" style="flex:1;">📲 Share</button>
+                  <button type="button" class="add-btn ghost" id="scrHoldingsExportCsv" style="flex:1;">⬇️ CSV</button>
+                  <button type="button" class="add-btn ghost" id="scrHoldingsShareWa" style="flex:1;">📲 Share</button>
                 </div>
-                <div id="scrNifty50Result" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
-              </div>
-            </div>
-
-            <div class="accordion" data-key="screen-nifty100" style="margin-top:12px;">
-              <button type="button" class="accordion-header"><span>🏆 Nifty 100 — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Scans all Nifty 100 stocks for a Strong Buy / Buy / Hold / Sell / Strong Sell verdict using the same technical engine above. Runs once automatically per day (first time you open this section that day) and caches the result — opening it again the same day just shows what was already scanned. Takes roughly 1–2 minutes the first time. The constituent list is fetched live from NSE Indices; if that's unreachable, a fallback list of well-known large caps is used instead.</div>
-                <button type="button" class="add-btn full-width" id="scrNifty100Rescan">🔄 Rescan now</button>
-                <div id="scrNifty100Status" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
-                <div style="display:flex;gap:6px;margin-top:6px;">
-                  <button type="button" class="add-btn ghost" id="scrNifty100ExportCsv" style="flex:1;">⬇️ CSV</button>
-                  <button type="button" class="add-btn ghost" id="scrNifty100ShareWa" style="flex:1;">📲 Share</button>
-                </div>
-                <div id="scrNifty100Result" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
-              </div>
-            </div>
-
-            <div class="accordion" data-key="screen-nifty500" style="margin-top:12px;">
-              <button type="button" class="accordion-header"><span>🏆 Nifty 500 — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Same scan as Nifty 100 above, run across all Nifty 500 constituents. With 500 stocks this takes noticeably longer the first time — expect several minutes. Cached once per day after that.</div>
-                <button type="button" class="add-btn full-width" id="scrNifty500Rescan">🔄 Rescan now</button>
-                <div id="scrNifty500Status" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
-                <div style="display:flex;gap:6px;margin-top:6px;">
-                  <button type="button" class="add-btn ghost" id="scrNifty500ExportCsv" style="flex:1;">⬇️ CSV</button>
-                  <button type="button" class="add-btn ghost" id="scrNifty500ShareWa" style="flex:1;">📲 Share</button>
-                </div>
-                <div id="scrNifty500Result" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
-              </div>
-            </div>
-
-            <div class="accordion" data-key="screen-niftymidcap" style="margin-top:12px;">
-              <button type="button" class="accordion-header"><span>🏆 Nifty Midcap — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Same scan, run across the Nifty Midcap 150 constituents. Cached once per day.</div>
-                <button type="button" class="add-btn full-width" id="scrNiftyMidcapRescan">🔄 Rescan now</button>
-                <div id="scrNiftyMidcapStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
-                <div style="display:flex;gap:6px;margin-top:6px;">
-                  <button type="button" class="add-btn ghost" id="scrNiftyMidcapExportCsv" style="flex:1;">⬇️ CSV</button>
-                  <button type="button" class="add-btn ghost" id="scrNiftyMidcapShareWa" style="flex:1;">📲 Share</button>
-                </div>
-                <div id="scrNiftyMidcapResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
-              </div>
-            </div>
-
-            <div class="accordion" data-key="screen-niftysmallcap" style="margin-top:12px;">
-              <button type="button" class="accordion-header"><span>🏆 Nifty Smallcap — Live Verdicts</span><span class="accordion-arrow">▸</span></button>
-              <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Same scan, run across the Nifty Smallcap 250 constituents. Small-caps are more volatile and less liquid — treat these verdicts with extra caution. Cached once per day.</div>
-                <button type="button" class="add-btn full-width" id="scrNiftySmallcapRescan">🔄 Rescan now</button>
-                <div id="scrNiftySmallcapStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
-                <div style="display:flex;gap:6px;margin-top:6px;">
-                  <button type="button" class="add-btn ghost" id="scrNiftySmallcapExportCsv" style="flex:1;">⬇️ CSV</button>
-                  <button type="button" class="add-btn ghost" id="scrNiftySmallcapShareWa" style="flex:1;">📲 Share</button>
-                </div>
-                <div id="scrNiftySmallcapResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
+                <div id="scrHoldingsResult" style="margin-top:10px;max-height:420px;overflow-y:auto;"></div>
               </div>
             </div>
 
@@ -3025,7 +2974,7 @@
             <div class="accordion" data-key="screen-strongbuy" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>🚀 Strong Buy List — Today</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Every stock rated "Strong Buy" in today's Nifty 100 and Watchlist scans above, combined. Run those scans first if this is empty.</div>
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Every stock rated "Strong Buy" in today's My Holdings and Watchlist scans above, combined. Run those scans first if this is empty.</div>
                 <div style="display:flex;gap:6px;margin-bottom:8px;">
                   <button type="button" class="add-btn ghost" id="scrStrongBuyExportCsv" style="flex:1;">⬇️ CSV</button>
                   <button type="button" class="add-btn ghost" id="scrStrongBuyShareWa" style="flex:1;">📲 Share</button>
@@ -9341,40 +9290,69 @@
       }
     });
   }
-  const scrAutoFillBtn = document.getElementById('scrAutoFill');
-  if(scrAutoFillBtn){
-    scrAutoFillBtn.addEventListener('click', async () => {
-      const nameEl = document.getElementById('scrName');
-      const statusEl = document.getElementById('scrAutoFillStatus');
-      const query = nameEl.value.trim();
-      if(!query){ statusEl.textContent = 'Type a stock name or ticker first.'; return; }
-      statusEl.textContent = `Looking up "${query}"…`;
-      try{
-        const res = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=IN`);
-        const data = await res.json();
-        if(!res.ok || data.error){ statusEl.textContent = data.error || "Couldn't fetch live data — enter values manually."; return; }
-        const filled = [];
-        const setIf = (id, val, decimals, label) => {
-          if(val != null){ document.getElementById(id).value = decimals != null ? val.toFixed(decimals) : val; filled.push(label); }
-        };
-        setIf('scrPrice', data.price, 2, 'price');
-        setIf('scrPe', data.pe, 2, 'P/E');
-        setIf('scrDe', data.debtToEquity, 2, 'debt-to-equity');
-        setIf('scrPb', data.priceToBook, 2, 'P/B');
-        setIf('scrRoe', data.returnOnEquity, 1, 'ROE');
-        setIf('scrCurrentRatio', data.currentRatio, 2, 'current ratio');
-        if(data.operatingCashflow != null) { document.getElementById('scrOcf3yr').value = (data.operatingCashflow / 1e7).toFixed(1); filled.push('operating cash flow (TTM, not a true 3yr sum)'); }
-        if(data.freeCashflow != null) { document.getElementById('scrFcf3yr').value = (data.freeCashflow / 1e7).toFixed(1); filled.push('free cash flow (TTM, not a true 3yr sum)'); }
-        nameEl.value = data.name || query;
-        const missing = ['Industry P/E', 'PEG', 'ROCE (3yr avg)', 'sales/profit growth (3yr)', 'EPS growth (5yr)', 'pledged %', 'RSI'];
-        statusEl.textContent = filled.length
-          ? `✓ Filled ${filled.join(', ')} from ${data.symbol}. Still need: ${missing.join(', ')} — those need Screener.in or the annual report, not available from this live source. Cash flow figures are trailing-12-month, not a true 3-year sum — adjust if you have the real 3yr totals.`
-          : `Found ${data.symbol} but couldn't extract usable fields — enter values manually.`;
-      }catch(e){
-        statusEl.textContent = "Couldn't reach the live data source — enter values manually instead.";
-      }
-    });
+  // Live fetch: resolves the stock, then fills EVERY field in the Fundamentals form from live data
+  // (quote + multi-year financials + RSI). Fields Yahoo can't supply are left blank and listed.
+  const SCR_FUND_IDS = ['scrPrice','scrPe','scrIndustryPe','scrPeg','scrPb','scrDe','scrCurrentRatio','scrRoe','scrRoce3yr','scrSalesGrowth3yr','scrProfitGrowth3yr','scrEpsGrowth5yr','scrFcf3yr','scrOcf3yr','scrFcf5yr','scrFcfPrecYear','scrShares','scrPledged','scrRsi'];
+  async function scrLiveFetchAll(rawQuery){
+    const say = m => ['scrAutoFillStatus', 'scrFundStatus'].forEach(id => { const e = document.getElementById(id); if(e) e.textContent = m; });
+    const query = (rawQuery || '').trim();
+    if(!query){ say('Type a stock name or ticker first.'); return; }
+    say(`Looking up "${query}"\u2026`);
+    try{
+      const qRes = await fetch(`/api/stock-quote?q=${encodeURIComponent(query)}&market=IN`);
+      const q = await qRes.json();
+      if(!qRes.ok || q.error){ say(q.error || "Couldn't fetch live data \u2014 enter values manually."); return; }
+      say(`Found ${q.symbol}. Fetching multi-year financials and RSI\u2026`);
+      const enc = encodeURIComponent(q.symbol);
+      const [fR, tR] = await Promise.allSettled([
+        fetch(`/api/stock-fundamentals?symbol=${enc}`).then(r => r.json()),
+        fetch(`/api/technical-analysis?q=${enc}&market=IN`).then(r => r.json())
+      ]);
+      const f = (fR.status === 'fulfilled' && fR.value && !fR.value.error) ? fR.value : null;
+      const ta = (tR.status === 'fulfilled' && tR.value && !tR.value.error) ? tR.value : null;
+      SCR_FUND_IDS.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; }); // never leave the previous stock's numbers behind
+      const missing = [], filled = [];
+      const put = (id, val, dec, label) => {
+        if(val != null && isFinite(val)){ document.getElementById(id).value = Number(val).toFixed(dec); filled.push(label); }
+        else missing.push(label);
+      };
+      put('scrPrice', q.price, 2, 'Price');
+      put('scrPe', q.pe, 2, 'P/E');
+      put('scrIndustryPe', f && f.industryPe, 2, 'Industry P/E');
+      const epsG = f && f.epsGrowth5yr;
+      put('scrPeg', (q.pe > 0 && epsG > 0) ? q.pe / epsG : null, 2, 'PEG');
+      put('scrPb', q.priceToBook, 2, 'P/B');
+      put('scrDe', q.debtToEquity, 2, 'Debt/Equity');
+      put('scrCurrentRatio', q.currentRatio, 2, 'Current ratio');
+      put('scrRoe', q.returnOnEquity, 1, 'ROE');
+      put('scrRoce3yr', f && f.roce3yr, 1, 'ROCE 3yr');
+      put('scrSalesGrowth3yr', f && f.salesGrowth3yr, 1, 'Sales growth');
+      put('scrProfitGrowth3yr', f && f.profitGrowth3yr, 1, 'Profit growth');
+      put('scrEpsGrowth5yr', epsG, 1, 'EPS growth');
+      put('scrFcf3yr', f && f.fcf3yr, 1, 'FCF 3yr');
+      put('scrOcf3yr', f && f.ocf3yr, 1, 'OCF 3yr');
+      put('scrFcf5yr', f && f.fcf5yr, 1, 'FCF 5yr');
+      put('scrFcfPrecYear', f && f.fcfPrecYear, 1, 'FCF preceding year');
+      put('scrShares', f && f.shares, 2, 'Shares (Cr)');
+      const rsiObj = ta && (ta.oscillators || []).find(o => o.name === 'RSI (14)');
+      put('scrRsi', rsiObj ? rsiObj.value : null, 1, 'RSI');
+      missing.push('Pledged % (no free data source \u2014 enter from the shareholding pattern)');
+      ['scrName', 'scrFundName'].forEach(id => { const el = document.getElementById(id); if(el) el.value = q.name || query; });
+      const acc = document.querySelector('.accordion[data-key="screen-fundamentals"]');
+      if(acc) acc.classList.add('open');
+      const notes = (f && f.notes && f.notes.length) ? ' Notes: ' + f.notes.join('; ') + '.' : '';
+      const peNote = (f && f.industryPeNote) ? ` Industry P/E = ${f.industryPeNote}.` : '';
+      say(`\u2713 ${q.name || q.symbol} (${q.symbol}): filled ${filled.length} of ${SCR_FUND_IDS.length} fields. Now tap "Score fundamentals".${missing.length ? ' Not available: ' + missing.join(', ') + '.' : ''}${peNote}${notes}`);
+    }catch(e){
+      say("Couldn't reach the live data source \u2014 enter values manually instead.");
+    }
   }
+  const scrAutoFillBtn = document.getElementById('scrAutoFill');
+  if(scrAutoFillBtn) scrAutoFillBtn.addEventListener('click', () => scrLiveFetchAll(document.getElementById('scrName').value));
+  const scrFundLiveBtn = document.getElementById('scrFundLiveFetch');
+  if(scrFundLiveBtn) scrFundLiveBtn.addEventListener('click', () => scrLiveFetchAll(document.getElementById('scrFundName').value));
+  const scrFundNameEl = document.getElementById('scrFundName');
+  if(scrFundNameEl) scrFundNameEl.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); scrLiveFetchAll(scrFundNameEl.value); } });
 
   // ---- Technical Analysis Summary: mirrors Groww's "Technical Overview"
   // tab (moving averages + RSI + MACD -> overall Buy/Sell/Neutral gauge),
@@ -9699,7 +9677,7 @@
     if(!box) return;
     const scans = state.screenerScans || {};
     const all = [];
-    [['nifty50', 'Nifty 50'], ['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+    [['holdings', 'My Holdings'], ['custom', 'Watchlist']].forEach(([key, label]) => {
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
@@ -9724,7 +9702,7 @@
     if(!box) return;
     const scans = state.screenerScans || {};
     const all = [];
-    [['nifty50', 'Nifty 50'], ['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+    [['holdings', 'My Holdings'], ['custom', 'Watchlist']].forEach(([key, label]) => {
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => {
         if(r.error || r.price == null || r.ma50 == null || r.rsi == null) return;
@@ -9782,7 +9760,7 @@
   function collectStrongBuyRows(){
     const scans = state.screenerScans || {};
     const all = [];
-    [['nifty50', 'Nifty 50'], ['nifty100', 'Nifty 100'], ['nifty500', 'Nifty 500'], ['niftymidcap', 'Nifty Midcap 150'], ['niftysmallcap', 'Nifty Smallcap 250'], ['custom', 'Watchlist']].forEach(([key, label]) => {
+    [['holdings', 'My Holdings'], ['custom', 'Watchlist']].forEach(([key, label]) => {
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
@@ -9817,6 +9795,8 @@
     ['scrNiftyMidcapShareWa', () => shareScreenerWhatsApp('niftymidcap', 'Nifty Midcap 150')],
     ['scrNiftySmallcapExportCsv', () => exportScreenerCsv('niftysmallcap', 'nifty-smallcap250-screener')],
     ['scrNiftySmallcapShareWa', () => shareScreenerWhatsApp('niftysmallcap', 'Nifty Smallcap 250')],
+    ['scrHoldingsExportCsv', () => exportScreenerCsv('holdings', 'holdings-screener')],
+    ['scrHoldingsShareWa', () => shareScreenerWhatsApp('holdings', 'My Holdings')],
     ['scrCustomExportCsv', () => exportScreenerCsv('custom', 'watchlist-screener')],
     ['scrCustomShareWa', () => shareScreenerWhatsApp('custom', 'My Watchlist')],
     ['scrStrongBuyExportCsv', exportStrongBuyCsv],
@@ -9832,7 +9812,7 @@
   // screener's Buy/Sell calls translate into concrete "trim this / add to
   // that" suggestions rather than staying abstract. ----
   const REBALANCE_SCAN_KEYS = {
-    India: ['nifty50', 'nifty100', 'nifty500', 'niftymidcap', 'niftysmallcap', 'custom'],
+    India: ['holdings', 'custom'],
     UAE: ['uaeindex']
   };
   function normStockName(s){ return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
@@ -11013,6 +10993,25 @@
   if(scrBuffettRescanBtn) scrBuffettRescanBtn.addEventListener('click', () => ensureBuffettScan(true));
   try{ renderBuffettResults(); }catch(e){}
 
+  // My Holdings scan: replaces the old index-wide scans. Scans only the stocks you own.
+  async function ensureHoldingsScan(force){
+    const scan = state.screenerScans && state.screenerScans.holdings;
+    const statusEl = document.getElementById('scrHoldingsStatus');
+    try{
+      const list = investmentGroupByName('India', 'stocks').filter(g => g.qty > 0.0000001).map(g => ({ name: g.name, symbol: g.name }));
+      if(!list.length){ if(statusEl) statusEl.textContent = 'No stock holdings yet \u2014 add some under Your Stocks first.'; return; }
+      if(scan && scan.date === todayStr() && !force){
+        renderBatchResults('holdings', 'scrHoldingsResult');
+        if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
+        return;
+      }
+      await runBatchScan(list, 'holdings', 'scrHoldingsStatus', 'scrHoldingsResult');
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Holdings scan failed: ' + (e && e.message ? e.message : 'unknown error'); }
+  }
+  const scrHoldingsRescanBtn = document.getElementById('scrHoldingsRescan');
+  if(scrHoldingsRescanBtn) scrHoldingsRescanBtn.addEventListener('click', () => ensureHoldingsScan(true));
+  try{ renderBatchResults('holdings', 'scrHoldingsResult'); }catch(e){}
+
   // Auto-run once per day, the first time each section is actually opened —
   // not on every page load, so it doesn't hammer Yahoo for household
   // members who never look at this section.
@@ -11029,6 +11028,7 @@
     if(acc.dataset.key === 'screen-niftysmallcap') ensureNiftySmallcapScan(false);
     if(acc.dataset.key === 'screen-customwatch'){ renderWatchlistItems(); ensureCustomScan(false); }
     if(acc.dataset.key === 'screen-buffett') ensureBuffettScan(false);
+    if(acc.dataset.key === 'screen-holdings') ensureHoldingsScan(false);
   });
   renderWatchlistItems();
   renderBatchResults('nifty50', 'scrNifty50Result');
@@ -17306,7 +17306,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.3.0', APP_VERSION_DATE = '28 Oct 2026';
+    const APP_VERSION = '1.4.0', APP_VERSION_DATE = '28 Oct 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
