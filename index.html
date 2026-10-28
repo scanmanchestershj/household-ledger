@@ -2963,7 +2963,7 @@
             <div class="accordion" data-key="screen-buffett" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>🧠 Warren Buffett — Value Screen (auto)</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">"Buffett Plus" score out of 100: quality (ROE, ROCE, low debt, profit every year) + earnings durability + margin of safety on <b>5-year-average</b> earnings + trend. Stocks must pass hard gates first, so a cyclical at peak earnings (a very low P/E that is just a good year) is blocked. Rescans once a day when you open this section. Entry = buy in 3 parts at 25% / 33% / 40% below value; trim at 90% of value; exit at 100% or if the thesis breaks. Promoter pledge is not checked (no free data source) — verify it yourself.</div>
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">"Buffett Plus" score out of 100: quality (ROE, ROCE, low debt, profit every year) + earnings durability + margin of safety on <b>5-year-average</b> earnings + trend. Stocks must pass hard gates first, so a cyclical at peak earnings (a very low P/E that is just a good year) is blocked. Scans <b>Nifty 500 + Midcap 150 + Smallcap 250 + Microcap 250</b> (about 750 stocks; the cheapest ~160 get the full check). Rescans once a day when you open this section. Small and microcap stocks are thinly traded, so check volume before buying. Entry = buy in 3 parts at 25% / 33% / 40% below value; trim at 90% of value; exit at 100% or if the thesis breaks. Promoter pledge is not checked (no free data source) — verify it yourself.</div>
                 <button type="button" class="add-btn full-width" id="scrBuffettRescan">🔄 Rescan now</button>
                 <div id="scrBuffettStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
                 <div id="scrBuffettResult" style="margin-top:10px;max-height:520px;overflow-y:auto;"></div>
@@ -10750,11 +10750,13 @@
   if(scrCustomRescanBtn) scrCustomRescanBtn.addEventListener('click', () => ensureCustomScan(true));
 
   // ---- Warren Buffett value screen ("Buffett Plus"): scoring happens server-side in
-  // /api/buffett-scan (buffett-formulas.js). Universe = Nifty 500 pre-filtered cheaply (P/E<=25,
+  // /api/buffett-scan (buffett-formulas.js). Universe = Nifty 500 + Midcap 150 + Smallcap 250 + Microcap 250 (~750 stocks) pre-filtered cheaply (P/E<=25,
   // P/B<=4), plus CPCL and every watchlist stock. Rescans once per day when the section is opened.
   // Alerts fire only when a stock's zone CHANGES vs the previous scan. Fully self-contained and
   // try/catch-wrapped so a failure here can never break the rest of the page. ----
   const BUFFETT_SEEDS = [{ name: 'Chennai Petroleum', symbol: 'CHENNPETRO.NS' }];
+  const BUFFETT_UNIVERSE_VER = 'allcap-750';   // bump to force one fresh rescan when the universe changes
+  const BUFFETT_CAPS = { LARGECAP: 'Large', MIDCAP: 'Mid', SMALLCAP: 'Small', MICROCAP: 'Micro' };
   const BUFFETT_ZONES = {
     ENTRY: ['\ud83d\udfe2 Entry zone', '#1e8449', 0], WATCH: ['\ud83d\udfe1 Watch', '#b8860b', 1], TRIM: ['\ud83d\udfe0 Trim', '#b9770e', 2],
     EXIT_FULL: ['\ud83d\udd34 Exit \u2014 at/above value', '#c0392b', 3], EXIT_THESIS: ['\u26d4 Thesis broken', '#c0392b', 3], NONE: ['\u2014 No signal', '#7f8c8d', 4]
@@ -10779,41 +10781,46 @@
       if(r.error) return `<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--ink-soft);">${escapeHtml(r.name || r.symbol)} \u2014 ${escapeHtml(r.error)}</div>`;
       const z = BUFFETT_ZONES[r.zone] || BUFFETT_ZONES.NONE;
       const tr = (r.entryTranches || []).map(f).join(' / ');
-      return `<details style="padding:6px 0;border-bottom:1px solid var(--line);"><summary style="cursor:pointer;font-size:12px;"><b>${escapeHtml(r.name)}</b> \u00b7 \u20b9${f(r.price)} \u00b7 Score ${r.score}/100 \u00b7 <span style="color:${z[1]};font-weight:600;">${z[0]}</span></summary>
+      return `<details style="padding:6px 0;border-bottom:1px solid var(--line);"><summary style="cursor:pointer;font-size:12px;"><b>${escapeHtml(r.name)}</b>${r.cap && BUFFETT_CAPS[r.cap] ? ' <span style="font-size:9.5px;color:var(--ink-soft);border:1px solid var(--line);border-radius:6px;padding:0 4px;">' + BUFFETT_CAPS[r.cap] + '</span>' : ''} \u00b7 \u20b9${f(r.price)} \u00b7 Score ${r.score}/100 \u00b7 <span style="color:${z[1]};font-weight:600;">${z[0]}</span></summary>
         <div style="font-size:11px;line-height:1.6;margin-top:4px;">Value (5-yr normalised): <b>\u20b9${f(r.intrinsic)}</b> \u00b7 Margin of safety: <b>${r.mosPct}%</b><br>Buy in 3 parts at \u20b9${tr} \u00b7 Trim \u20b9${f(r.trimAt)} \u00b7 Exit \u20b9${f(r.exitAt)} \u00b7 Review-stop \u20b9${f(r.reviewStop)}<br><span style="color:var(--ink-soft);">${escapeHtml(r.why || '')}${r.industry ? ' \u00b7 ' + escapeHtml(r.industry) : ''}</span></div></details>`;
     }).join('');
     const hits = rows.filter(r => !r.error && (r.zone === 'ENTRY' || r.zone === 'WATCH')).length;
     const note = hits ? '' : '<div style="font-size:11px;margin:4px 0 8px 0;padding:6px 8px;border:1px dashed var(--line);border-radius:8px;">No stock is in an Entry or Watch zone today \u2014 that is normal for a strict Buffett screen. Below are your tracked stocks (e.g. CPCL) and the closest candidates, with the reason for each.</div>';
-    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} \u00b7 ${scan.deepScanned || 0} stocks analysed in depth of ${scan.universe || 0} in the universe</div>${note}${cards || '<div class="empty">Nothing passed the screen today.</div>'}`;
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last scanned: ${scan.date} \u00b7 ${scan.deepScanned || 0} stocks analysed in depth of ${scan.universe || 0} in the universe (Nifty 500 + Midcap + Smallcap + Microcap)</div>${note}${cards || '<div class="empty">Nothing passed the screen today.</div>'}`;
   }
   async function ensureBuffettScan(force){
     const statusEl = document.getElementById('scrBuffettStatus');
     try{
       const scan = state.screenerScans && state.screenerScans.buffett;
-      if(scan && scan.date === todayStr() && !force){
+      if(scan && scan.date === todayStr() && scan.ver === BUFFETT_UNIVERSE_VER && !force){
         renderBuffettResults();
         if(statusEl) statusEl.textContent = `Showing today's scan (cached). Last updated ${scan.date}.`;
         return;
       }
-      if(statusEl) statusEl.textContent = 'Loading Nifty 500 list\u2026';
-      let list = [];
-      try{ list = (await buffettGet('/api/nifty500')).list || []; }catch(e){ /* fall back to seeds + watchlist */ }
+      if(statusEl) statusEl.textContent = 'Loading Nifty 500 + Midcap + Smallcap + Microcap lists\u2026';
+      let list = [], listNote = '';
+      try{ const ld = await buffettGet('/api/nifty500?all=1'); list = ld.list || []; listNote = ld.note || ''; }catch(e){ /* fall back to seeds + watchlist */ }
       normalizeWatchlist();
       const extra = BUFFETT_SEEDS.concat((state.customWatchlist || []).map(i => ({ name: i.name, symbol: i.symbol || i.name })));
-      const names = {};
-      list.concat(extra).forEach(i => { if(i.symbol) names[i.symbol] = i.name || i.symbol; });
+      const names = {}, capOf = {};
+      list.concat(extra).forEach(i => { if(i.symbol){ names[i.symbol] = i.name || i.symbol; if(i.cap) capOf[i.symbol] = i.cap; } });
       const universe = Object.keys(names);
       const must = new Set(extra.map(i => i.symbol));
       // 1) cheap pre-filter in chunks of 100
       let keep = [], checked = 0, preErr = '';
+      const rankOf = {};
       for(let i = 0; i < universe.length; i += 100){
         if(statusEl) statusEl.textContent = `Pre-filtering ${Math.min(i + 100, universe.length)} of ${universe.length}\u2026`;
         try{
           const d = await buffettGet('/api/buffett-scan?prefilter=' + encodeURIComponent(universe.slice(i, i + 100).join(',')));
           keep = keep.concat(d.keep || []); checked += d.checked || 0;
+          Object.assign(rankOf, d.rank || {});
         }catch(e){ preErr = (e && e.message) || 'failed'; }
       }
-      const deep = Array.from(new Set(keep.concat(Array.from(must)))).slice(0, 120);
+      // cheapest (lowest P/E x P/B) first, so the 160-stock deep-scan cap never drops the best candidates
+      keep.sort((a, b) => (rankOf[a] == null ? 1e9 : rankOf[a]) - (rankOf[b] == null ? 1e9 : rankOf[b]));
+      const deepKeep = keep.filter(s => !must.has(s)).slice(0, 160);
+      const deep = Array.from(new Set(deepKeep.concat(Array.from(must))));
       // 2) deep scan: 4 symbols per request, 3 requests in parallel
       const chunks = []; for(let i = 0; i < deep.length; i += 4) chunks.push(deep.slice(i, i + 4));
       const out = []; let ci = 0, doneCount = 0;
@@ -10827,7 +10834,7 @@
         }
       }
       await Promise.all([worker(), worker(), worker()]);
-      out.forEach(r => { if(!r.name || r.name === r.symbol) r.name = names[r.symbol] || r.symbol; });
+      out.forEach(r => { if(!r.name || r.name === r.symbol) r.name = names[r.symbol] || r.symbol; if(capOf[r.symbol]) r.cap = capOf[r.symbol]; });
       // keep: anything with a signal or passing the gates, plus errors/rejections for the stocks the user cares about
       const results = out.filter(r => r.error ? must.has(r.symbol) : (r.gatesPass || r.zone !== 'NONE' || must.has(r.symbol)));
       const prevZones = {};
@@ -10835,11 +10842,11 @@
       if(!state.screenerScans) state.screenerScans = {};
       const okCount = out.filter(r => !r.error).length, errCount = out.length - okCount;
       const firstErr = (out.find(r => r.error) || {}).error || '';
-      state.screenerScans.buffett = { date: todayStr(), results, universe: universe.length, deepScanned: okCount };
+      state.screenerScans.buffett = { date: todayStr(), ver: BUFFETT_UNIVERSE_VER, results, universe: universe.length, deepScanned: okCount };
       save();
       if(statusEl) statusEl.textContent = checked
-        ? `\u2713 ${universe.length} stocks checked, ${keep.length} passed the cheap filter, ${okCount} analysed in depth` + (errCount ? `, ${errCount} had no data${firstErr ? ' (e.g. ' + firstErr + ')' : ''}` : '') + `. Updated ${todayStr()}.`
-        : `\u26a0\ufe0f The market-wide pre-filter failed (${preErr || 'no data'}), so only CPCL and your watchlist were analysed. Tap Rescan later for the full Nifty 500 scan.`;
+        ? `\u2713 ${universe.length} stocks checked, ${keep.length} passed the cheap filter, ${okCount} analysed in depth` + (listNote ? ` (${listNote})` : '') + (errCount ? `, ${errCount} had no data${firstErr ? ' (e.g. ' + firstErr + ')' : ''}` : '') + `. Updated ${todayStr()}.`
+        : `\u26a0\ufe0f The market-wide pre-filter failed (${preErr || 'no data'}), so only CPCL and your watchlist were analysed. Tap Rescan later for the full scan.`;
       renderBuffettResults();
       // alerts: only on a zone CHANGE; trim/exit only for stocks you hold or watch
       const held = buffettHeldNames();
@@ -17272,7 +17279,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.5.1', APP_VERSION_DATE = '28 Oct 2026';
+    const APP_VERSION = '1.5.2', APP_VERSION_DATE = '28 Oct 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;

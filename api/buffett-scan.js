@@ -1,5 +1,5 @@
 // Warren Buffett value screen — serverless endpoint.
-//   GET /api/buffett-scan?prefilter=A.NS,B.NS,...   (<=120) -> { keep: [symbols with P/B<=4 and 0<PE<=25] }
+//   GET /api/buffett-scan?prefilter=A.NS,B.NS,...   (<=120) -> { keep: [symbols with P/B<=4 and 0<PE<=25], rank: {symbol: PE*PB} }
 //   GET /api/buffett-scan?symbols=A.NS,B.NS          (<=4)   -> { results: [...evaluate() output | {symbol,error}] }
 // Uses Yahoo Finance's UNOFFICIAL endpoints (same as stock-quote.js). Anything missing -> that stock is
 // reported as an error/insufficient-data and is NEVER passed as a buy.
@@ -84,8 +84,11 @@ module.exports = async (req, res) => {
       const cr = sess.crumb ? '&crumb=' + encodeURIComponent(sess.crumb) : '';
       const d = await getJson(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms.join(','))}${cr}`, sess.cookie ? { Cookie: sess.cookie } : {});
       const rows = d?.quoteResponse?.result || [];
-      const keep = rows.filter(x => x.trailingPE > 0 && x.trailingPE <= 25 && x.priceToBook > 0 && x.priceToBook <= 4).map(x => x.symbol);
-      res.status(200).json({ keep, checked: rows.length, crumb: !!sess.crumb });
+      const passed = rows.filter(x => x.trailingPE > 0 && x.trailingPE <= 25 && x.priceToBook > 0 && x.priceToBook <= 4);
+      const keep = passed.map(x => x.symbol);
+      // cheapness rank (P/E x P/B, lower = cheaper) so the client can deep-scan the cheapest first when the list is long
+      const rank = {}; passed.forEach(x => { rank[x.symbol] = Math.round(x.trailingPE * x.priceToBook * 10) / 10; });
+      res.status(200).json({ keep, rank, checked: rows.length, crumb: !!sess.crumb });
       return;
     }
     const syms = String(qs.symbols || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 4);
