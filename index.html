@@ -10061,26 +10061,71 @@
     });
     return map;
   }
+  // ---- Rebalancing: two styles. "long" (default) is for long-term investors: short-term technical Sell
+  // ratings never cause a Trim. Trim = a position that has grown too big; Review = the business fundamentals
+  // weakened (Buffett Plus thesis-break gate); Add = quality business at a real margin of safety. ETFs/index
+  // funds are held for diversification and only trimmed for concentration. "short" keeps the old technical logic.
+  function rebalanceStyle(){ return (state.settings && state.settings.rebalanceStyle) === 'short' ? 'short' : 'long'; }
+  function isEtfName(n){ return /\betf\b|\bbees\b|liquid ?bees|gold ?(etf|bees)|silver ?(etf|bees)|index fund/i.test(n || ''); }
+  function longTermMapFor(){
+    const lt = (state.screenerScans && state.screenerScans.holdingsLT && state.screenerScans.holdingsLT.results) || [], m = {};
+    lt.forEach(r => { if(r.error) return; [normStockName(r.inputName), normStockName(r.name)].forEach(k => { if(k && !m[k]) m[k] = r; }); });
+    return m;
+  }
+  async function ensureHoldingsLongTermScan(force){
+    const scans = state.screenerScans = state.screenerScans || {};
+    const prev = scans.holdingsLT;
+    if(prev && prev.date === todayStr() && !force) return prev;
+    const list = investmentGroupByName('India', 'stocks').filter(g => g.qty > 0.0000001 && !isEtfName(g.name));
+    const syms = [], nameBySym = {};
+    for(const g of list){ try{ const sym = await divSymbolFor(g.name, 'IN'); if(sym){ syms.push(sym); nameBySym[sym] = g.name; } }catch(e){} }
+    const out = [];
+    for(let i = 0; i < syms.length; i += 4){
+      const chunk = syms.slice(i, i + 4);
+      try{ const d = await buffettGet('/api/buffett-scan?symbols=' + encodeURIComponent(chunk.join(','))); (d.results || []).forEach(r => out.push(r)); }
+      catch(e){ chunk.forEach(sy => out.push({ symbol: sy, error: 'data unavailable' })); }
+    }
+    out.forEach(r => { r.inputName = nameBySym[r.symbol] || r.name; if(!r.name || r.name === r.symbol) r.name = r.inputName; });
+    scans.holdingsLT = { date: todayStr(), results: out };
+    save();
+    return scans.holdingsLT;
+  }
   function computeRebalancing(countryKey){
     const holdings = investmentGroupByName(countryKey, 'stocks').filter(g => g.qty > 0.0000001);
     const verdictMap = collectVerdictsForCountry(countryKey);
     const totalCurrent = holdings.reduce((s, g) => s + g.current, 0);
+    const style = rebalanceStyle(), ltMap = style === 'long' ? longTermMapFor() : {};
     const rows = holdings.map(g => {
       const v = verdictMap[normStockName(g.name)];
       const weightPct = totalCurrent > 0 ? (g.current / totalCurrent) * 100 : 0;
       let action, note;
-      if(!v){ action = 'Not scanned'; note = 'Run a scan or a single-stock check for this name to get a verdict.'; }
-      else if(v.verdict === 'Strong Sell' || v.verdict === 'Sell'){ action = 'Trim'; note = `Rated ${v.verdict} — currently ${weightPct.toFixed(1)}% of your stock holdings.`; }
-      else if(v.verdict === 'Strong Buy' && weightPct < 15){ action = 'Add'; note = `Rated Strong Buy and only ${weightPct.toFixed(1)}% of your stock portfolio.`; }
-      else { action = 'Hold'; note = `Rated ${v.verdict}.`; }
+      if(style === 'short'){
+        if(!v){ action = 'Not scanned'; note = 'Run a scan or a single-stock check for this name to get a verdict.'; }
+        else if(v.verdict === 'Strong Sell' || v.verdict === 'Sell'){ action = 'Trim'; note = `Rated ${v.verdict} — currently ${weightPct.toFixed(1)}% of your stock holdings.`; }
+        else if(v.verdict === 'Strong Buy' && weightPct < 15){ action = 'Add'; note = `Rated Strong Buy and only ${weightPct.toFixed(1)}% of your stock portfolio.`; }
+        else { action = 'Hold'; note = `Rated ${v.verdict}.`; }
+      } else {
+        const etf = isEtfName(g.name), cap = etf ? 30 : 20, lt = ltMap[normStockName(g.name)], w = weightPct.toFixed(1);
+        if(weightPct > cap){ action = 'Trim'; note = `Concentration: ${w}% of your stocks (long-term cap ${cap}%). Trim the excess only, not the whole position.`; }
+        else if(etf){ action = 'Hold'; note = 'ETF / index holding \u2014 held for diversification, no valuation trim.'; }
+        else if(lt && lt.zone === 'EXIT_THESIS'){ action = 'Review'; note = `Fundamentals weakened (${lt.why || 'thesis-break check'}). Review the business before deciding.`; }
+        else if(lt && lt.zone === 'ENTRY' && weightPct < 15){ action = 'Add'; note = `Quality business with a ${lt.mosPct}% margin of safety (score ${lt.score}/100) and only ${w}% of your stocks.`; }
+        else if(lt && (lt.zone === 'TRIM' || lt.zone === 'EXIT_FULL')){ action = 'Hold'; note = `Trading near/above estimated value (margin ${lt.mosPct}%) \u2014 fine to keep for the long term, just avoid adding more.`; }
+        else if(lt){ action = 'Hold'; note = `Long-term score ${lt.score}/100, margin of safety ${lt.mosPct}%. Keep holding.`; }
+        else { action = 'Hold'; note = 'Long-term hold \u2014 short-term technical ratings are ignored. Tap "Long-term check" for fundamentals.'; }
+      }
       return { name: g.name, weightPct, verdict: v ? v.verdict : null, action, note, current: g.current, invested: g.invested, pnlPct: g.pnlPct };
     });
     const heldNorm = new Set(holdings.map(g => normStockName(g.name)));
-    const opportunities = Object.values(verdictMap).filter(v => v.verdict === 'Strong Buy' && !heldNorm.has(normStockName(v.name)));
-    return { rows, opportunities, totalCurrent };
+    let opportunities;
+    if(style === 'long'){
+      const bs = (state.screenerScans && state.screenerScans.buffett && state.screenerScans.buffett.results) || [];
+      opportunities = bs.filter(r => !r.error && r.zone === 'ENTRY' && !heldNorm.has(normStockName(r.name))).map(r => ({ name: r.name, verdict: 'Value entry' }));
+    } else opportunities = Object.values(verdictMap).filter(v => v.verdict === 'Strong Buy' && !heldNorm.has(normStockName(v.name)));
+    return { rows, opportunities, totalCurrent, style };
   }
-  const REBALANCE_ACTION_ORDER = { 'Trim': 0, 'Not scanned': 1, 'Add': 2, 'Hold': 3 };
-  const REBALANCE_ACTION_COLOR = { 'Trim': '#c0392b', 'Add': '#1e8449', 'Hold': 'var(--ink-soft)', 'Not scanned': '#b8860b' };
+  const REBALANCE_ACTION_ORDER = { 'Trim': 0, 'Review': 1, 'Not scanned': 2, 'Add': 3, 'Hold': 4 };
+  const REBALANCE_ACTION_COLOR = { 'Trim': '#c0392b', 'Review': '#b8860b', 'Add': '#1e8449', 'Hold': 'var(--ink-soft)', 'Not scanned': '#b8860b' };
   function renderPortfolioRebalancing(countryKey){
     const box = document.getElementById(countryKey === 'UAE' ? 'uaeRebalanceResult' : 'indiaRebalanceResult');
     if(!box) return;
@@ -10093,15 +10138,25 @@
     let html = rows.length ? `<table style="width:100%;font-size:12px;border-collapse:collapse;">` +
       sorted.map(r => `
         <tr>
-          <td style="padding:5px 0;">${escapeHtml(r.name)}<div style="font-size:10px;color:var(--ink-soft);">${r.weightPct.toFixed(1)}% of stocks${r.verdict ? ' · ' + escapeHtml(r.verdict) : ''}</div></td>
+          <td style="padding:5px 0;">${escapeHtml(r.name)}<div style="font-size:10px;color:var(--ink-soft);">${r.weightPct.toFixed(1)}% of stocks${r.verdict && rebalanceStyle() === 'short' ? ' · ' + escapeHtml(r.verdict) : ''}</div>${rebalanceStyle() === 'long' ? `<div style="font-size:10px;color:var(--ink-soft);white-space:normal;max-width:330px;">${escapeHtml(r.note)}</div>` : ''}</td>
           <td style="text-align:right;padding:5px 0;white-space:nowrap;"><span style="color:${REBALANCE_ACTION_COLOR[r.action] || 'inherit'};font-weight:600;">${escapeHtml(r.action)}</span></td>
         </tr>`).join('') + `</table>` : '';
     if(opportunities.length){
       html += `<div style="font-size:11.5px;font-weight:600;margin-top:${rows.length ? 10 : 0}px;">💡 Strong Buy stocks you don't hold yet</div>`;
       html += `<div style="font-size:12px;margin-top:2px;">${opportunities.map(o => escapeHtml(o.name)).join(', ')}</div>`;
     }
-    html += `<div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">Based on your latest scan verdicts — not investment advice. Rescan for up-to-date verdicts before acting.</div>`;
+    html += `<div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">${rebalanceStyle() === 'long' ? 'Long-term view: Trim = position too large; Review = fundamentals weakened; short-term technical sell ratings are ignored.' : 'Based on your latest scan verdicts.'} Not investment advice.</div>`;
+    const pre = countryKey === 'UAE' ? 'uae' : 'india';
+    html = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;margin-bottom:6px;"><label>Style <select id="${pre}RebStyle" style="font-size:11px;"><option value="long"${rebalanceStyle() === 'long' ? ' selected' : ''}>Long-term investor</option><option value="short"${rebalanceStyle() === 'short' ? ' selected' : ''}>Short-term (technical)</option></select></label>${countryKey === 'India' && rebalanceStyle() === 'long' ? `<button type="button" class="add-btn ghost" id="${pre}RebLtBtn" style="padding:3px 10px;font-size:11px;">\ud83d\udd04 Long-term check</button><span id="${pre}RebLtStatus" style="font-size:10.5px;color:var(--ink-soft);"></span>` : ''}</div>` + html;
     box.innerHTML = html;
+    const sel = document.getElementById(pre + 'RebStyle');
+    if(sel) sel.addEventListener('change', () => { state.settings = state.settings || {}; state.settings.rebalanceStyle = sel.value; save(); renderPortfolioRebalancing(countryKey); });
+    const ltBtn = document.getElementById(pre + 'RebLtBtn'), ltSt = document.getElementById(pre + 'RebLtStatus');
+    if(ltBtn) ltBtn.addEventListener('click', async () => {
+      ltBtn.disabled = true; if(ltSt) ltSt.textContent = 'Checking fundamentals\u2026 (about a minute)';
+      try{ await ensureHoldingsLongTermScan(true); }catch(e){}
+      renderPortfolioRebalancing(countryKey);
+    });
   }
 
   // ---- Portfolio Tracker: every held stock (not just watchlist) tracked
@@ -10281,11 +10336,13 @@
         }
       });
       const { rows, opportunities } = computeRebalancing(countryKey);
-      const trims = rows.filter(r => r.action === 'Trim').map(r => r.name);
-      const adds = rows.filter(r => r.action === 'Add').map(r => r.name);
-      if(trims.length) lines.push(`  Suggested to trim: ${trims.join(', ')}`);
-      if(adds.length) lines.push(`  Suggested to add to: ${adds.join(', ')}`);
-      if(opportunities.length) lines.push(`  Not held but Strong Buy: ${opportunities.slice(0, 5).map(o => o.name).join(', ')}`);
+      const longStyle = rebalanceStyle() === 'long';
+      const trims = rows.filter(r => r.action === 'Trim'), reviews = rows.filter(r => r.action === 'Review'), adds = rows.filter(r => r.action === 'Add');
+      if(longStyle && rows.length) lines.push('  Investor style: long-term holder. Short-term technical sell ratings are ignored; holdings with no trim/review listed below should simply be kept.');
+      if(trims.length) lines.push(longStyle ? `  Position too large (trim only the excess): ${trims.map(r => `${r.name} (${r.weightPct.toFixed(0)}% of stocks)`).join(', ')}` : `  Suggested to trim: ${trims.map(r => r.name).join(', ')}`);
+      if(reviews.length) lines.push(`  Fundamentals weakened - worth reviewing the business: ${reviews.map(r => r.name).join(', ')}`);
+      if(adds.length) lines.push(longStyle ? `  Quality at a margin of safety, could add to: ${adds.map(r => r.name).join(', ')}` : `  Suggested to add to: ${adds.map(r => r.name).join(', ')}`);
+      if(opportunities.length) lines.push(longStyle ? `  Not held, value-entry candidates: ${opportunities.slice(0, 5).map(o => o.name).join(', ')}` : `  Not held but Strong Buy: ${opportunities.slice(0, 5).map(o => o.name).join(', ')}`);
     });
     return lines.join('\n');
   }
@@ -10300,6 +10357,7 @@
   if(digestGenerateBtn){
     digestGenerateBtn.addEventListener('click', async () => {
       const month = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      if(rebalanceStyle() === 'long'){ digestStatusEl.textContent = 'Checking long-term fundamentals\u2026'; try{ await ensureHoldingsLongTermScan(false); }catch(e){} }
       const summary = buildDigestSummary();
       if(!summary.trim()){ digestStatusEl.textContent = 'Add some holdings first — nothing to summarize yet.'; return; }
       digestGenerateBtn.disabled = true;
@@ -17783,7 +17841,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.6.6', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.7.0', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;

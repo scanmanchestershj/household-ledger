@@ -86,7 +86,7 @@ async function handleDigest(req, res) {
     return;
   }
 
-  const systemPrompt = `You write a short monthly portfolio digest for one household's personal finance app. Input is a plain-text data summary the app already computed (real numbers — never invent figures not present in it). Write 120-220 words, plain text only (no markdown headers, no asterisks), friendly but concise, suitable to paste straight into WhatsApp. Cover: overall portfolio value and P&L, the biggest mover(s), and the rebalancing suggestions if present. End with one line noting this isn't financial advice. Do not add emoji beyond what's tasteful (a few at most).`;
+  const systemPrompt = `You write a short monthly portfolio digest for one household's personal finance app. Input is a plain-text data summary the app already computed (real numbers — never invent figures not present in it). Write 120-220 words, plain text only (no markdown headers, no asterisks), friendly but concise, suitable to paste straight into WhatsApp. Cover: overall portfolio value and P&L, the biggest mover(s), and the rebalancing suggestions if present. The household invests for the long term: never suggest selling or trimming because of short-term price moves or technical ratings, and only mention a trim or review if the summary lists it, giving the reason stated there (position too large, or weakened fundamentals); say plainly that the other holdings can simply be kept. End with one line noting this isn't financial advice. Do not add emoji beyond what's tasteful (a few at most).`;
 
   try {
     const response = await withTimeout(fetch('https://api.anthropic.com/v1/messages', {
