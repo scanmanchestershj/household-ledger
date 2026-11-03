@@ -3014,6 +3014,17 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-track" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>📈 Signal Track Record</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Every Top Pick, Buffett Entry-zone and Strong Buy signal is logged with its date and price, then compared with the Nifty 50 over the same period. Once enough signals are 3, 6 and 12 months old, this shows whether the scoring really beats the index. Results below 30 signals per period are too few to trust.</div>
+                <button type="button" class="add-btn full-width" id="scrTrackRefresh">🔄 Update returns</button>
+                <div id="scrTrackStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrTrackResult" style="margin-top:10px;max-height:520px;overflow-y:auto;"></div>
+                <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">A record of past signals, not a forecast. Prices from unofficial Yahoo Finance data; dividends and costs are ignored.</div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-strongbuy" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>🚀 Strong Buy List — Today</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -9912,6 +9923,7 @@
       const scan = scans[key];
       if(scan && scan.results) scan.results.forEach(r => { if(!r.error && r.verdict === 'Strong Buy') all.push(Object.assign({ source: label }, r)); });
     });
+    try{ logSignals('strongbuy', all); }catch(e){}
     if(!all.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No Strong Buy signals yet today — run the scans above first.</div>'; return; }
     const rows = all.map(r => `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}</td><td>${r.price != null ? r.price.toFixed(2) : '—'}</td><td style="font-size:10px;color:var(--ink-soft);">${escapeHtml(r.source)}</td></tr>`).join('');
     box.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
@@ -11145,6 +11157,7 @@
       const okCount = out.filter(r => !r.error).length, errCount = out.length - okCount;
       const firstErr = (out.find(r => r.error) || {}).error || '';
       state.screenerScans.buffett = { date: todayStr(), ver: BUFFETT_UNIVERSE_VER, results, universe: universe.length, deepScanned: okCount };
+      try{ logSignals('buffett', results.filter(r => !r.error && r.gatesPass && r.zone === 'ENTRY')); }catch(e){}
       save();
       if(statusEl) statusEl.textContent = checked
         ? `\u2713 ${universe.length} stocks checked, ${keep.length} passed the cheap filter, ${okCount} analysed in depth` + (listNote ? ` (${listNote})` : '') + (errCount ? `, ${errCount} had no data${firstErr ? ' (e.g. ' + firstErr + ')' : ''}` : '') + `. Updated ${todayStr()}.`
@@ -11229,6 +11242,7 @@
       const near = done.filter(r => !isPick(r)).sort((a, b) => b.score - a.score).slice(0, 5);
       if(!state.screenerScans) state.screenerScans = {};
       state.screenerScans.toppicks = { date: todayStr(), picks, near, considered: cands.length };
+      try{ logSignals('toppick', picks); }catch(e){}
       save();
       renderTopPicks();
       if(statusEl) statusEl.textContent = `\u2713 ${picks.length} top pick${picks.length === 1 ? '' : 's'} today. Updated ${todayStr()}.`;
@@ -11297,6 +11311,93 @@
   if(scrEarningsBtn) scrEarningsBtn.addEventListener('click', () => ensureEarnings(true));
   try{ renderEarnings(); }catch(e){}
 
+  // ---- Signal Track Record: log every screener signal, then measure it against the Nifty 50 ----
+  const SIGNAL_SRC_LABEL = { toppick: 'Top Pick', buffett: 'Buffett Entry', strongbuy: 'Strong Buy' };
+  function logSignals(source, rows){
+    try{
+      if(!Array.isArray(state.signalLog)) state.signalLog = [];
+      const today = todayStr();
+      const recent = Date.now() - 30 * 86400000;
+      let added = 0;
+      (rows || []).forEach(r => {
+        if(!r || r.error || !r.symbol || !(r.price > 0)) return;
+        const dup = state.signalLog.some(x => x.symbol === r.symbol && x.source === source && new Date(x.date + 'T00:00:00').getTime() > recent);
+        if(dup) return;
+        state.signalLog.push({ symbol: r.symbol, name: r.name || r.symbol, source, date: today, price: Number(r.price), verdict: r.verdict || null, score: r.score != null ? r.score : null });
+        added++;
+      });
+      if(added){ if(state.signalLog.length > 3000) state.signalLog = state.signalLog.slice(-3000); save(); }
+    }catch(e){}
+  }
+  function trackStats(rows, minDays){
+    const m = rows.filter(r => r.ret != null && r.nifty != null && r.days >= minDays);
+    if(!m.length) return null;
+    const alphas = m.map(r => r.ret - r.nifty).sort((a, b) => a - b);
+    const mid = alphas.length % 2 ? alphas[(alphas.length - 1) / 2] : (alphas[alphas.length / 2 - 1] + alphas[alphas.length / 2]) / 2;
+    const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+    return { n: m.length, hit: m.filter(r => r.ret > r.nifty).length / m.length * 100, avgRet: avg(m.map(r => r.ret)), avgAlpha: avg(alphas), medAlpha: mid };
+  }
+  function renderSignalTrack(){
+    const box = document.getElementById('scrTrackResult');
+    if(!box) return;
+    const log = state.signalLog || [];
+    const t = state.signalTrack;
+    if(!log.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">No signals logged yet. They are recorded automatically whenever Top Picks, the Buffett scan or the Strong Buy list produce results.</div>'; return; }
+    if(!t || !t.rows){ box.innerHTML = `<div class="empty" style="padding:8px 0;">${log.length} signal${log.length === 1 ? '' : 's'} logged. Tap "Update returns" to measure them.</div>`; return; }
+    const pc = v => v == null ? '\u2014' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+    const col = v => v == null ? 'var(--ink-soft)' : (v >= 0 ? '#1e8e3e' : '#c0392b');
+    const periods = [[90, '3 months+'], [180, '6 months+'], [365, '12 months+']];
+    const sumRows = periods.map(([d, label]) => {
+      const st = trackStats(t.rows, d);
+      if(!st) return `<tr><td>${label}</td><td colspan="4" style="color:var(--ink-soft);font-size:11px;">No signals this old yet</td></tr>`;
+      const few = st.n < 30 ? ' <span style="font-size:9.5px;color:#b8860b;">too few to trust</span>' : '';
+      return `<tr><td>${label}</td><td>${st.n}${few}</td><td>${st.hit.toFixed(0)}%</td><td style="color:${col(st.avgRet)}">${pc(st.avgRet)}</td><td style="color:${col(st.avgAlpha)}">${pc(st.avgAlpha)}<br><span style="font-size:9.5px;color:var(--ink-soft);">median ${pc(st.medAlpha)}</span></td></tr>`;
+    }).join('');
+    const sorted = [...t.rows].sort((a, b) => (b.date < a.date ? -1 : 1));
+    const detail = sorted.map(r => `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}<br><span style="font-size:9.5px;color:var(--ink-soft);">${escapeHtml(SIGNAL_SRC_LABEL[r.source] || r.source)} \u00b7 ${r.date}</span></td><td>${r.price.toFixed(2)}</td><td style="color:${col(r.ret)}">${pc(r.ret)}</td><td style="color:${col(r.nifty)}">${pc(r.nifty)}</td></tr>`).join('');
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Updated ${t.date} \u00b7 ${t.rows.length} signals tracked</div>`
+      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);text-align:left;"><th>Age</th><th>Signals</th><th>Beat Nifty</th><th>Avg return</th><th>Avg vs Nifty</th></tr>${sumRows}</table>`
+      + `<div style="font-weight:600;font-size:12px;margin:12px 0 4px 0;">Every signal</div>`
+      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);text-align:left;"><th>Stock</th><th>Signal price</th><th>Return</th><th>Nifty</th></tr>${detail}</table>`;
+  }
+  async function ensureSignalTrack(){
+    const statusEl = document.getElementById('scrTrackStatus');
+    try{
+      const log = state.signalLog || [];
+      if(!log.length){ renderSignalTrack(); return; }
+      if(statusEl) statusEl.textContent = 'Fetching Nifty 50 history\u2026';
+      const nh = await buffettGet('/api/stock-history?symbol=' + encodeURIComponent('^NSEI') + '&range=5y');
+      const npts = (nh.points || []);
+      if(!npts.length) throw new Error('Nifty history unavailable');
+      const niftyNow = nh.price != null ? nh.price : npts[npts.length - 1].c;
+      const niftyAt = dstr => { const ts = new Date(dstr + 'T00:00:00').getTime(); const p = npts.find(x => x.t >= ts - 3 * 86400000) || npts[0]; return p.c; };
+      const syms = [...new Set(log.map(x => x.symbol))];
+      const prices = {};
+      let i = 0;
+      async function worker(){
+        while(i < syms.length){
+          const sym = syms[i++];
+          if(statusEl) statusEl.textContent = `Updating prices ${i} of ${syms.length}\u2026`;
+          try{ const d = await buffettGet('/api/stock-history?symbol=' + encodeURIComponent(sym) + '&range=1mo'); if(d && d.price > 0) prices[sym] = d.price; }catch(e){}
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      const now = Date.now();
+      const rows = log.map(x => {
+        const days = Math.floor((now - new Date(x.date + 'T00:00:00').getTime()) / 86400000);
+        const cur = prices[x.symbol];
+        return Object.assign({}, x, { days, ret: cur && x.price ? (cur / x.price - 1) * 100 : null, nifty: (niftyNow / niftyAt(x.date) - 1) * 100 });
+      });
+      state.signalTrack = { date: todayStr(), rows };
+      save();
+      renderSignalTrack();
+      if(statusEl) statusEl.textContent = `\u2713 Updated ${todayStr()}.`;
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Update failed: ' + (e && e.message ? e.message : 'unknown error'); }
+  }
+  const scrTrackBtn = document.getElementById('scrTrackRefresh');
+  if(scrTrackBtn) scrTrackBtn.addEventListener('click', () => ensureSignalTrack());
+  try{ renderSignalTrack(); }catch(e){}
+
   // Auto-run once per day, the first time each section is actually opened —
   // not on every page load, so it doesn't hammer Yahoo for household
   // members who never look at this section.
@@ -11311,6 +11412,7 @@
     if(acc.dataset.key === 'screen-holdings') ensureHoldingsScan(false);
     if(acc.dataset.key === 'screen-toppicks') ensureTopPicks(false);
     if(acc.dataset.key === 'screen-earnings') ensureEarnings(false);
+    if(acc.dataset.key === 'screen-track') renderSignalTrack();
   });
   renderWatchlistItems();
   renderBatchResults('uaeindex', 'scrUaeResult');
@@ -17841,7 +17943,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.7.0', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.8.0', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
