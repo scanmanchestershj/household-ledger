@@ -9772,6 +9772,7 @@
         const item = list[i];
         if(statusEl) statusEl.textContent = `Scanning ${i + 1} of ${list.length}: ${item.name || item.symbol}…`;
         results[i] = await fetchOneVerdict(item.symbol || item.name, market);
+        if(results[i] && item.name) results[i].inputName = item.name; // the name as the user typed it, so holdings still match
       }
     }
     await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
@@ -10035,7 +10036,8 @@
     India: ['holdings', 'custom'],
     UAE: ['uaeindex']
   };
-  function normStockName(s){ return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  // Drops a trailing "Limited"/"Ltd" so a holding typed as "Wipro" matches the scan's "Wipro Limited".
+  function normStockName(s){ return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/(limited|ltd)+$/, ''); }
   function collectVerdictsForCountry(countryKey){
     const scans = state.screenerScans || {};
     const map = {};
@@ -10046,6 +10048,15 @@
         const n = normStockName(r.name);
         if(!n || map[n]) return; // first (highest-priority list) match wins
         map[n] = { name: r.name, symbol: r.symbol, verdict: r.verdict, price: r.price, buySignals: r.buySignals, sellSignals: r.sellSignals, totalSignals: r.totalSignals, ma50: r.ma50, pb: r.pb };
+      });
+    });
+    // Also match by the name the user typed (e.g. "TCS" -> "Tata Consultancy Services Limited").
+    (REBALANCE_SCAN_KEYS[countryKey] || []).forEach(key => {
+      const scan = scans[key];
+      if(scan && scan.results) scan.results.forEach(r => {
+        if(r.error || !r.inputName) return;
+        const a = normStockName(r.inputName), n = normStockName(r.name);
+        if(a && !map[a] && map[n]) map[a] = map[n];
       });
     });
     return map;
@@ -17527,7 +17538,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.6.1', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.6.2', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
