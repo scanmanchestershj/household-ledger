@@ -17,6 +17,7 @@ const RANGE_MAP = {
   '6mo': { range: '6mo', interval: '1d' },
   '1y':  { range: '1y',  interval: '1d' },
   '5y':  { range: '5y',  interval: '1wk' },
+  '5yd': { range: '5y',  interval: '1d' },
   'max': { range: 'max', interval: '1mo' }
 };
 

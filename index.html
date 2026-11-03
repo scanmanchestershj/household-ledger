@@ -3021,6 +3021,9 @@
                 <button type="button" class="add-btn full-width" id="scrTrackRefresh">🔄 Update returns</button>
                 <div id="scrTrackStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
                 <div id="scrTrackResult" style="margin-top:10px;max-height:520px;overflow-y:auto;"></div>
+                <button type="button" class="add-btn full-width ghost" id="scrBacktestRun" style="margin-top:10px;">🧪 Run historical backtest (takes a few minutes)</button>
+                <div id="scrBacktestStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrBacktestResult"></div>
                 <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">A record of past signals, not a forecast. Prices from unofficial Yahoo Finance data; dividends and costs are ignored.</div>
               </div>
             </div>
@@ -11398,6 +11401,112 @@
   if(scrTrackBtn) scrTrackBtn.addEventListener('click', () => ensureSignalTrack());
   try{ renderSignalTrack(); }catch(e){}
 
+  // ---- Historical backtest: the technical half of the verdict (SMA50/200, RSI-14, MACD) replayed on 5 years of daily prices ----
+  function btTechScores(c){
+    const n = c.length, sc = new Array(n).fill(null);
+    if(n < 230) return sc;
+    const pre = [0]; for(let i = 0; i < n; i++) pre.push(pre[i] + c[i]);
+    const sma = (i, p) => (pre[i + 1] - pre[i + 1 - p]) / p;
+    const ema = (p) => { const k = 2 / (p + 1), e = new Array(n).fill(null); let v = 0; for(let i = 0; i < p; i++) v += c[i]; v /= p; e[p - 1] = v; for(let i = p; i < n; i++){ v = c[i] * k + v * (1 - k); e[i] = v; } return e; };
+    const e12 = ema(12), e26 = ema(26), macd = new Array(n).fill(null);
+    for(let i = 25; i < n; i++) macd[i] = e12[i] - e26[i];
+    const sig = new Array(n).fill(null); let sv = 0; for(let i = 25; i < 34; i++) sv += macd[i]; sv /= 9; sig[33] = sv;
+    for(let i = 34; i < n; i++){ sv = macd[i] * 0.2 + sv * 0.8; sig[i] = sv; }
+    const gp = [0], lp = [0]; for(let i = 1; i < n; i++){ const d = c[i] - c[i - 1]; gp.push(gp[i - 1] + (d > 0 ? d : 0)); lp.push(lp[i - 1] + (d < 0 ? -d : 0)); }
+    for(let i = 200; i < n; i++){
+      let s = 0;
+      const m50 = sma(i, 50), m200 = sma(i, 200);
+      if(c[i] > m50) s += 10;
+      if(m50 > m200) s += 10;
+      const g = (gp[i] - gp[i - 14]) / 14, l = (lp[i] - lp[i - 14]) / 14;
+      const rsi = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+      if(rsi >= 40 && rsi <= 60) s += 10; else if(rsi > 60 && rsi <= 70) s += 5;
+      if(macd[i] > sig[i]) s += 15;
+      if(macd[i] - sig[i] > 0) s += 5;
+      sc[i] = s;
+    }
+    return sc;
+  }
+  const BT_HORIZONS = [[63, '3 months'], [126, '6 months'], [252, '12 months'], [756, '3 years']];
+  function btNiftyAt(npts, ts){ let lo = 0, hi = npts.length - 1, r = 0; while(lo <= hi){ const m = (lo + hi) >> 1; if(npts[m].t <= ts){ r = m; lo = m + 1; } else hi = m - 1; } return npts[r].c; }
+  function btCollect(acc, pts, npts, minScore){
+    const c = pts.map(p => p.c), sc = btTechScores(c);
+    for(let i = 200; i < c.length - 63; i += 21){
+      if(sc[i] == null) continue;
+      BT_HORIZONS.forEach(([h], k) => {
+        if(i + h >= c.length) return;
+        const ret = (c[i + h] / c[i] - 1) * 100;
+        const nret = (btNiftyAt(npts, pts[i + h].t) / btNiftyAt(npts, pts[i].t) - 1) * 100;
+        [['all', true], ['sig', sc[i] >= minScore]].forEach(([g, ok]) => {
+          if(!ok) return;
+          const a = acc[k][g]; a.n++; a.ret += ret; a.alpha += ret - nret; if(ret > nret) a.hit++; if(ret >= 100) a.dbl++; if(ret <= -30) a.big++;
+        });
+      });
+    }
+  }
+  function btNewAcc(){ return BT_HORIZONS.map(() => ({ all: { n: 0, ret: 0, alpha: 0, hit: 0, dbl: 0, big: 0 }, sig: { n: 0, ret: 0, alpha: 0, hit: 0, dbl: 0, big: 0 } })); }
+
+  function renderBacktest(){
+    const box = document.getElementById('scrBacktestResult');
+    if(!box) return;
+    const b = state.backtest;
+    if(!b){ box.innerHTML = ''; return; }
+    const pc = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+    const col = v => v >= 0 ? '#1e8e3e' : '#c0392b';
+    const rows = BT_HORIZONS.map(([h, label], k) => {
+      const a = b.acc[k], s = a.sig, al = a.all;
+      if(!s.n || !al.n) return `<tr><td>${label}</td><td colspan="5" style="color:var(--ink-soft);font-size:11px;">Not enough history</td></tr>`;
+      const sa = s.alpha / s.n, aa = al.alpha / al.n, edge = sa - aa;
+      const dbl = h === 756 ? `<br><span style="font-size:9.5px;color:var(--ink-soft);">doubled: ${(s.dbl / s.n * 100).toFixed(1)}% vs ${(al.dbl / al.n * 100).toFixed(1)}% all</span>` : '';
+      return `<tr><td>${label}</td><td>${s.n}</td><td style="color:${col(s.ret / s.n)}">${pc(s.ret / s.n)}</td><td>${(s.hit / s.n * 100).toFixed(0)}% <span style="font-size:9.5px;color:var(--ink-soft);">(all ${(al.hit / al.n * 100).toFixed(0)}%)</span>${dbl}</td><td style="color:${col(sa)}">${pc(sa)}<br><span style="font-size:9.5px;color:var(--ink-soft);">all ${pc(aa)}</span></td><td style="color:${col(edge)};font-weight:600;">${pc(edge)}</td></tr>`;
+    }).join('');
+    box.innerHTML = `<div style="font-weight:600;font-size:12px;margin:12px 0 4px 0;">Historical backtest (technical score \u2265 ${b.minScore}/50)</div>`
+      + `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Run ${b.date} \u00b7 ${b.stocks} stocks sampled from the Nifty 500, monthly sample dates over ~5 years</div>`
+      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);text-align:left;"><th>Held for</th><th>Signals</th><th>Avg return</th><th>Beat Nifty</th><th>Avg vs Nifty</th><th>Edge</th></tr>${rows}</table>`
+      + `<div style="font-size:10px;color:var(--ink-soft);margin-top:8px;line-height:1.5;"><b>Edge</b> = average margin over the Nifty for signalled stocks minus the same for every stock on every date, so it isolates what the signal adds. An edge near zero means the technical score adds nothing. <b>Read with care:</b> only today's Nifty 500 members are tested, so failed or delisted companies are missing, which flatters every number; the window is mostly a rising market; monthly windows overlap, so the real sample is smaller than the signal count; and the fundamentals half of the score cannot be replayed because past ROCE and growth data is not freely available.</div>`;
+  }
+  let btRunning = false;
+  async function runBacktest(){
+    const statusEl = document.getElementById('scrBacktestStatus');
+    if(btRunning) return;
+    btRunning = true;
+    try{
+      if(statusEl) statusEl.textContent = 'Loading the Nifty 500 list\u2026';
+      const ld = await buffettGet('/api/nifty500');
+      const list = (ld.list || []).filter(x => x.symbol);
+      if(list.length < 20) throw new Error('stock list unavailable');
+      for(let i = list.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); const t = list[i]; list[i] = list[j]; list[j] = t; }
+      const sample = list.slice(0, 120);
+      if(statusEl) statusEl.textContent = 'Fetching Nifty 50 history\u2026';
+      const nh = await buffettGet('/api/stock-history?symbol=' + encodeURIComponent('^NSEI') + '&range=5yd');
+      const npts = nh.points || [];
+      if(npts.length < 500) throw new Error('Nifty history unavailable');
+      const acc = btNewAcc();
+      let i = 0, ok = 0, done = 0;
+      async function worker(){
+        while(i < sample.length){
+          const s = sample[i++];
+          try{
+            const d = await buffettGet('/api/stock-history?symbol=' + encodeURIComponent(s.symbol) + '&range=5yd');
+            if(d && d.points && d.points.length > 400){ btCollect(acc, d.points, npts, 40); ok++; }
+          }catch(e){}
+          done++;
+          if(statusEl) statusEl.textContent = `Replaying history: ${done} of ${sample.length} stocks\u2026`;
+        }
+      }
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      if(ok < 20) throw new Error('too few stocks returned price history (' + ok + ')');
+      state.backtest = { date: todayStr(), stocks: ok, minScore: 40, acc };
+      save();
+      renderBacktest();
+      if(statusEl) statusEl.textContent = `\u2713 Backtest done on ${ok} stocks.`;
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Backtest failed: ' + (e && e.message ? e.message : 'unknown error'); }
+    btRunning = false;
+  }
+  const scrBtBtn = document.getElementById('scrBacktestRun');
+  if(scrBtBtn) scrBtBtn.addEventListener('click', () => runBacktest());
+  try{ renderBacktest(); }catch(e){}
+
   // Auto-run once per day, the first time each section is actually opened —
   // not on every page load, so it doesn't hammer Yahoo for household
   // members who never look at this section.
@@ -17943,7 +18052,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.8.0', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.9.0', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
