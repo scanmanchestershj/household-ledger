@@ -15055,6 +15055,69 @@
       ${renderBrokerExtras(countryKey)}
     </div>`;
   }
+  // Edit button on a stock row: shows ALL of that stock's buy/sell entries side by side in an editable grid.
+  function openStockEntriesEditor(countryKey, stockKey){
+    const all = investmentEntriesList(countryKey, 'stocks');
+    const list = all.filter(e => invKeyName(e.name) === stockKey).slice()
+      .sort((a, b) => (a.date || '').localeCompare(b.date || '') || String(a.id).localeCompare(String(b.id)));
+    if(!list.length) return;
+    const brokers = brokerListFor(countryKey), title = list[list.length - 1].name;
+    const old = document.getElementById('stockEntriesEditor'); if(old) old.remove();
+    const ov = document.createElement('div');
+    ov.id = 'stockEntriesEditor';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:12px;';
+    const rowHtml = e => {
+      const cur = e.broker || '', opts = (cur && brokers.indexOf(cur) < 0 ? [cur] : []).concat(brokers);
+      return `<tr data-id="${escapeHtml(String(e.id))}">
+        <td><input class="se-name" type="text" value="${escapeHtml(e.name)}" style="min-width:110px;"></td>
+        <td><select class="se-type"><option value="buy"${e.type === 'sell' ? '' : ' selected'}>Buy</option><option value="sell"${e.type === 'sell' ? ' selected' : ''}>Sell</option></select></td>
+        <td><input class="se-qty" type="number" step="1" min="0" value="${escapeHtml(String(e.qty))}" style="width:84px;"></td>
+        <td><input class="se-price" type="number" step="0.01" min="0" value="${escapeHtml(String(e.price))}" style="width:92px;"></td>
+        <td><input class="se-date" type="date" value="${escapeHtml(e.date || '')}"></td>
+        <td><select class="se-broker"><option value=""${cur ? '' : ' selected'}>Unassigned</option>${opts.map(b => `<option value="${escapeHtml(b)}"${b === cur ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('')}</select></td>
+        <td><button type="button" class="se-del" title="Delete this entry" style="border:0;background:none;font-size:16px;cursor:pointer;color:var(--coral);">\u00d7</button></td></tr>`;
+    };
+    ov.innerHTML = `<style>#stockEntriesEditor td,#stockEntriesEditor th{padding:3px 4px;white-space:nowrap;} #stockEntriesEditor input,#stockEntriesEditor select{font-size:12px;padding:3px;}</style>
+      <div style="background:var(--card,#fff);color:var(--ink,#222);border-radius:12px;max-width:780px;width:100%;max-height:90vh;overflow:auto;padding:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;"><b>Edit ${escapeHtml(title)} \u2014 all ${list.length} entr${list.length === 1 ? 'y' : 'ies'}</b><button type="button" id="seClose" class="add-btn ghost" style="padding:4px 10px;">Close</button></div>
+        <div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;width:100%;min-width:660px;"><thead><tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;"><th>Stock name</th><th>Buy / Sell</th><th>Quantity (shares)</th><th>Price / share</th><th>Date</th><th>Broker</th><th></th></tr></thead><tbody id="seBody">${list.map(rowHtml).join('')}</tbody></table></div>
+        <div id="seMsg" style="font-size:11px;color:var(--coral);margin-top:6px;"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;"><button type="button" class="add-btn" id="seSave">Save changes</button><button type="button" class="add-btn ghost" id="seCancel">Cancel</button></div>
+      </div>`;
+    document.body.appendChild(ov);
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = ev => { if(ev.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    ov.addEventListener('click', ev => { if(ev.target === ov) close(); });
+    ov.querySelector('#seClose').addEventListener('click', close);
+    ov.querySelector('#seCancel').addEventListener('click', close);
+    ov.querySelectorAll('.se-del').forEach(btn => btn.addEventListener('click', () => {
+      const tr = btn.closest('tr'), gone = tr.dataset.del === '1';
+      tr.dataset.del = gone ? '' : '1'; tr.style.opacity = gone ? '' : '0.4'; tr.style.textDecoration = gone ? '' : 'line-through'; btn.textContent = gone ? '\u00d7' : '\u21ba';
+    }));
+    ov.querySelector('#seSave').addEventListener('click', () => {
+      const msg = ov.querySelector('#seMsg'), updates = [], dels = [];
+      const rows = Array.from(ov.querySelectorAll('#seBody tr'));
+      for(let i = 0; i < rows.length; i++){
+        const tr = rows[i], id = tr.dataset.id;
+        if(tr.dataset.del === '1'){ dels.push(id); continue; }
+        const name = tr.querySelector('.se-name').value.trim(), qty = parseFloat(tr.querySelector('.se-qty').value), price = parseFloat(tr.querySelector('.se-price').value);
+        if(!name || isNaN(qty) || qty <= 0 || isNaN(price) || price < 0){ msg.textContent = `Row ${i + 1}: enter a name, a quantity above 0 and a price.`; return; }
+        updates.push({ id, name, type: tr.querySelector('.se-type').value === 'sell' ? 'sell' : 'buy', qty, price, date: tr.querySelector('.se-date').value || todayStr(), broker: tr.querySelector('.se-broker').value });
+      }
+      if(dels.length && !confirm(`Delete ${dels.length} entr${dels.length === 1 ? 'y' : 'ies'} of ${title}? This cannot be undone.`)) return;
+      const d = currentData(), changed = [];
+      updates.forEach(u => {
+        const e = all.find(x => String(x.id) === u.id); if(!e) return;
+        if((e.broker || '') !== u.broker) changed.push({ id: e.id, broker: e.broker || '' });
+        Object.assign(e, { name: u.name, type: u.type, qty: u.qty, price: u.price, date: u.date });
+        if(u.broker) e.broker = u.broker; else delete e.broker;
+      });
+      if(changed.length){ d.brokerUndo = d.brokerUndo || {}; d.brokerUndo[countryKey] = { ts: Date.now(), label: `Edit ${title}`, prev: changed }; }
+      dels.forEach(id => { const i = all.findIndex(x => String(x.id) === id); if(i > -1) all.splice(i, 1); });
+      save(); close(); renderInvestmentCountry(countryKey);
+    });
+  }
   function renderStocksOverview(countryKey){
     const box = document.getElementById(invPrefix(countryKey) + 'InvStocksOverview');
     const panel = document.getElementById(invPrefix(countryKey) + 'InvStocksOverviewPanel');
@@ -15118,8 +15181,7 @@
     }
     box.querySelectorAll('.stock-row-edit').forEach(btn => {
       btn.addEventListener('click', () => {
-        const h = latestEntryFor(btn.dataset.key);
-        if(h) startEditInvestment(countryKey, catCfg, h);
+        openStockEntriesEditor(countryKey, btn.dataset.key);
       });
     });
     box.querySelectorAll('.stock-row-del').forEach(btn => {
@@ -17679,7 +17741,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.6.3', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.6.4', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
