@@ -14857,18 +14857,168 @@
     });
     return out;
   }
-  function moveStockToBroker(countryKey, stockKey, broker){
+  // Every broker change goes through here so it can be previewed and undone.
+  // `to` is a broker name (BROKER_NONE/'' clears it) or a function(entry) -> broker.
+  function applyBrokerChange(countryKey, match, to, label){
     const entries = investmentEntriesList(countryKey, 'stocks');
-    entries.forEach(e => { if(invKeyName(e.name) === stockKey){ if(broker && broker !== BROKER_NONE) e.broker = broker; else delete e.broker; } });
-    save(); renderInvestmentCountry(countryKey);
-  }
-  function moveAllBroker(countryKey, from, to){
-    const entries = investmentEntriesList(countryKey, 'stocks');
-    const hit = entries.filter(e => entryBroker(e) === from);
-    if(!hit.length || !to || from === to) return 0;
-    hit.forEach(e => { if(to === BROKER_NONE) delete e.broker; else e.broker = to; });
+    const hit = entries.filter(match);
+    if(!hit.length) return 0;
+    const d = currentData(); d.brokerUndo = d.brokerUndo || {};
+    d.brokerUndo[countryKey] = { ts: Date.now(), label: label || 'Broker change', prev: hit.map(e => ({ id: e.id, broker: e.broker || '' })) };
+    hit.forEach(e => {
+      const t = typeof to === 'function' ? to(e) : to;
+      if(t && t !== BROKER_NONE) e.broker = t; else delete e.broker;
+    });
     save(); renderInvestmentCountry(countryKey);
     return hit.length;
+  }
+  function undoBrokerChange(countryKey){
+    const d = currentData(), u = d.brokerUndo && d.brokerUndo[countryKey];
+    if(!u) return;
+    const entries = investmentEntriesList(countryKey, 'stocks');
+    u.prev.forEach(pv => { const e = entries.find(x => x.id === pv.id); if(e){ if(pv.broker) e.broker = pv.broker; else delete e.broker; } });
+    delete d.brokerUndo[countryKey];
+    save(); renderInvestmentCountry(countryKey);
+  }
+  function moveStockToBroker(countryKey, stockKey, broker){
+    return applyBrokerChange(countryKey, e => invKeyName(e.name) === stockKey, broker, `Set ${stockKey} to ${broker || BROKER_NONE}`);
+  }
+  function moveAllBroker(countryKey, from, to){
+    if(!to || from === to) return 0;
+    return applyBrokerChange(countryKey, e => entryBroker(e) === from, to, `Move all ${from} \u2192 ${to}`);
+  }
+  // What a change would touch: per stock, how many entries, which brokers they are at now, and which other
+  // entries of the same stock are NOT being changed (and where they sit).
+  function describeBrokerPlan(countryKey, match){
+    const entries = investmentEntriesList(countryKey, 'stocks');
+    const hit = entries.filter(match), hitIds = new Set(hit.map(e => e.id)), byStock = {};
+    hit.forEach(e => {
+      const k = invKeyName(e.name), st = byStock[k] = byStock[k] || { key: k, name: e.name, n: 0, from: {}, others: {} };
+      st.n++; const b = entryBroker(e); st.from[b] = (st.from[b] || 0) + 1;
+    });
+    entries.forEach(e => {
+      const st = byStock[invKeyName(e.name)];
+      if(st && !hitIds.has(e.id)){ const b = entryBroker(e); if(b !== BROKER_NONE) st.others[b] = (st.others[b] || 0) + 1; }
+    });
+    return { count: hit.length, stocks: Object.values(byStock) };
+  }
+  function brokerPlanLines(plan){
+    return plan.stocks.map(st => {
+      const from = Object.keys(st.from).map(b => `${st.from[b]} ${b}`).join(', ');
+      const oth = Object.keys(st.others).map(b => `${st.others[b]} ${b}`).join(', ');
+      return `\u2022 ${st.name}: ${st.n} entr${st.n === 1 ? 'y' : 'ies'} (${from})` + (oth ? ` \u2014 other entries stay at ${oth}` : '');
+    });
+  }
+  // Suggestion: an unassigned stock whose other entries all sit at one broker probably belongs there too.
+  function brokerSuggestion(plan){
+    const out = {}; let none = 0;
+    plan.stocks.forEach(st => { const ks = Object.keys(st.others); if(ks.length === 1){ (out[ks[0]] = out[ks[0]] || []).push(st.name); } else none++; });
+    return { byBroker: out, none };
+  }
+  function updateBrokerMovePreview(countryKey){
+    const pre = invPrefix(countryKey), box = document.getElementById(pre + 'BrokerMovePreview');
+    const fromEl = document.getElementById(pre + 'BrokerMoveFrom'), toEl = document.getElementById(pre + 'BrokerMoveTo');
+    if(!box || !fromEl || !toEl) return;
+    const from = fromEl.value, to = toEl.value;
+    if(from === to){ box.innerHTML = 'Pick a different broker to move to.'; return; }
+    const plan = describeBrokerPlan(countryKey, e => entryBroker(e) === from);
+    if(!plan.count){ box.innerHTML = `Nothing is at ${escapeHtml(from)} right now.`; return; }
+    const sug = brokerSuggestion(plan), sugKeys = Object.keys(sug.byBroker);
+    let html = `<b>Preview:</b> ${plan.count} entr${plan.count === 1 ? 'y' : 'ies'} across ${plan.stocks.length} stock${plan.stocks.length === 1 ? '' : 's'} will move from <b>${escapeHtml(from)}</b> to <b>${escapeHtml(to)}</b>.<br>` + brokerPlanLines(plan).map(escapeHtml).join('<br>');
+    const clash = sugKeys.filter(b => b !== to);
+    if(sugKeys.length){
+      html += `<div style="margin-top:4px;color:#8a5a00;">\ud83d\udca1 Suggestion: ` + sugKeys.map(b => `${sug.byBroker[b].map(escapeHtml).join(', ')} already ${sug.byBroker[b].length === 1 ? 'has' : 'have'} other entries at ${escapeHtml(b)}`).join('; ') + (clash.length ? ` \u2014 moving everything to ${escapeHtml(to)} would mix them up. Consider assigning those entry by entry below.` : '. Looks consistent with your choice.') + '</div>';
+    }
+    box.innerHTML = html;
+  }
+  var brokerEditorOpen = {};
+  function renderBrokerEntryEditor(countryKey){
+    const entries = investmentEntriesList(countryKey, 'stocks'), list = brokerListFor(countryKey), groups = {};
+    entries.forEach(e => { const k = invKeyName(e.name); (groups[k] = groups[k] || { name: e.name, list: [] }).list.push(e); });
+    const body = Object.values(groups).sort((x, y) => x.name.localeCompare(y.name)).map(g => {
+      const rows = g.list.slice().sort((x, y) => (x.date || '').localeCompare(y.date || '')).map(e => {
+        const cur = e.broker || '', opts = (cur && list.indexOf(cur) < 0 ? [cur] : []).concat(list);
+        return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;margin:2px 0;">
+          <span style="min-width:74px;color:var(--ink-soft);">${escapeHtml(e.date || '')}</span>
+          <span style="min-width:120px;">${e.type === 'sell' ? 'Sell' : 'Buy'} ${escapeHtml(String(e.qty))} @ ${escapeHtml(String(e.price))}</span>
+          <select class="broker-entry-sel" data-id="${escapeHtml(String(e.id))}" style="font-size:10.5px;padding:2px;"><option value=""${cur ? '' : ' selected'}>Unassigned</option>${opts.map(b => `<option value="${escapeHtml(b)}"${b === cur ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('')}</select></div>`;
+      }).join('');
+      return `<div style="margin-top:6px;"><b style="font-size:11.5px;">${escapeHtml(g.name)}</b>${rows}</div>`;
+    }).join('');
+    return `<details id="${invPrefix(countryKey)}BrokerEditor" style="margin-top:8px;"${brokerEditorOpen[countryKey] ? ' open' : ''}>
+      <summary style="cursor:pointer;font-size:12px;font-weight:600;">Assign broker entry by entry (to split Zerodha / Groww)</summary>
+      <div style="font-size:10px;color:var(--ink-soft);margin:4px 0;">Each buy/sell can sit at its own broker. Changes apply immediately and can be undone.</div>${body}</details>`;
+  }
+  function renderBrokerExtras(countryKey){
+    const pre = invPrefix(countryKey), u = (currentData().brokerUndo || {})[countryKey];
+    return `<div id="${pre}BrokerMovePreview" style="font-size:10.5px;background:var(--paper-deep);border-radius:8px;padding:6px 8px;margin-top:6px;"></div>
+      ${u ? `<button type="button" class="add-btn ghost" id="${pre}BrokerUndoBtn" style="margin-top:6px;padding:4px 10px;font-size:11px;">\u21a9 Undo last broker change (${escapeHtml(u.label)}, ${u.prev.length} entr${u.prev.length === 1 ? 'y' : 'ies'})</button>` : ''}
+      ${renderBrokerEntryEditor(countryKey)}
+      <div style="margin-top:8px;font-size:10.5px;color:var(--ink-soft);">Restore broker tags from an older backup file (only the broker field changes):</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px;"><input type="file" id="${pre}BrokerRestoreFile" accept=".json" style="font-size:10.5px;max-width:200px;"><button type="button" class="add-btn ghost" id="${pre}BrokerRestoreBtn" style="padding:4px 10px;font-size:11px;">\u2b06 Restore tags</button></div>`;
+  }
+  function wireBrokerControls(countryKey, box){
+    const pre = invPrefix(countryKey);
+    box.querySelectorAll('.stock-broker-sel').forEach(sel => {
+      sel.addEventListener('change', () => {
+        if(sel.value === '__multi') return;
+        const to = sel.value, key = sel.dataset.key;
+        const st = describeBrokerPlan(countryKey, e => invKeyName(e.name) === key).stocks[0];
+        const overwritten = st ? Object.keys(st.from).filter(b => b !== BROKER_NONE && b !== (to || BROKER_NONE)) : [];
+        if(overwritten.length && !confirm(`${st.name} has entries at: ${Object.keys(st.from).map(b => st.from[b] + ' ' + b).join(', ')}.\n\nSet ALL ${st.n} entries to ${to || 'Unassigned'}? That overwrites the other broker.\n\nTip: press Cancel and use "Assign broker entry by entry" below to split between brokers. You can also undo afterwards.`)){
+          renderInvestmentCountry(countryKey); return;
+        }
+        moveStockToBroker(countryKey, key, to);
+      });
+    });
+    const fromEl = document.getElementById(pre + 'BrokerMoveFrom'), toEl = document.getElementById(pre + 'BrokerMoveTo');
+    if(fromEl && toEl){
+      const refresh = () => updateBrokerMovePreview(countryKey);
+      fromEl.addEventListener('change', refresh); toEl.addEventListener('change', refresh);
+      const un = Array.from(fromEl.options).find(o => o.value === BROKER_NONE); if(un) fromEl.value = BROKER_NONE;
+      const plan = describeBrokerPlan(countryKey, e => entryBroker(e) === fromEl.value), sug = brokerSuggestion(plan);
+      const top = Object.keys(sug.byBroker).sort((a, b) => sug.byBroker[b].length - sug.byBroker[a].length)[0];
+      if(top) toEl.value = top; else toEl.value = brokerListFor(countryKey)[0];
+      refresh();
+    }
+    const moveBtn = document.getElementById(pre + 'BrokerMoveBtn');
+    if(moveBtn) moveBtn.addEventListener('click', () => {
+      const from = fromEl.value, to = toEl.value;
+      if(from === to){ alert('Pick a different broker to move to.'); return; }
+      const plan = describeBrokerPlan(countryKey, e => entryBroker(e) === from);
+      if(!plan.count){ alert('Nothing to move.'); return; }
+      if(!confirm(`Move ${plan.count} entries (${plan.stocks.length} stocks) from "${from}" to "${to}"?\n\n${brokerPlanLines(plan).join('\n')}\n\nYou can undo this afterwards.`)) return;
+      moveAllBroker(countryKey, from, to);
+    });
+    const undoBtn = document.getElementById(pre + 'BrokerUndoBtn');
+    if(undoBtn) undoBtn.addEventListener('click', () => undoBrokerChange(countryKey));
+    const det = document.getElementById(pre + 'BrokerEditor');
+    if(det) det.addEventListener('toggle', () => { brokerEditorOpen[countryKey] = det.open; });
+    box.querySelectorAll('.broker-entry-sel').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const id = sel.dataset.id, e = investmentEntriesList(countryKey, 'stocks').find(x => String(x.id) === id);
+        if(e) applyBrokerChange(countryKey, x => x === e, sel.value, `${e.name} ${e.date || ''} \u2192 ${sel.value || BROKER_NONE}`);
+      });
+    });
+    const rb = document.getElementById(pre + 'BrokerRestoreBtn'), rf = document.getElementById(pre + 'BrokerRestoreFile');
+    if(rb && rf) rb.addEventListener('click', async () => {
+      const f = rf.files && rf.files[0];
+      if(!f){ alert('Choose a backup .json file first.'); return; }
+      let data; try{ data = JSON.parse(await f.text()); }catch(e){ alert('That file is not a valid backup.'); return; }
+      if(data && data.enc){ alert('That backup is encrypted, so broker tags cannot be read from it here.'); return; }
+      const old = {};
+      Object.values((data && data.userData) || {}).forEach(u => {
+        const inv = u && u.countries && u.countries[countryKey] && u.countries[countryKey].investments;
+        const en = inv && inv.stocks && inv.stocks.entries;
+        (Array.isArray(en) ? en : []).forEach(e => { if(e && e.id && e.broker) old[String(e.id)] = e.broker; });
+      });
+      const diff = investmentEntriesList(countryKey, 'stocks').filter(e => old[String(e.id)] && old[String(e.id)] !== e.broker);
+      if(!diff.length){ alert('That backup has no different broker tags for these entries (it may predate brokers, or already match).'); return; }
+      const lines = diff.slice(0, 15).map(e => `\u2022 ${e.name} ${e.date || ''}: ${e.broker || 'Unassigned'} \u2192 ${old[String(e.id)]}`).join('\n');
+      if(!confirm(`Restore broker tags on ${diff.length} entr${diff.length === 1 ? 'y' : 'ies'} from the backup?\n\n${lines}${diff.length > 15 ? '\n\u2026' : ''}\n\nOnly the broker field changes. You can undo.`)) return;
+      const ids = new Set(diff.map(e => String(e.id)));
+      applyBrokerChange(countryKey, e => ids.has(String(e.id)), e => old[String(e.id)], `Restore tags from ${f.name}`);
+    });
   }
 
   // Run only after the broker constants above are defined (calling earlier throws and stops the whole page script).
@@ -14902,6 +15052,7 @@
         <button type="button" class="add-btn" id="${invPrefix(countryKey)}BrokerMoveBtn" style="padding:4px 10px;font-size:11px;">Move</button>
       </div>
       <div style="font-size:10px;color:var(--ink-soft);margin-top:4px;">Moves existing entries to the broker \u2014 nothing needs retyping. You can also change a single stock with the Broker dropdown in its row.</div>
+      ${renderBrokerExtras(countryKey)}
     </div>`;
   }
   function renderStocksOverview(countryKey){
@@ -14977,17 +15128,7 @@
         if(h) deleteInvestment(countryKey, catCfg, h.id);
       });
     });
-    box.querySelectorAll('.stock-broker-sel').forEach(sel => {
-      sel.addEventListener('change', () => { if(sel.value !== '__multi') moveStockToBroker(countryKey, sel.dataset.key, sel.value); });
-    });
-    const moveBtn = document.getElementById(invPrefix(countryKey) + 'BrokerMoveBtn');
-    if(moveBtn) moveBtn.addEventListener('click', () => {
-      const from = document.getElementById(invPrefix(countryKey) + 'BrokerMoveFrom').value;
-      const to = document.getElementById(invPrefix(countryKey) + 'BrokerMoveTo').value;
-      if(from === to){ alert('Pick a different broker to move to.'); return; }
-      if(!confirm(`Move every stock entry from "${from}" to "${to}"?`)) return;
-      moveAllBroker(countryKey, from, to);
-    });
+    wireBrokerControls(countryKey, box);
     box.querySelectorAll('.hold-chart-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const name = btn.dataset.name;
@@ -17538,7 +17679,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.6.2', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.6.3', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
