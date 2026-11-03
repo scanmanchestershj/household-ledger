@@ -14517,8 +14517,15 @@
     if(editId){
       const idx = entries.findIndex(x => x.id === editId);
       if(idx > -1){
-        const keepBroker = broker || entries[idx].broker;
-        entries[idx] = Object.assign({ id: editId, name, type, qty, price, date }, keepBroker ? { broker: keepBroker } : {});
+        // The form is pre-filled with this entry's broker, so an empty value means "Unassigned".
+        entries[idx] = Object.assign({ id: editId, name, type, qty, price, date }, broker ? { broker } : {});
+        if(catCfg.key === 'stocks' && broker){
+          // If none of this stock's other entries has a broker yet, give them the same one so the stock
+          // doesn't end up half Unassigned / "Multiple brokers".
+          const k = invKeyName(name);
+          const others = entries.filter((x, i) => i !== idx && invKeyName(x.name) === k);
+          if(others.length && others.every(x => !x.broker)) others.forEach(x => { x.broker = broker; });
+        }
       }
       cancelEditInvestment(countryKey, catCfg);
     } else {
@@ -14802,31 +14809,40 @@
   }
   // Pure function (easy to test): entries + LTP map -> per-broker totals and holdings.
   function investmentBrokerBreakdown(entries, prices){
-    const byBroker = {};
-    entries.forEach(e => {
-      const b = entryBroker(e), key = invKeyName(e.name);
-      byBroker[b] = byBroker[b] || {};
-      (byBroker[b][key] = byBroker[b][key] || { name: e.name, list: [] }).list.push(e);
-    });
+    // Replays each stock once, in date order, keeping a lot bucket per broker. A sell comes out of its own
+    // broker's bucket first, then Unassigned, then any other broker - so tagging just one entry with a broker
+    // can never hide or duplicate shares.
+    const byStock = {};
+    entries.forEach(e => { const key = invKeyName(e.name); (byStock[key] = byStock[key] || { name: e.name, list: [] }).list.push(e); });
     const out = {};
-    Object.keys(byBroker).forEach(b => {
-      const row = { invested: 0, current: 0, holdings: [] };
-      Object.keys(byBroker[b]).forEach(key => {
-        const g = byBroker[b][key];
-        const sorted = g.list.slice().sort((x, y) => (x.date||'').localeCompare(y.date||'') || String(x.id).localeCompare(String(y.id)));
-        let qty = 0, invested = 0;
-        sorted.forEach(e => {
-          const eq = Number(e.qty) || 0, ep = Number(e.price) || 0;
-          if(e.type === 'sell'){ const sq = Math.min(eq, qty); const avg = qty > 0 ? invested / qty : 0; invested -= sq * avg; qty -= sq; }
-          else { invested += eq * ep; qty += eq; }
-        });
-        if(qty <= 0.0000001) return;
-        const avgPrice = invested / qty;
-        const cur = prices[key] != null ? Number(prices[key]) : avgPrice;
-        row.holdings.push({ name: g.name, qty, avgPrice, curPrice: cur, invested, current: qty * cur });
-        row.invested += invested; row.current += qty * cur;
+    Object.keys(byStock).forEach(key => {
+      const g = byStock[key];
+      const sorted = g.list.slice().sort((x, y) => (x.date||'').localeCompare(y.date||'') || String(x.id).localeCompare(String(y.id)));
+      const bk = {};
+      const take = (b, want) => {
+        const x = bk[b]; if(!x || x.qty <= 0 || want <= 0) return 0;
+        const q = Math.min(want, x.qty), avg = x.invested / x.qty;
+        x.invested -= q * avg; x.qty -= q; return q;
+      };
+      sorted.forEach(e => {
+        const b = entryBroker(e), eq = Number(e.qty) || 0, ep = Number(e.price) || 0;
+        if(e.type === 'sell'){
+          let left = eq - take(b, eq);
+          if(left > 0) left -= take(BROKER_NONE, left);
+          Object.keys(bk).forEach(o => { if(left > 0) left -= take(o, left); });
+        } else {
+          const x = bk[b] = bk[b] || { qty: 0, invested: 0 };
+          x.qty += eq; x.invested += eq * ep;
+        }
       });
-      if(row.holdings.length) out[b] = row;
+      Object.keys(bk).forEach(b => {
+        const x = bk[b]; if(x.qty <= 0.0000001) return;
+        const avgPrice = x.invested / x.qty;
+        const cur = prices[key] != null ? Number(prices[key]) : avgPrice;
+        const row = out[b] = out[b] || { invested: 0, current: 0, holdings: [] };
+        row.holdings.push({ name: g.name, qty: x.qty, avgPrice, curPrice: cur, invested: x.invested, current: x.qty * cur });
+        row.invested += x.invested; row.current += x.qty * cur;
+      });
     });
     return out;
   }
@@ -17511,7 +17527,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.6.0', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.6.1', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
