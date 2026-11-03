@@ -15066,13 +15066,13 @@
     const ov = document.createElement('div');
     ov.id = 'stockEntriesEditor';
     ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:12px;';
-    const rowHtml = e => {
+    const rowHtml = (e, isNew) => {
       const cur = e.broker || '', opts = (cur && brokers.indexOf(cur) < 0 ? [cur] : []).concat(brokers);
-      return `<tr data-id="${escapeHtml(String(e.id))}">
+      return `<tr data-id="${escapeHtml(String(e.id))}"${isNew ? ' data-new="1"' : ''}>
         <td><input class="se-name" type="text" value="${escapeHtml(e.name)}" style="min-width:110px;"></td>
         <td><select class="se-type"><option value="buy"${e.type === 'sell' ? '' : ' selected'}>Buy</option><option value="sell"${e.type === 'sell' ? ' selected' : ''}>Sell</option></select></td>
         <td><input class="se-qty" type="number" step="1" min="0" value="${escapeHtml(String(e.qty))}" style="width:84px;"></td>
-        <td><input class="se-price" type="number" step="0.01" min="0" value="${escapeHtml(String(e.price))}" style="width:92px;"></td>
+        <td style="white-space:nowrap;"><input class="se-price" type="number" step="0.01" min="0" value="${escapeHtml(String(e.price))}" style="width:92px;">${isNew ? '<button type="button" class="se-live" title="Use live price" style="border:0;background:none;cursor:pointer;font-size:14px;">\u26a1</button>' : ''}</td>
         <td><input class="se-date" type="date" value="${escapeHtml(e.date || '')}"></td>
         <td><select class="se-broker"><option value=""${cur ? '' : ' selected'}>Unassigned</option>${opts.map(b => `<option value="${escapeHtml(b)}"${b === cur ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('')}</select></td>
         <td><button type="button" class="se-del" title="Delete this entry" style="border:0;background:none;font-size:16px;cursor:pointer;color:var(--coral);">\u00d7</button></td></tr>`;
@@ -15080,7 +15080,9 @@
     ov.innerHTML = `<style>#stockEntriesEditor td,#stockEntriesEditor th{padding:3px 4px;white-space:nowrap;} #stockEntriesEditor input,#stockEntriesEditor select{font-size:12px;padding:3px;}</style>
       <div style="background:var(--card,#fff);color:var(--ink,#222);border-radius:12px;max-width:780px;width:100%;max-height:90vh;overflow:auto;padding:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;"><b>Edit ${escapeHtml(title)} \u2014 all ${list.length} entr${list.length === 1 ? 'y' : 'ies'}</b><button type="button" id="seClose" class="add-btn ghost" style="padding:4px 10px;">Close</button></div>
-        <div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;width:100%;min-width:660px;"><thead><tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;"><th>Stock name</th><th>Buy / Sell</th><th>Quantity (shares)</th><th>Price / share</th><th>Date</th><th>Broker</th><th></th></tr></thead><tbody id="seBody">${list.map(rowHtml).join('')}</tbody></table></div>
+        <div id="seLive" style="font-size:12px;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span id="seLiveTxt">Live price: fetching\u2026</span><button type="button" id="seLiveBtn" class="add-btn ghost" style="padding:3px 10px;font-size:11px;">\ud83d\udd04 Fetch live</button></div>
+        <div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;width:100%;min-width:700px;"><thead><tr style="text-align:left;color:var(--ink-soft);font-size:10.5px;"><th>Stock name</th><th>Buy / Sell</th><th>Quantity (shares)</th><th>Price / share</th><th>Date</th><th>Broker</th><th></th></tr></thead><tbody id="seBody">${list.map(e => rowHtml(e, false)).join('')}</tbody></table></div>
+        <button type="button" id="seAdd" class="add-btn ghost" style="margin-top:8px;padding:4px 12px;font-size:12px;">\uff0b Add buy / sell entry</button>
         <div id="seMsg" style="font-size:11px;color:var(--coral);margin-top:6px;"></div>
         <div style="display:flex;gap:8px;margin-top:10px;"><button type="button" class="add-btn" id="seSave">Save changes</button><button type="button" class="add-btn ghost" id="seCancel">Cancel</button></div>
       </div>`;
@@ -15091,19 +15093,52 @@
     ov.addEventListener('click', ev => { if(ev.target === ov) close(); });
     ov.querySelector('#seClose').addEventListener('click', close);
     ov.querySelector('#seCancel').addEventListener('click', close);
-    ov.querySelectorAll('.se-del').forEach(btn => btn.addEventListener('click', () => {
-      const tr = btn.closest('tr'), gone = tr.dataset.del === '1';
-      tr.dataset.del = gone ? '' : '1'; tr.style.opacity = gone ? '' : '0.4'; tr.style.textDecoration = gone ? '' : 'line-through'; btn.textContent = gone ? '\u00d7' : '\u21ba';
-    }));
+    // Live price (Yahoo via /api/stock-quote) - shown in the header and usable for new rows.
+    let livePrice = null;
+    const market = (currentMarketInfo(countryKey).code) || (countryKey === 'UAE' ? 'AE' : 'IN'), cs = currentCurrencySymbol(countryKey);
+    const liveTxt = ov.querySelector('#seLiveTxt');
+    const fetchLive = async () => {
+      liveTxt.textContent = 'Live price: fetching\u2026';
+      try{
+        const r = await fetch(`/api/stock-quote?q=${encodeURIComponent(title)}&market=${market}`), d = await r.json();
+        if(!r.ok || d.error || d.price == null) throw new Error(d.error || 'no price');
+        livePrice = Number(d.price);
+        liveTxt.innerHTML = `Live price: <b>${escapeHtml(cs)} ${livePrice.toFixed(2)}</b> <span style="color:var(--ink-soft);">(${escapeHtml(d.symbol || title)}, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>`;
+        ov.querySelectorAll('#seBody tr[data-new="1"] .se-price').forEach(inp => { if(!inp.value) inp.value = livePrice.toFixed(2); });
+      }catch(e){ livePrice = null; liveTxt.textContent = 'Live price unavailable right now \u2014 try Fetch live again.'; }
+    };
+    ov.querySelector('#seLiveBtn').addEventListener('click', fetchLive);
+    fetchLive();
+    // Add a new buy/sell row to this stock.
+    ov.querySelector('#seAdd').addEventListener('click', () => {
+      let lastB = ''; try{ lastB = localStorage.getItem('ledgerLastBroker_' + countryKey) || ''; }catch(e){}
+      const mostRecent = list[list.length - 1];
+      const e = { id: uid(), name: title, type: 'buy', qty: '', price: livePrice != null ? livePrice.toFixed(2) : '', date: todayStr(), broker: (mostRecent && mostRecent.broker) || lastB };
+      ov.querySelector('#seBody').insertAdjacentHTML('beforeend', rowHtml(e, true));
+      const tr = ov.querySelector('#seBody tr:last-child'); tr.querySelector('.se-qty').focus();
+    });
+    ov.querySelector('#seBody').addEventListener('click', ev => {
+      const del = ev.target.closest('.se-del'), live = ev.target.closest('.se-live');
+      if(live){ if(livePrice != null) live.closest('tr').querySelector('.se-price').value = livePrice.toFixed(2); else fetchLive(); return; }
+      if(!del) return;
+      const tr = del.closest('tr');
+      if(tr.dataset.new === '1'){ tr.remove(); return; }
+      const gone = tr.dataset.del === '1';
+      tr.dataset.del = gone ? '' : '1'; tr.style.opacity = gone ? '' : '0.4'; tr.style.textDecoration = gone ? '' : 'line-through'; del.textContent = gone ? '\u00d7' : '\u21ba';
+    });
     ov.querySelector('#seSave').addEventListener('click', () => {
-      const msg = ov.querySelector('#seMsg'), updates = [], dels = [];
+      const msg = ov.querySelector('#seMsg'), updates = [], dels = [], adds = [];
       const rows = Array.from(ov.querySelectorAll('#seBody tr'));
       for(let i = 0; i < rows.length; i++){
         const tr = rows[i], id = tr.dataset.id;
         if(tr.dataset.del === '1'){ dels.push(id); continue; }
-        const name = tr.querySelector('.se-name').value.trim(), qty = parseFloat(tr.querySelector('.se-qty').value), price = parseFloat(tr.querySelector('.se-price').value);
+        const isNew = tr.dataset.new === '1';
+        const name = tr.querySelector('.se-name').value.trim(), qtyRaw = tr.querySelector('.se-qty').value, priceRaw = tr.querySelector('.se-price').value;
+        if(isNew && !qtyRaw) continue; // new row with no quantity = nothing to add (price may be pre-filled)
+        const qty = parseFloat(qtyRaw), price = parseFloat(priceRaw);
         if(!name || isNaN(qty) || qty <= 0 || isNaN(price) || price < 0){ msg.textContent = `Row ${i + 1}: enter a name, a quantity above 0 and a price.`; return; }
-        updates.push({ id, name, type: tr.querySelector('.se-type').value === 'sell' ? 'sell' : 'buy', qty, price, date: tr.querySelector('.se-date').value || todayStr(), broker: tr.querySelector('.se-broker').value });
+        const row = { id, name, type: tr.querySelector('.se-type').value === 'sell' ? 'sell' : 'buy', qty, price, date: tr.querySelector('.se-date').value || todayStr(), broker: tr.querySelector('.se-broker').value };
+        (isNew ? adds : updates).push(row);
       }
       if(dels.length && !confirm(`Delete ${dels.length} entr${dels.length === 1 ? 'y' : 'ies'} of ${title}? This cannot be undone.`)) return;
       const d = currentData(), changed = [];
@@ -15115,6 +15150,11 @@
       });
       if(changed.length){ d.brokerUndo = d.brokerUndo || {}; d.brokerUndo[countryKey] = { ts: Date.now(), label: `Edit ${title}`, prev: changed }; }
       dels.forEach(id => { const i = all.findIndex(x => String(x.id) === id); if(i > -1) all.splice(i, 1); });
+      adds.forEach(a => {
+        const e = { id: a.id, name: a.name, type: a.type, qty: a.qty, price: a.price, date: a.date };
+        if(a.broker){ e.broker = a.broker; try{ localStorage.setItem('ledgerLastBroker_' + countryKey, a.broker); }catch(x){} }
+        all.push(e);
+      });
       save(); close(); renderInvestmentCountry(countryKey);
     });
   }
@@ -17743,7 +17783,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.6.5', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.6.6', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
