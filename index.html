@@ -584,6 +584,11 @@
         <div class="add-row" style="margin-top:8px;"><button type="button" class="add-btn" id="backupBannerNow">⬇ Back up now</button><button type="button" class="add-btn ghost" id="backupBannerLater">Remind me later</button></div>
       </div>
       <div id="dailyBriefing" class="daily-briefing"></div>
+      <div id="weeklySummaryBox" class="daily-briefing" style="display:none;"></div>
+      <div id="installAppBox" style="display:none;margin-bottom:14px;">
+        <button type="button" class="add-btn full-width" id="installAppBtn" style="display:none;background:var(--navbar-bg);color:var(--navbar-ink);">📲 Install app on this device</button>
+        <div id="installIosHint" style="display:none;font-size:12px;color:var(--ink-soft);">📲 To install on iPhone/iPad: tap the Share button in Safari, then <strong>Add to Home Screen</strong>.</div>
+      </div>
       <div id="notifyPromptBox" style="display:none;margin-bottom:14px;">
         <button type="button" class="add-btn full-width" id="notifyEnableBtn" style="background:var(--navbar-bg);color:var(--navbar-ink);">🔔 Enable notifications for bills, budget alerts & documents</button>
       </div>
@@ -860,6 +865,7 @@
               <div id="spendAnalysisChart"></div>
               <div id="spendAnalysisCategorySummary" class="sa-cat-summary"></div>
               <div id="spendAnalysisCatAvg" style="margin-top:10px;"></div>
+              <div id="spendAnalysisMoM" style="margin-top:12px;"></div>
               <div id="spendAnalysisTotal" class="spend-analysis-total"></div>
             </div>
           </div>
@@ -2224,6 +2230,14 @@
                 <div id="uaeInvStocksOverview" style="overflow-x:auto;"></div>
               </div>
             </div>
+            <div class="accordion" data-key="uae-inv-dividends" style="margin-top:4px;">
+              <button type="button" class="accordion-header"><span>💰 Dividends received — auto-tracked yearly total</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">Fetched automatically for every stock you hold. Amount = dividend per share × shares you held before the ex-date (from your buy/sell entries). Counted on the ex-date; actual bank credit comes a few weeks later.</div>
+                <button type="button" class="add-btn ghost full-width" id="uaeDivRefresh">🔄 Refresh dividends</button>
+                <div id="uaeDivResult" style="margin-top:8px;overflow-x:auto;"></div>
+              </div>
+            </div>
             <div id="uaeInvStocksList"></div>
           </div>
         </div>
@@ -2816,6 +2830,14 @@
               <button type="button" class="accordion-header"><span>📊 Your Stocks — Qty · Avg · LTP · Current · Return</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
                 <div id="indiaInvStocksOverview" style="overflow-x:auto;"></div>
+              </div>
+            </div>
+            <div class="accordion" data-key="india-inv-dividends" style="margin-top:4px;">
+              <button type="button" class="accordion-header"><span>💰 Dividends received — auto-tracked yearly total</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">Fetched automatically for every stock you hold. Amount = dividend per share × shares you held before the ex-date (from your buy/sell entries). Counted on the ex-date; actual bank credit comes a few weeks later.</div>
+                <button type="button" class="add-btn ghost full-width" id="indiaDivRefresh">🔄 Refresh dividends</button>
+                <div id="indiaDivResult" style="margin-top:8px;overflow-x:auto;"></div>
               </div>
             </div>
             <div id="indiaInvStocksList"></div>
@@ -7767,11 +7789,198 @@
     currentData().bankSummaries.push({ id: uid(), bank, from, to });
     save(); renderBankSummaries();
   });
+  // ================= v1.6.0 additions =================
+  // ---- Install button (PWA) ----
+  var deferredInstall = null;
+  function showInstallBox(){
+    const box = document.getElementById('installAppBox'); if(!box) return;
+    const btn = document.getElementById('installAppBtn'), hint = document.getElementById('installIosHint');
+    const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if(standalone || (!deferredInstall && !ios)){ box.style.display = 'none'; return; }
+    box.style.display = '';
+    btn.style.display = deferredInstall ? '' : 'none';
+    hint.style.display = (!deferredInstall && ios) ? '' : 'none';
+  }
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; showInstallBox(); });
+  window.addEventListener('appinstalled', () => { deferredInstall = null; showInstallBox(); });
+  (function(){
+    const btn = document.getElementById('installAppBtn');
+    if(btn) btn.addEventListener('click', async () => {
+      if(!deferredInstall) return;
+      deferredInstall.prompt();
+      try{ await deferredInstall.userChoice; }catch(e){}
+      deferredInstall = null; showInstallBox();
+    });
+    showInstallBox();
+  })();
+
+  // ---- Category totals + month-over-month insights ----
+  function categoryTotalsInRange(from, to){
+    const map = {};
+    cardsInSlot().filter(c => c.date >= from && c.date <= to).forEach(c => {
+      const label = (c.desc || 'Uncategorized').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'Uncategorized';
+      const k = label.toLowerCase();
+      if(!map[k]) map[k] = { label, amount: 0 };
+      map[k].amount += Number(c.amount) || 0;
+    });
+    return map;
+  }
+  function renderCategoryMoM(){
+    const el = document.getElementById('spendAnalysisMoM'); if(!el) return;
+    const today = todayStr(), day = Number(today.slice(8,10));
+    const [y, m] = today.slice(0,7).split('-').map(Number);
+    const prevKey = prevMonthKey(today.slice(0,7));
+    const [py, pm] = prevKey.split('-').map(Number);
+    const prevDays = new Date(py, pm, 0).getDate(), curDays = new Date(y, m, 0).getDate();
+    const cur = categoryTotalsInRange(today.slice(0,8) + '01', today);
+    const prev = categoryTotalsInRange(prevKey + '-01', prevKey + '-' + String(Math.min(day, prevDays)).padStart(2,'0'));
+    const keys = [...new Set([...Object.keys(cur), ...Object.keys(prev)])];
+    if(!keys.length){ el.innerHTML = ''; return; }
+    const curTotal = Object.values(cur).reduce((s,r) => s + r.amount, 0);
+    const prevTotal = Object.values(prev).reduce((s,r) => s + r.amount, 0);
+    const rows = keys.map(k => ({ label: (cur[k] || prev[k]).label, c: cur[k] ? cur[k].amount : 0, p: prev[k] ? prev[k].amount : 0 }))
+      .sort((a,b) => Math.abs(b.c - b.p) - Math.abs(a.c - a.p)).slice(0, 6);
+    const pctTxt = (c,p) => {
+      if(p <= 0) return c > 0 ? '<span style="color:var(--coral);font-weight:600;">new</span>' : '—';
+      const pc = ((c - p) / p) * 100;
+      if(Math.abs(pc) < 0.5) return '→ 0%';
+      return `<span style="color:${pc > 0 ? 'var(--coral)' : 'var(--teal)'};font-weight:600;">${pc > 0 ? '▲' : '▼'} ${Math.abs(pc).toFixed(0)}%</span>`;
+    };
+    const projected = day > 0 ? (curTotal / day) * curDays : 0;
+    el.innerHTML = `<div style="font-weight:600;font-size:13px;margin-bottom:4px;">📈 Month-over-month — days 1–${day} vs same days last month</div>
+      <div style="font-size:12px;margin-bottom:6px;">Total ${fmt(curTotal)} vs ${fmt(prevTotal)} ${pctTxt(curTotal, prevTotal)} · on pace for <strong>${fmt(projected)}</strong> by month-end</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <tr style="color:var(--ink-soft);text-align:left;"><th>Biggest movers</th><th style="text-align:right;">This</th><th style="text-align:right;">Last</th><th style="text-align:right;">Change</th></tr>
+        ${rows.map(r => `<tr><td>${escapeHtml(r.label)}</td><td style="text-align:right;">${fmt(r.c)}</td><td style="text-align:right;">${fmt(r.p)}</td><td style="text-align:right;">${pctTxt(r.c, r.p)}</td></tr>`).join('')}
+      </table>`;
+  }
+
+  // ---- Weekly summary (card + once-a-week notification) ----
+  function weekIdStr(){
+    const d = new Date(), t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return t.getUTCFullYear() + '-W' + Math.ceil(((t - y0) / 86400000 + 1) / 7);
+  }
+  function renderWeeklySummary(){
+    const box = document.getElementById('weeklySummaryBox'); if(!box) return;
+    const today = todayStr();
+    const sum = map => Object.values(map).reduce((s,r) => s + r.amount, 0);
+    const cur = categoryTotalsInRange(addDaysStr(today, -6), today);
+    const prev = categoryTotalsInRange(addDaysStr(today, -13), addDaysStr(today, -7));
+    const curT = sum(cur), prevT = sum(prev);
+    const top = Object.values(cur).sort((a,b) => b.amount - a.amount).slice(0, 3);
+    const due = cardsInSlot().filter(c => c.dueDate && c.dueDate >= today && c.dueDate <= addDaysStr(today, 7));
+    const dueTotal = due.reduce((s,c) => s + (Number(c.amount) || 0), 0);
+    if(curT <= 0 && !due.length){ box.style.display = 'none'; return; }
+    let delta = '';
+    if(prevT > 0){ const pc = ((curT - prevT) / prevT) * 100; delta = ` (${pc >= 0 ? '▲' : '▼'} ${Math.abs(pc).toFixed(0)}% vs previous 7 days)`; }
+    const lines = [`Spent ${fmt(curT)} in the last 7 days${delta}`];
+    if(top.length) lines.push('Top: ' + top.map(r => `${r.label} ${fmt(r.amount)}`).join(', '));
+    if(due.length) lines.push(`${due.length} bill${due.length === 1 ? '' : 's'} due in the next 7 days — ${fmt(dueTotal)}`);
+    box.style.display = '';
+    box.innerHTML = `<h3>📊 Weekly summary</h3>` + lines.map(l => `<div class="db-row"><span>${escapeHtml(l)}</span></div>`).join('');
+    try{
+      const flag = 'shb_weekly_' + weekIdStr();
+      if(notifyPermissionSupported() && Notification.permission === 'granted' && !localStorage.getItem(flag)){
+        localStorage.setItem(flag, '1');
+        navigator.serviceWorker.ready.then(reg => reg.showNotification('📊 Your weekly summary', { body: lines.join('\n'), icon: './icons/icon-192.png', badge: './icons/icon-192.png', tag: 'weekly-summary' })).catch(() => {});
+      }
+    }catch(e){}
+  }
+
+  // ---- Dividend tracker (auto, from Yahoo via /api/portfolio-tools?dividends=) ----
+  var divState = {};
+  async function divSymbolFor(name, market){
+    const k = 'shb_sym_' + market + '_' + invKeyName(name);
+    try{ const c = localStorage.getItem(k); if(c) return c; }catch(e){}
+    const r = await fetch(`/api/stock-quote?q=${encodeURIComponent(name)}&market=${market}`);
+    const d = await r.json();
+    if(!r.ok || !d.symbol) return null;
+    try{ localStorage.setItem(k, d.symbol); }catch(e){}
+    return d.symbol;
+  }
+  async function divFetch(symbol, force){
+    const k = 'shb_div_' + symbol;
+    if(!force){
+      try{ const c = JSON.parse(localStorage.getItem(k) || 'null'); if(c && Date.now() - c.ts < 12 * 3600 * 1000) return c.data; }catch(e){}
+    }
+    const r = await fetch(`/api/portfolio-tools?dividends=${encodeURIComponent(symbol)}`);
+    const d = await r.json();
+    if(!r.ok || d.error) throw new Error(d.error || 'failed');
+    try{ localStorage.setItem(k, JSON.stringify({ ts: Date.now(), data: d })); }catch(e){}
+    return d;
+  }
+  function sharesHeldBefore(entries, exDate){
+    let q = 0;
+    entries.forEach(e => { if((e.date || '') < exDate){ q += (e.type === 'sell' ? -1 : 1) * (Number(e.qty) || 0); } });
+    return Math.max(0, q);
+  }
+  function divYearLabel(date, countryKey){
+    const y = Number(date.slice(0,4)), mo = Number(date.slice(5,7));
+    if(countryKey === 'India'){ const sy = mo >= 4 ? y : y - 1; return `FY ${sy}-${String((sy + 1) % 100).padStart(2,'0')}`; }
+    return String(y);
+  }
+  async function renderDividendTracker(countryKey, force){
+    const pre = countryKey === 'UAE' ? 'uae' : 'india';
+    const el = document.getElementById(pre + 'DivResult'); if(!el) return;
+    const st = divState[countryKey] || (divState[countryKey] = {});
+    if(st.busy) return;
+    const entries = investmentEntriesList(countryKey, 'stocks') || [];
+    const sig = entries.map(e => [e.name, e.type, e.qty, e.date].join('|')).join(';');
+    if(!force && st.sig === sig && st.html && Date.now() - st.ts < 300000){ el.innerHTML = st.html; return; }
+    if(!entries.length){ el.innerHTML = '<div class="empty">Add stock buy entries to track dividends.</div>'; return; }
+    st.busy = true;
+    const market = currentMarketInfo(countryKey).code || (countryKey === 'UAE' ? 'AE' : 'IN');
+    const groups = {};
+    entries.forEach(e => { const k = invKeyName(e.name); (groups[k] = groups[k] || { name: e.name, entries: [] }).entries.push(e); });
+    const names = Object.values(groups), today = todayStr(), payouts = [], upcoming = [], failed = [];
+    try{
+      for(let i = 0; i < names.length; i++){
+        const g = names[i];
+        el.innerHTML = `<div style="font-size:12px;color:var(--ink-soft);">Fetching dividends ${i + 1}/${names.length}: ${escapeHtml(g.name)}…</div>`;
+        try{
+          const sym = await divSymbolFor(g.name, market);
+          if(!sym){ failed.push(g.name); continue; }
+          const d = await divFetch(sym, force);
+          (d.dividends || []).forEach(dv => {
+            const sh = sharesHeldBefore(g.entries, dv.exDate);
+            if(sh > 0 && dv.exDate <= today) payouts.push({ name: g.name, exDate: dv.exDate, per: dv.amount, shares: sh, total: sh * dv.amount });
+          });
+          if(d.upcoming && d.upcoming.exDate > today){
+            const sh = sharesHeldBefore(g.entries, d.upcoming.exDate);
+            if(sh > 0) upcoming.push({ name: g.name, exDate: d.upcoming.exDate, per: d.upcoming.amount, shares: sh });
+          }
+        }catch(e){ failed.push(g.name); }
+      }
+      const cs = currentCurrencySymbol(countryKey);
+      const money = v => cs + ' ' + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const byYear = {};
+      payouts.forEach(p => { const y = divYearLabel(p.exDate, countryKey); byYear[y] = (byYear[y] || 0) + p.total; });
+      const years = Object.keys(byYear).sort().reverse();
+      const recent = payouts.sort((a,b) => b.exDate.localeCompare(a.exDate)).slice(0, 15);
+      let html = '';
+      html += years.length ? `<div style="font-weight:600;margin-bottom:4px;">Total received</div>` + years.map(y => `<div style="display:flex;justify-content:space-between;font-size:13px;"><span>${y}</span><strong>${money(byYear[y])}</strong></div>`).join('') : '<div class="empty">No dividends found yet for your holding periods.</div>';
+      if(upcoming.length) html += `<div style="font-weight:600;margin:10px 0 4px;">📅 Announced — upcoming</div>` + upcoming.map(u => `<div style="font-size:12px;">${escapeHtml(u.name)} · ex-date ${u.exDate} · ${money(u.per)}/share × ${u.shares} ≈ <strong>${money(u.per * u.shares)}</strong></div>`).join('');
+      if(recent.length) html += `<div style="font-weight:600;margin:10px 0 4px;">Recent payouts</div><table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="color:var(--ink-soft);text-align:left;"><th>Stock</th><th>Ex-date</th><th style="text-align:right;">Per share</th><th style="text-align:right;">Shares</th><th style="text-align:right;">Received</th></tr>` + recent.map(p => `<tr><td>${escapeHtml(p.name)}</td><td>${p.exDate}</td><td style="text-align:right;">${p.per}</td><td style="text-align:right;">${p.shares}</td><td style="text-align:right;">${money(p.total)}</td></tr>`).join('') + '</table>';
+      if(failed.length) html += `<div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">Couldn't fetch dividends for: ${escapeHtml(failed.join(', '))}.</div>`;
+      html += `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:6px;">Gross of any tax deducted at source. Source: Yahoo Finance ex-dividend history.</div>`;
+      el.innerHTML = html; st.html = html; st.sig = sig; st.ts = Date.now();
+    } finally { st.busy = false; }
+  }
+  ['UAE','India'].forEach(c => {
+    const b = document.getElementById((c === 'UAE' ? 'uae' : 'india') + 'DivRefresh');
+    if(b) b.addEventListener('click', () => renderDividendTracker(c, true));
+  });
+  // ================= end v1.6.0 additions =================
+
   function renderSpendAnalysis(){
     const chartEl = document.getElementById('spendAnalysisChart');
     const totalEl = document.getElementById('spendAnalysisTotal');
     const summaryEl = document.getElementById('spendAnalysisCategorySummary');
     if(!chartEl || !totalEl) return;
+    try{ renderCategoryMoM(); }catch(e){ console.warn('MoM failed', e); }
     const fromEl = document.getElementById('spendAnalysisFrom');
     const toEl = document.getElementById('spendAnalysisTo');
     if(fromEl && !fromEl.value) fromEl.value = todayStr().slice(0,8) + '01';
@@ -14411,6 +14620,7 @@
 
   function renderInvestmentCountry(countryKey){
     renderMarketSnapshot(countryKey);
+    try{ renderDividendTracker(countryKey, false); }catch(e){ console.warn('Dividends failed', e); }
     let totalInvested = 0, totalCurrent = 0;
     INVESTMENT_CATS.forEach(catCfg => {
       const res = renderInvestmentCategory(countryKey, catCfg);
@@ -15012,6 +15222,7 @@
       else rows.push(`<div class="db-row">💧 <span>Water target met for today — nice.</span></div>`);
     }
 
+    try{ renderWeeklySummary(); }catch(e){}
     const dateLabel = new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
     box.innerHTML = `<h3>🌅 Today — ${escapeHtml(dateLabel)}</h3>` + (rows.length ? rows.join('') : `<div class="db-empty">Nothing pressing today — you're all caught up.</div>`);
   }
@@ -17300,7 +17511,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.5.3', APP_VERSION_DATE = '28 Oct 2026';
+    const APP_VERSION = '1.6.0', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;

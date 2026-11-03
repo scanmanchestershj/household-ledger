@@ -125,7 +125,39 @@ async function handleDigest(req, res) {
   }
 }
 
+// GET /api/portfolio-tools?dividends=<yahoo symbol>  -> ex-dividend history (+ upcoming, best effort)
+async function handleDividends(req, res) {
+  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=7200');
+  const symbol = String(req.query.dividends || '').trim();
+  if (!symbol) { res.status(400).json({ error: 'Missing symbol.' }); return; }
+  const headers = { 'User-Agent': UA, 'Accept': 'application/json' };
+  let data;
+  try {
+    data = await fetchJson(`${YAHOO_CHART}/${encodeURIComponent(symbol)}?range=max&interval=1mo&events=div`, { headers });
+  } catch (e) {
+    res.status(502).json({ error: 'Dividend data is unavailable right now.' });
+    return;
+  }
+  const result = data && data.chart && data.chart.result && data.chart.result[0];
+  const dividends = Object.values((result && result.events && result.events.dividends) || {})
+    .map(d => ({ exDate: new Date(d.date * 1000).toISOString().slice(0, 10), amount: d.amount }))
+    .sort((a, b) => a.exDate.localeCompare(b.exDate));
+  let upcoming = null;
+  try {
+    const q = await fetchJson(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=calendarEvents,summaryDetail`, { headers });
+    const r0 = q && q.quoteSummary && q.quoteSummary.result && q.quoteSummary.result[0];
+    const ex = r0 && r0.calendarEvents && r0.calendarEvents.exDividendDate && r0.calendarEvents.exDividendDate.raw;
+    const rate = r0 && r0.summaryDetail && r0.summaryDetail.lastDividendValue && r0.summaryDetail.lastDividendValue.raw;
+    if (ex) {
+      const exDate = new Date(ex * 1000).toISOString().slice(0, 10);
+      if (!dividends.some(d => d.exDate === exDate)) upcoming = { exDate, amount: rate || null };
+    }
+  } catch (e) { /* upcoming is best effort */ }
+  res.status(200).json({ symbol, currency: result && result.meta ? result.meta.currency : null, dividends, upcoming });
+}
+
 module.exports = async (req, res) => {
+  if (req.query && req.query.dividends) { await handleDividends(req, res); return; }
   if (req.method === 'POST') {
     await handleDigest(req, res);
   } else {
