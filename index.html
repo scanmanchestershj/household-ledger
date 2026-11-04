@@ -3014,10 +3014,21 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-compounder" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🌱 Early Compounder Scan</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Searches Nifty Midcap 150 and Smallcap 250 for the traits multibaggers usually share: 3-year average ROCE ≥ 18%, debt/equity ≤ 0.5, sales growth ≥ 15% a year and profit growth ≥ 20% a year, ranked by a 0–100 score. Every candidate is logged in the Signal Track Record and measured against its own index (Midcap 150 or Smallcap 250), so over time you can see whether this scan really finds winners.</div>
+                <button type="button" class="add-btn full-width" id="scrCompRun">🌱 Run scan (a few minutes)</button>
+                <div id="scrCompStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrCompResult" style="margin-top:10px;max-height:560px;overflow-y:auto;"></div>
+                <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;line-height:1.5;">A shortlist to research, not a buy list. <b>Promoter pledge is not available from this data source, so check it yourself</b> (a high pledge is a serious warning), along with governance, valuation and why the growth can continue. ROCE is a pre-tax estimate. Smallcaps can fall 50% or more, and most stocks that pass any screen do not become multibaggers.</div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-track" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>📈 Signal Track Record</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
-                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Every Top Pick, Buffett Entry-zone and Strong Buy signal is logged with its date and price, then compared with the Nifty 50 over the same period. Once enough signals are 3, 6 and 12 months old, this shows whether the scoring really beats the index. Results below 30 signals per period are too few to trust.</div>
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Every Top Pick, Buffett Entry-zone and Strong Buy signal is logged with its date and price, then compared with its own index (Nifty 50, Midcap or Smallcap) over the same period. Once enough signals are 3, 6 and 12 months old, this shows whether the scoring really beats the index. Results below 30 signals per period are too few to trust.</div>
                 <button type="button" class="add-btn full-width" id="scrTrackRefresh">🔄 Update returns</button>
                 <div id="scrTrackStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
                 <div id="scrTrackResult" style="margin-top:10px;max-height:520px;overflow-y:auto;"></div>
@@ -11315,7 +11326,7 @@
   try{ renderEarnings(); }catch(e){}
 
   // ---- Signal Track Record: log every screener signal, then measure it against the Nifty 50 ----
-  const SIGNAL_SRC_LABEL = { toppick: 'Top Pick', buffett: 'Buffett Entry', strongbuy: 'Strong Buy' };
+  const SIGNAL_SRC_LABEL = { toppick: 'Top Pick', buffett: 'Buffett Entry', strongbuy: 'Strong Buy', compounder: 'Early Compounder' };
   function logSignals(source, rows){
     try{
       if(!Array.isArray(state.signalLog)) state.signalLog = [];
@@ -11326,7 +11337,7 @@
         if(!r || r.error || !r.symbol || !(r.price > 0)) return;
         const dup = state.signalLog.some(x => x.symbol === r.symbol && x.source === source && new Date(x.date + 'T00:00:00').getTime() > recent);
         if(dup) return;
-        state.signalLog.push({ symbol: r.symbol, name: r.name || r.symbol, source, date: today, price: Number(r.price), verdict: r.verdict || null, score: r.score != null ? r.score : null });
+        state.signalLog.push({ symbol: r.symbol, name: r.name || r.symbol, source, date: today, price: Number(r.price), cap: r.cap || null, verdict: r.verdict || null, score: r.score != null ? r.score : null });
         added++;
       });
       if(added){ if(state.signalLog.length > 3000) state.signalLog = state.signalLog.slice(-3000); save(); }
@@ -11357,23 +11368,39 @@
       return `<tr><td>${label}</td><td>${st.n}${few}</td><td>${st.hit.toFixed(0)}%</td><td style="color:${col(st.avgRet)}">${pc(st.avgRet)}</td><td style="color:${col(st.avgAlpha)}">${pc(st.avgAlpha)}<br><span style="font-size:9.5px;color:var(--ink-soft);">median ${pc(st.medAlpha)}</span></td></tr>`;
     }).join('');
     const sorted = [...t.rows].sort((a, b) => (b.date < a.date ? -1 : 1));
-    const detail = sorted.map(r => `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}<br><span style="font-size:9.5px;color:var(--ink-soft);">${escapeHtml(SIGNAL_SRC_LABEL[r.source] || r.source)} \u00b7 ${r.date}</span></td><td>${r.price.toFixed(2)}</td><td style="color:${col(r.ret)}">${pc(r.ret)}</td><td style="color:${col(r.nifty)}">${pc(r.nifty)}</td></tr>`).join('');
+    const detail = sorted.map(r => `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}<br><span style="font-size:9.5px;color:var(--ink-soft);">${escapeHtml(SIGNAL_SRC_LABEL[r.source] || r.source)} \u00b7 ${r.date}${r.bench ? ' \u00b7 vs ' + escapeHtml(r.bench) : ''}</span></td><td>${r.price.toFixed(2)}</td><td style="color:${col(r.ret)}">${pc(r.ret)}</td><td style="color:${col(r.nifty)}">${pc(r.nifty)}</td></tr>`).join('');
     box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Updated ${t.date} \u00b7 ${t.rows.length} signals tracked</div>`
-      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);text-align:left;"><th>Age</th><th>Signals</th><th>Beat Nifty</th><th>Avg return</th><th>Avg vs Nifty</th></tr>${sumRows}</table>`
+      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);text-align:left;"><th>Age</th><th>Signals</th><th>Beat index</th><th>Avg return</th><th>Avg vs index</th></tr>${sumRows}</table>`
       + `<div style="font-weight:600;font-size:12px;margin:12px 0 4px 0;">Every signal</div>`
-      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);text-align:left;"><th>Stock</th><th>Signal price</th><th>Return</th><th>Nifty</th></tr>${detail}</table>`;
+      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);text-align:left;"><th>Stock</th><th>Signal price</th><th>Return</th><th>Index</th></tr>${detail}</table>`;
+  }
+  // Each signal is judged against the index for its size band; if that index cannot be loaded the Nifty 50 is used and labelled as such.
+  const BENCH_CANDS = { MIDCAP: ['NIFTYMIDCAP150.NS', 'NIFTY_MIDCAP_100.NS'], SMALLCAP: ['NIFTYSMLCAP250.NS', '^CNXSC'], MICROCAP: ['NIFTYSMLCAP250.NS', '^CNXSC'] };
+  const BENCH_LABEL = { MIDCAP: 'Midcap index', SMALLCAP: 'Smallcap index', MICROCAP: 'Smallcap index' };
+  async function loadBench(cands){
+    for(const sym of cands){
+      try{ const d = await buffettGet('/api/stock-history?symbol=' + encodeURIComponent(sym) + '&range=5y'); if(d && d.points && d.points.length > 100) return { pts: d.points, now: d.price != null ? d.price : d.points[d.points.length - 1].c, sym }; }catch(e){}
+    }
+    return null;
   }
   async function ensureSignalTrack(){
     const statusEl = document.getElementById('scrTrackStatus');
     try{
       const log = state.signalLog || [];
       if(!log.length){ renderSignalTrack(); return; }
-      if(statusEl) statusEl.textContent = 'Fetching Nifty 50 history\u2026';
+      if(statusEl) statusEl.textContent = 'Fetching index history\u2026';
       const nh = await buffettGet('/api/stock-history?symbol=' + encodeURIComponent('^NSEI') + '&range=5y');
       const npts = (nh.points || []);
       if(!npts.length) throw new Error('Nifty history unavailable');
-      const niftyNow = nh.price != null ? nh.price : npts[npts.length - 1].c;
-      const niftyAt = dstr => { const ts = new Date(dstr + 'T00:00:00').getTime(); const p = npts.find(x => x.t >= ts - 3 * 86400000) || npts[0]; return p.c; };
+      const benches = { NIFTY: { pts: npts, now: nh.price != null ? nh.price : npts[npts.length - 1].c, label: 'Nifty 50' } };
+      for(const cap of [...new Set(log.map(x => x.cap).filter(c => BENCH_CANDS[c]))]){
+        const key = BENCH_LABEL[cap];
+        if(benches[key]) { benches[cap] = benches[key]; continue; }
+        const bl = await loadBench(BENCH_CANDS[cap]);
+        benches[cap] = bl ? { pts: bl.pts, now: bl.now, label: BENCH_LABEL[cap] } : benches.NIFTY;
+        benches[key] = benches[cap];
+      }
+      const at = (bn, dstr) => { const ts = new Date(dstr + 'T00:00:00').getTime(); const p = bn.pts.find(x => x.t >= ts - 3 * 86400000) || bn.pts[0]; return p.c; };
       const syms = [...new Set(log.map(x => x.symbol))];
       const prices = {};
       let i = 0;
@@ -11389,7 +11416,8 @@
       const rows = log.map(x => {
         const days = Math.floor((now - new Date(x.date + 'T00:00:00').getTime()) / 86400000);
         const cur = prices[x.symbol];
-        return Object.assign({}, x, { days, ret: cur && x.price ? (cur / x.price - 1) * 100 : null, nifty: (niftyNow / niftyAt(x.date) - 1) * 100 });
+        const bn = benches[x.cap] || benches.NIFTY;
+        return Object.assign({}, x, { days, bench: bn.label, ret: cur && x.price ? (cur / x.price - 1) * 100 : null, nifty: (bn.now / at(bn, x.date) - 1) * 100 });
       });
       state.signalTrack = { date: todayStr(), rows };
       save();
@@ -11400,6 +11428,54 @@
   const scrTrackBtn = document.getElementById('scrTrackRefresh');
   if(scrTrackBtn) scrTrackBtn.addEventListener('click', () => ensureSignalTrack());
   try{ renderSignalTrack(); }catch(e){}
+
+  // ---- Early Compounder scan ----
+  function renderCompounder(){
+    const box = document.getElementById('scrCompResult');
+    if(!box) return;
+    const c = state.screenerScans && state.screenerScans.compounder;
+    if(!c){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Not run yet. Tap "Run scan".</div>'; return; }
+    const f1 = v => v == null ? '\u2014' : v.toFixed(1);
+    const cards = c.picks.map((r, i) => `<div class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}" style="padding:8px 0;border-bottom:1px solid var(--line,#e5e5e5);"><div style="display:flex;justify-content:space-between;gap:8px;"><div><b>${i + 1}. ${escapeHtml(r.name)}</b><br><span style="font-size:10px;color:var(--ink-soft);">${escapeHtml(BUFFETT_CAPS[r.cap] || '')} cap \u00b7 \u20b9${r.price.toFixed(2)}</span></div><div style="font-weight:700;">${r.score}<span style="font-size:10px;color:var(--ink-soft);">/100</span></div></div><div style="font-size:11px;color:var(--ink-soft);margin-top:3px;">ROCE ${f1(r.roce)}% \u00b7 D/E ${r.de == null ? '\u2014' : r.de.toFixed(2)} \u00b7 Sales ${f1(r.salesG)}%/yr \u00b7 Profit ${f1(r.profitG)}%/yr${r.fcfPositive ? ' \u00b7 FCF positive' : ''}${r.insiders != null ? ' \u00b7 Insiders ' + r.insiders.toFixed(0) + '%' : ''}</div></div>`).join('');
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Scanned ${c.date}: ${c.ok} of ${c.universe} Midcap/Smallcap stocks had usable data; ${c.picks.length} passed all four gates${c.picks.length ? '' : '.'}</div>` + (cards || '<div class="empty" style="padding:8px 0;">No stock passed every gate today.</div>');
+  }
+  let compRunning = false;
+  async function runCompounder(){
+    const statusEl = document.getElementById('scrCompStatus');
+    if(compRunning) return;
+    compRunning = true;
+    try{
+      if(statusEl) statusEl.textContent = 'Loading Midcap and Smallcap lists\u2026';
+      const ld = await buffettGet('/api/nifty500?all=1');
+      const uni = (ld.list || []).filter(x => x.symbol && (x.cap === 'MIDCAP' || x.cap === 'SMALLCAP'));
+      if(uni.length < 50) throw new Error('stock list unavailable');
+      const meta = {}; uni.forEach(x => { meta[x.symbol] = x; });
+      const chunks = []; for(let k = 0; k < uni.length; k += 6) chunks.push(uni.slice(k, k + 6).map(x => x.symbol));
+      const all = [];
+      let ci = 0, done = 0;
+      async function worker(){
+        while(ci < chunks.length){
+          const ch = chunks[ci++];
+          try{ const d = await buffettGet('/api/compounder-scan?symbols=' + encodeURIComponent(ch.join(','))); (d.results || []).forEach(r => all.push(r)); }catch(e){}
+          done++;
+          if(statusEl) statusEl.textContent = `Scanning ${Math.min(done * 6, uni.length)} of ${uni.length} stocks\u2026`;
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      if(all.length < 30) throw new Error('too few stocks returned data (' + all.length + ')');
+      const picks = all.filter(r => r.pass).map(r => Object.assign({}, r, { name: meta[r.symbol].name, cap: meta[r.symbol].cap })).sort((a, b) => b.score - a.score).slice(0, 25);
+      if(!state.screenerScans) state.screenerScans = {};
+      state.screenerScans.compounder = { date: todayStr(), universe: uni.length, ok: all.length, picks };
+      try{ logSignals('compounder', picks); }catch(e){}
+      save();
+      renderCompounder();
+      if(statusEl) statusEl.textContent = `\u2713 Scan done: ${picks.length} candidates.`;
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Scan failed: ' + (e && e.message ? e.message : 'unknown error'); }
+    compRunning = false;
+  }
+  const scrCompBtn = document.getElementById('scrCompRun');
+  if(scrCompBtn) scrCompBtn.addEventListener('click', () => runCompounder());
+  try{ renderCompounder(); }catch(e){}
 
   // ---- Historical backtest: the technical half of the verdict (SMA50/200, RSI-14, MACD) replayed on 5 years of daily prices ----
   function btTechScores(c){
@@ -18052,7 +18128,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.9.0', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.10.0', APP_VERSION_DATE = '3 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
