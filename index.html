@@ -15,7 +15,7 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -36,6 +36,8 @@
     --coral: #F4515F;
     --amber: #F5A623;
     --blue: #4A90E2;
+    --purple: #7A5AF8;
+    --invest: #0E9384;
     --line: #DDE1E8;
     --navbar-bg: rgba(27,42,74,0.55);
     --navbar-ink: #E8ECF5;
@@ -55,7 +57,7 @@
     margin:0;
     background:transparent;
     color:var(--ink);
-    font-family:'Work Sans', sans-serif;
+    font-family:'Plus Jakarta Sans', 'Work Sans', sans-serif;
     -webkit-font-smoothing:antialiased;
   }
   .app{
@@ -3791,6 +3793,7 @@
 
   // ---- Theme (choosable colors, avoiding the default green/blue) ----
   const THEMES = {
+    premium: { name: 'Premium Finance – Navy & Emerald (Recommended)', swatch: '#101828', paper:'#F8FAFC', paperDeep:'#EEF2F6', teal:'#12B981', tealDark:'#0B8F63', line:'#EAECF0', navbarBg:'#101828', navbarInk:'#F8FAFC', headingInk:'#101828', coral:'#F04438', blue:'#2E90FA', amber:'#F79009', purple:'#7A5AF8', invest:'#0E9384' },
     navyamber: { name: 'Navy & Amber', swatch: '#1B2A4A', paper:'#F5F6FA', paperDeep:'#E9EBF1', teal:'#D97B3F', tealDark:'#B85F26', line:'#DDE1E8', navbarBg:'#1B2A4A', navbarInk:'#E8ECF5', headingInk:'#1B2A4A' },
     royal:  { name: 'Royal Purple',swatch: '#5B2A86', paper:'#F7F4FB', paperDeep:'#EBE2F5', teal:'#5B2A86', tealDark:'#3E1C5E', line:'#D9C7EC', gold:'#C9A227' },
     sand:   { name: 'Warm Sand',   swatch: '#C97B4A', paper:'#FBF7F2', paperDeep:'#F3EAE0', teal:'#C97B4A', tealDark:'#A85E33', line:'#EADFD2' },
@@ -3829,6 +3832,13 @@
     root.style.setProperty('--navbar-bg', toRgba(vars.navbarBg || vars.paper, 0.55));
     root.style.setProperty('--navbar-ink', vars.navbarInk || vars.teal);
     root.style.setProperty('--heading-ink', vars.headingInk || '#2A2E2D');
+    // Financial colour coding: other themes fall back to the original defaults.
+    root.style.setProperty('--coral', vars.coral || '#F4515F');
+    root.style.setProperty('--blue', vars.blue || '#4A90E2');
+    root.style.setProperty('--amber', vars.amber || '#F5A623');
+    root.style.setProperty('--purple', vars.purple || '#7A5AF8');
+    root.style.setProperty('--invest', vars.invest || '#0E9384');
+    root.style.setProperty('--gold', vars.invest || '#D97B3F'); // investments figures
   }
   function applyTheme(themeKey){
     const t = THEMES[themeKey];
@@ -3871,6 +3881,13 @@
     }));
   }
   function initThemeFromSettings(){
+    if(!state.settings) state.settings = {};
+    // One-time switch to the Navy & Emerald finance palette (can be changed again any time).
+    if(!state.settings.themePremiumV1){
+      state.settings.themePremiumV1 = true;
+      state.settings.theme = { preset: 'premium', custom: null };
+      try{ debouncedThemeSave(); }catch(e){}
+    }
     const saved = state.settings && state.settings.theme;
     if(saved && saved.custom){
       applyCustomThemeColor(saved.custom);
@@ -18444,7 +18461,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.11.4', APP_VERSION_DATE = '6 Nov 2026';
+    const APP_VERSION = '1.12.0', APP_VERSION_DATE = '6 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
