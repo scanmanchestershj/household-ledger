@@ -715,9 +715,14 @@
                 <option value="Dinner">Dinner</option>
                 <option value="Groceries">Groceries</option>
                 <option value="Groceries Mess">Groceries Mess</option>
+                <option value="EMI">EMI</option>
                 <option value="Others">Others</option>
               </select>
               <input type="text" id="cardDesc" placeholder="Type it here" style="display:none;margin-top:8px;">
+              <div id="cardDetailsWrap" style="display:none;margin-top:8px;">
+                <label class="field-label">Details</label>
+                <input type="text" id="cardDetails" placeholder="EMI details (e.g. what it is for, plan)">
+              </div>
             </div>
             <div>
               <label class="field-label">Amount (total)</label>
@@ -1434,6 +1439,18 @@
         <button type="button" class="add-btn ghost privacy-eye" id="privacyToggleBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1; flex:0 0 auto;">🙈</button>
       </div>
 
+      <div class="accordion" data-key="report-date-range">
+        <button type="button" class="accordion-header"><span>Report by date range</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Pick any From and To date. Follows the Both / Resident / Home selector above.</div>
+          <div class="form-grid">
+            <div><label class="field-label">From date</label><input type="date" id="reportRangeFrom"></div>
+            <div><label class="field-label">To date</label><input type="date" id="reportRangeTo"></div>
+          </div>
+          <div id="reportRangeOut" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
       <div class="report-grid">
         <div class="stat teal" id="repIncomeCard" style="cursor:pointer;" title="Click to see the full split">
           <div class="num" id="repIncome">–</div><div class="label">income (tap for split ▸)</div>
@@ -1834,6 +1851,23 @@
             <div style="font-size:10.5px;color:var(--ink-soft);margin:-6px 0 8px 0;">If this transfer was actually paid by swiping a card you already logged in Cards, link it here — the card spend won't be counted again separately, so it isn't double-counted.</div>
             <div style="font-size:10.5px;color:var(--ink-soft);margin:-4px 0 8px 0;">List below follows the "Viewing month" selector above.</div>
             <ul class="item-list" id="uaeRemitList"></ul>
+          </div>
+        </div>
+
+
+        <div class="accordion" data-key="home-country-expenses">
+          <button type="button" class="accordion-header"><span>Home Country Expenses</span><span class="accordion-arrow">▸</span></button>
+          <div class="accordion-body">
+            <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Track what you send to India and what it was spent on. This is a monitoring log only — it doesn't change your income, expense or balance totals.</div>
+            <div id="homeSentSummary" style="margin-bottom:6px;"></div>
+            <div class="accordion" data-key="home-sent-india-home">
+              <button type="button" class="accordion-header"><span>INDIA HOME</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body" id="homeSentBody-home"></div>
+            </div>
+            <div class="accordion" data-key="home-sent-india-investment">
+              <button type="button" class="accordion-header"><span>INDIA INVESTMENT</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body" id="homeSentBody-investment"></div>
+            </div>
           </div>
         </div>
 
@@ -7054,10 +7088,14 @@
   document.getElementById('cardCountry').addEventListener('change', populateCardBankOptions);
   document.getElementById('cardBank').addEventListener('change', toggleCardBankOther);
 
-  const CARD_DESC_PRESETS = ['Tea', 'Lunch', 'Dinner', 'Groceries', 'Groceries Mess'];
-  function setCardDescValue(desc){
+  const CARD_DESC_PRESETS = ['Tea', 'Lunch', 'Dinner', 'Groceries', 'Groceries Mess', 'EMI'];
+  function setCardDescValue(desc, details){
     const sel = document.getElementById('cardDescSelect');
     const box = document.getElementById('cardDesc');
+    const dWrap = document.getElementById('cardDetailsWrap');
+    const dBox = document.getElementById('cardDetails');
+    if(dWrap) dWrap.style.display = (desc === 'EMI') ? '' : 'none';
+    if(dBox) dBox.value = (desc === 'EMI' && details) ? details : '';
     if(desc && CARD_DESC_PRESETS.includes(desc)){
       sel.value = desc;
       box.style.display = 'none';
@@ -7070,6 +7108,14 @@
   }
   document.getElementById('cardDescSelect').addEventListener('change', function(){
     const box = document.getElementById('cardDesc');
+    const dWrap = document.getElementById('cardDetailsWrap');
+    if(dWrap) dWrap.style.display = this.value === 'EMI' ? '' : 'none';
+    if(this.value === 'EMI'){
+      box.style.display = 'none';
+      box.value = 'EMI';
+      const dBox = document.getElementById('cardDetails'); if(dBox) dBox.focus();
+      return;
+    }
     if(this.value === 'Others'){
       box.style.display = '';
       box.value = '';
@@ -7446,6 +7492,7 @@
             <div class="tx-amount expense">${fmt(c.amount)}</div>
           </div>
           ${c.desc ? `<div class="card-desc">${escapeHtml(c.desc)}</div>` : ''}
+          ${c.details ? `<div class="card-desc" style="margin-top:2px;">Details: ${escapeHtml(c.details)}</div>` : ''}
           <div class="card-desc" style="margin-top:2px;">${escapeHtml(c.date || '')}${timeStr}</div>
           ${mappedBadge}
           ${bodyExtra}
@@ -7556,7 +7603,7 @@
     }
     toggleCardBankOther();
     document.getElementById('cardLabel').value = c.cardLabel || '';
-    setCardDescValue(c.desc || '');
+    setCardDescValue(c.desc || '', c.details || '');
     document.getElementById('cardAmount').value = c.amount;
     document.getElementById('cardDate').value = c.date || todayStr();
     document.getElementById('cardTime').value = c.time || nowTimeStr();
@@ -7608,6 +7655,8 @@
     const bank = bankSelVal === 'Other' ? (document.getElementById('cardBankOther').value.trim() || 'Other') : bankSelVal;
     const cardLabel = document.getElementById('cardLabel').value.trim();
     const desc = document.getElementById('cardDesc').value.trim();
+    const detailsEl = document.getElementById('cardDetails');
+    const details = (desc === 'EMI' && detailsEl) ? detailsEl.value.trim() : '';
     const amount = parseFloat(document.getElementById('cardAmount').value);
     const date = document.getElementById('cardDate').value || todayStr();
     const time = document.getElementById('cardTime').value || nowTimeStr();
@@ -7656,7 +7705,7 @@
           id: uid(), country, bank, cardLabel,
           desc: (desc || 'EMI purchase') + ` — installment ${inst.no}/${n}`,
           amount: inst.amount, date: inst.date, time: '00:00', dueDate: inst.date,
-          spendFor: 'own', returnable: 'non-returnable', returnName: '', splits: [], slot: activeCardSlot,
+          spendFor: 'own', returnable: 'non-returnable', returnName: '', splits: [], slot: activeCardSlot, details,
           emi: { groupId, installmentNo: inst.no, totalInstallments: n, principal: amount, ratePerPeriod: rate,
                  frequency, debtType, lenderCountry, lenderBank, perInstallment, originalDesc: desc, purchaseDate: date }
         });
@@ -7674,7 +7723,7 @@
       return;
     }
 
-    const record = { country, bank, cardLabel, desc, amount, date, time, dueDate, spendFor, returnable, returnName, splits, slot: activeCardSlot, paid: false, paidDate: '', appliedDue: '', usedFor: '' };
+    const record = { country, bank, cardLabel, desc, details, amount, date, time, dueDate, spendFor, returnable, returnName, splits, slot: activeCardSlot, paid: false, paidDate: '', appliedDue: '', usedFor: '' };
     if(editingCardId){
       const idx = currentData().cards.findIndex(c => c.id === editingCardId);
       if(idx > -1) currentData().cards[idx] = Object.assign({id: editingCardId}, record);
@@ -8023,7 +8072,13 @@
       if(!groups[key]) groups[key] = { label: cleanDesc, amount: 0 };
       groups[key].amount += Number(c.amount) || 0;
     });
-    const rows = Object.values(groups).sort((a,b) => b.amount - a.amount);
+    // Headings only: every description rolls up into Tea / Lunch / Dinner / Groceries /
+    // Groceries Mess / Others (custom text and EMI entries count under Others).
+    const SA_HEADINGS = ['Tea', 'Lunch', 'Dinner', 'Groceries', 'Groceries Mess', 'Others'];
+    const saCanon = (label) => SA_HEADINGS.find(h => h.toLowerCase() === String(label).trim().toLowerCase()) || 'Others';
+    const headingTotals = {};
+    Object.values(groups).forEach(g => { const h = saCanon(g.label); headingTotals[h] = (headingTotals[h] || 0) + g.amount; });
+    const rows = SA_HEADINGS.filter(h => headingTotals[h] > 0).map(h => ({ label: h, amount: headingTotals[h] })).sort((a,b) => b.amount - a.amount);
     const total = rows.reduce((s,r) => s + r.amount, 0);
 
     if(rows.length === 0){
@@ -8065,8 +8120,7 @@
       Object.keys(buckets).forEach(k => { stats[k] = { total: 0, count: 0, days: new Set() }; });
       cards.forEach(c => {
         const cleanDesc = (c.desc || 'Uncategorized').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'Uncategorized';
-        const gLabel = groups[cleanDesc.toLowerCase()].label.trim();
-        const b = buckets.hasOwnProperty(gLabel) ? gLabel : 'Others';
+        const b = saCanon(cleanDesc);
         stats[b].total += Number(c.amount) || 0;
         stats[b].count += 1;
         stats[b].days.add(c.date);
@@ -8842,11 +8896,13 @@
   }
   function inPeriod(dateStr, period){
     if(!dateStr) return false;
+    if(period.type === 'range') return dateStr >= period.from && dateStr <= period.to;
     if(period.type === 'daily') return dateStr === period.key;
     if(period.type === 'yearly') return dateStr.slice(0,4) === period.key;
     return dateStr.slice(0,7) === period.key;
   }
   function periodLabel(period){
+    if(period.type === 'range') return period.from + ' → ' + period.to;
     if(period.type === 'daily') return period.key;
     if(period.type === 'yearly') return period.key;
     return monthLabel(period.key);
@@ -8866,6 +8922,7 @@
     return ids;
   }
   function periodStartDate(period){
+    if(period.type === 'range') return period.from;
     if(period.type === 'daily') return period.key;
     if(period.type === 'yearly') return period.key + '-01-01';
     return period.key + '-01';
@@ -12444,7 +12501,46 @@
     if(later) later.addEventListener('click', () => { backupBannerDismissed = true; renderBackupReminder(); });
   })();
 
+  // ---- Report by date range (separate From / To section) ----
+  function renderReportRange(){
+    const out = document.getElementById('reportRangeOut');
+    const fromEl = document.getElementById('reportRangeFrom'), toEl = document.getElementById('reportRangeTo');
+    if(!out || !fromEl || !toEl) return;
+    if(!fromEl.value) fromEl.value = todayStr().slice(0,8) + '01';
+    if(!toEl.value) toEl.value = todayStr();
+    let from = fromEl.value, to = toEl.value;
+    if(from > to){ out.innerHTML = '<div class="empty">"From" date is after "To" date.</div>'; return; }
+    const scope = reportScopeVal();
+    const r = computeReportData({ type: 'range', from, to }, scope);
+    const f = scope ? (amt) => fmtCountry(amt, scope) : fmt;
+    const m = (v) => privacyMode ? PRIVACY_MASK : f(v);
+    const net = r.income - r.regularExpense - r.cardTotalSpendAll - r.remitSentTotal;
+    const cell = (label, val) => `<div class="stat"><div class="num">${m(val)}</div><div class="label">${label}</div></div>`;
+    // Card spend grouped under the same headings as Spend analysis
+    const H = ['Tea','Lunch','Dinner','Groceries','Groceries Mess','Others'];
+    const hb = {};
+    r.cardsBySpend.forEach(c => {
+      const d = (c.desc || '').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim();
+      const h = H.find(x => x.toLowerCase() === d.toLowerCase()) || 'Others';
+      hb[h] = (hb[h] || 0) + Number(c.amount || 0);
+    });
+    const catRows = H.filter(h => hb[h] > 0).map(h => `<div class="sub-row"><span class="label">${h}</span><span>${m(hb[h])}</span></div>`).join('');
+    out.innerHTML = `<div style="font-weight:600;margin-bottom:6px;">${from} → ${to}</div>
+      <div class="report-grid">
+        ${cell('income', r.income)}
+        ${cell('expenses (budget)', r.regularExpense)}
+        ${cell('card spend', r.cardTotalSpendAll)}
+        ${(!scope || scope === 'UAE') ? cell('remittance sent', r.remitSentTotal) : cell('remittance received', r.remitReceivedTotal)}
+        ${cell('net (income − outflow)', net)}
+      </div>
+      ${catRows ? `<div style="margin-top:8px;"><div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">Card spend by category</div>${catRows}</div>` : ''}`;
+  }
+  ['reportRangeFrom','reportRangeTo'].forEach(id => {
+    document.addEventListener('change', (e) => { if(e.target && e.target.id === id) renderReportRange(); });
+  });
+
   function renderReport(){
+    try{ renderReportRange(); }catch(e){ console.warn('range report failed', e); }
     populateReportMonths();
     populateDueBankFilter();
     renderGlanceCards();
@@ -14196,8 +14292,110 @@
     if(countryKey === 'UAE') renderUAE(); else renderIndia();
   }
 
+  // ---- Home Country Expenses (Resident Country): money sent to India, split by what it was used for ----
+  const HOME_SENT_KINDS = { home: 'INDIA HOME', investment: 'INDIA INVESTMENT' };
+  function homeSentList(){
+    const c = currentData().countries.UAE;
+    if(!Array.isArray(c.homeSent)) c.homeSent = [];
+    return c.homeSent;
+  }
+  function inrFmt(v){ return privacyMode ? PRIVACY_MASK : '₹' + Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }); }
+  function aedFmt(v){ return privacyMode ? PRIVACY_MASK : 'AED ' + Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+  function homeSplitRowHtml(name, amt){
+    return `<div class="add-row hs-split-row" style="margin:4px 0;">
+      <input type="text" class="hs-split-name" placeholder="Used for (e.g. Groceries, Rent)" value="${escapeHtml(name || '')}" style="flex:2 1 150px;">
+      <input type="number" class="hs-split-amt" placeholder="INR" step="0.01" value="${amt || amt === 0 ? amt : ''}" style="flex:1 1 90px;max-width:130px;">
+      <button type="button" class="del-btn hs-split-del" aria-label="Remove split row">×</button>
+    </div>`;
+  }
+  function buildHomeSentBody(kind){
+    const body = document.getElementById('homeSentBody-' + kind);
+    if(!body) return;
+    if(!body.dataset.built){
+      body.dataset.built = '1';
+      body.innerHTML = `
+        <div class="form-grid">
+          <div><label class="field-label">Sent date</label><input type="date" class="hs-date"></div>
+          <div><label class="field-label">Sent amount (AED)</label><input type="number" class="hs-aed" placeholder="0.00" step="0.01"></div>
+          <div><label class="field-label">INR value</label><input type="number" class="hs-inr" placeholder="auto from exchange rate" step="0.01"></div>
+        </div>
+        <div style="font-size:10.5px;color:var(--ink-soft);margin:4px 0 8px;">INR value fills in from the exchange rate — edit it if your bank gave a different rate.</div>
+        <label class="field-label">Split-up (used for)</label>
+        <div class="hs-splits">${homeSplitRowHtml('', '')}</div>
+        <button type="button" class="add-btn ghost hs-split-add" style="margin-top:4px;">+ Add split row</button>
+        <button type="button" class="add-btn full-width hs-add" style="margin-top:8px;">Add entry</button>
+        <div class="hs-list" style="margin-top:12px;"></div>`;
+      const aed = body.querySelector('.hs-aed'), inr = body.querySelector('.hs-inr');
+      body.querySelector('.hs-date').value = todayStr();
+      aed.addEventListener('input', () => { const v = parseFloat(aed.value); inr.value = isNaN(v) ? '' : (v * (state.exchangeRate || 22.5)).toFixed(2); });
+      body.addEventListener('click', (e) => {
+        if(e.target.closest('.hs-split-add')){ body.querySelector('.hs-splits').insertAdjacentHTML('beforeend', homeSplitRowHtml('', '')); return; }
+        const del = e.target.closest('.hs-split-del');
+        if(del){ const rows = body.querySelectorAll('.hs-split-row'); if(rows.length > 1) del.closest('.hs-split-row').remove(); else { rows[0].querySelectorAll('input').forEach(i => i.value = ''); } return; }
+        if(e.target.closest('.hs-add')){
+          const amountAed = parseFloat(aed.value);
+          if(isNaN(amountAed) || amountAed <= 0){ alert('Enter the sent amount in AED.'); return; }
+          let inrVal = parseFloat(inr.value);
+          if(isNaN(inrVal) || inrVal <= 0) inrVal = amountAed * (state.exchangeRate || 22.5);
+          const splits = [...body.querySelectorAll('.hs-split-row')].map(r => ({
+            name: r.querySelector('.hs-split-name').value.trim(),
+            inr: parseFloat(r.querySelector('.hs-split-amt').value) || 0
+          })).filter(x => x.name || x.inr > 0);
+          homeSentList().push({ id: uid(), kind, date: body.querySelector('.hs-date').value || todayStr(), aed: amountAed, inr: inrVal, splits });
+          aed.value = ''; inr.value = '';
+          body.querySelector('.hs-splits').innerHTML = homeSplitRowHtml('', '');
+          save(); renderHomeSent();
+          return;
+        }
+        const delEntry = e.target.closest('.hs-del');
+        if(delEntry){
+          if(!confirm('Delete this entry?')) return;
+          const list = homeSentList();
+          const i = list.findIndex(x => x.id === delEntry.dataset.id);
+          if(i > -1){ list.splice(i, 1); save(); renderHomeSent(); }
+        }
+      });
+    }
+  }
+  function renderHomeSent(){
+    if(!document.getElementById('homeSentBody-home')) return;
+    const all = homeSentList();
+    const sumEl = document.getElementById('homeSentSummary');
+    ['home', 'investment'].forEach(kind => {
+      buildHomeSentBody(kind);
+      const body = document.getElementById('homeSentBody-' + kind);
+      const items = all.filter(x => x.kind === kind).sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+      const totAed = items.reduce((t,x) => t + Number(x.aed || 0), 0);
+      const totInr = items.reduce((t,x) => t + Number(x.inr || 0), 0);
+      const listEl = body.querySelector('.hs-list');
+      if(!items.length){ listEl.innerHTML = '<div class="empty" style="padding:6px 0;">Nothing logged yet.</div>'; return; }
+      listEl.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">Total sent: ${aedFmt(totAed)} · ${inrFmt(totInr)}</div>` + items.map(x => {
+        const used = (x.splits || []).reduce((t,sp) => t + Number(sp.inr || 0), 0);
+        const left = Number(x.inr || 0) - used;
+        const splitLines = (x.splits || []).map(sp => `<div style="font-size:12px;display:flex;justify-content:space-between;gap:8px;"><span>${escapeHtml(sp.name || '(no name)')}</span><span>${inrFmt(sp.inr)}</span></div>`).join('');
+        const leftLine = (x.splits || []).length && Math.abs(left) > 0.5 ? `<div style="font-size:11px;color:var(--ink-soft);">${left > 0 ? 'Not yet split' : 'Split exceeds INR value by'}: ${inrFmt(Math.abs(left))}</div>` : '';
+        return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <div><strong>${escapeHtml(x.date || '')}</strong><div style="font-size:12px;color:var(--ink-soft);">${aedFmt(x.aed)} → ${inrFmt(x.inr)}</div></div>
+            <button type="button" class="del-btn hs-del" data-id="${x.id}" aria-label="Delete entry">×</button>
+          </div>
+          ${splitLines ? `<div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;"><div style="font-size:11px;color:var(--ink-soft);">Used for</div>${splitLines}${leftLine}</div>` : ''}
+        </div>`;
+      }).join('');
+    });
+    if(sumEl){
+      const h = all.filter(x => x.kind === 'home'), iv = all.filter(x => x.kind === 'investment');
+      const s = (arr, k) => arr.reduce((t,x) => t + Number(x[k] || 0), 0);
+      sumEl.innerHTML = `<div style="font-size:12.5px;line-height:1.6;background:var(--paper-deep);border-radius:10px;padding:8px 12px;">
+        India Home: <strong>${aedFmt(s(h,'aed'))}</strong> · ${inrFmt(s(h,'inr'))}<br>
+        India Investment: <strong>${aedFmt(s(iv,'aed'))}</strong> · ${inrFmt(s(iv,'inr'))}<br>
+        All sent to India: <strong>${aedFmt(s(all,'aed'))}</strong> · ${inrFmt(s(all,'inr'))}</div>`;
+    }
+  }
+
   function renderUAE(){
     const c = currentData().countries.UAE;
+    try{ renderHomeSent(); }catch(e){ console.warn('home sent render failed', e); }
     renderRemittances('UAE');
     renderDebts('uaeDebtList', c.debts, 'UAE',
       (id) => { c.debts = c.debts.filter(x=>x.id!==id); if(editingDebtId('UAE')===id) cancelEditDebtCountry('UAE'); save(); renderUAE(); },
@@ -18128,7 +18326,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.10.0', APP_VERSION_DATE = '3 Nov 2026';
+    const APP_VERSION = '1.11.0', APP_VERSION_DATE = '6 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
