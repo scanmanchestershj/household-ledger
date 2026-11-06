@@ -1439,6 +1439,14 @@
         <button type="button" class="add-btn ghost privacy-eye" id="privacyToggleBtn" title="Show amounts" aria-label="Show amounts" style="padding:6px 10px; font-size:14px; line-height:1; flex:0 0 auto;">🙈</button>
       </div>
 
+      <div class="accordion" data-key="report-home-country-expenses">
+        <button type="button" class="accordion-header"><span>Resident Country → Home Country Expenses</span><span class="accordion-arrow">▸</span></button>
+        <div class="accordion-body">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Money sent to India (INDIA HOME and INDIA INVESTMENT) and what it was used for, for the period selected above.</div>
+          <div id="reportHomeSentOut"></div>
+        </div>
+      </div>
+
       <div class="accordion" data-key="report-date-range">
         <button type="button" class="accordion-header"><span>Report by date range</span><span class="accordion-arrow">▸</span></button>
         <div class="accordion-body">
@@ -8067,14 +8075,14 @@
     cards.forEach(c => {
       // strip the " — installment N/M" suffix EMI records get, so all of an
       // EMI's installments still roll up under their original category
-      const cleanDesc = (c.desc || 'Uncategorized').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'Uncategorized';
+      const cleanDesc = c.emi ? 'EMI' : ((c.desc || 'Uncategorized').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'Uncategorized');
       const key = cleanDesc.toLowerCase();
       if(!groups[key]) groups[key] = { label: cleanDesc, amount: 0 };
       groups[key].amount += Number(c.amount) || 0;
     });
     // Headings only: every description rolls up into Tea / Lunch / Dinner / Groceries /
     // Groceries Mess / Others (custom text and EMI entries count under Others).
-    const SA_HEADINGS = ['Tea', 'Lunch', 'Dinner', 'Groceries', 'Groceries Mess', 'Others'];
+    const SA_HEADINGS = ['Tea', 'Lunch', 'Dinner', 'Groceries', 'Groceries Mess', 'EMI', 'Others'];
     const saCanon = (label) => SA_HEADINGS.find(h => h.toLowerCase() === String(label).trim().toLowerCase()) || 'Others';
     const headingTotals = {};
     Object.values(groups).forEach(g => { const h = saCanon(g.label); headingTotals[h] = (headingTotals[h] || 0) + g.amount; });
@@ -8108,7 +8116,7 @@
     // shown individually (matching the Cards description presets), everything
     // else rolled up into one "Others" figure.
     if(summaryEl){
-      const buckets = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, 'Groceries Mess': 0, Others: 0 };
+      const buckets = { Tea: 0, Lunch: 0, Dinner: 0, Groceries: 0, 'Groceries Mess': 0, EMI: 0, Others: 0 };
       rows.forEach(r => {
         const label = r.label.trim();
         if(buckets.hasOwnProperty(label)) buckets[label] += r.amount;
@@ -8119,7 +8127,7 @@
       const stats = {};
       Object.keys(buckets).forEach(k => { stats[k] = { total: 0, count: 0, days: new Set() }; });
       cards.forEach(c => {
-        const cleanDesc = (c.desc || 'Uncategorized').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'Uncategorized';
+        const cleanDesc = c.emi ? 'EMI' : ((c.desc || 'Uncategorized').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'Uncategorized');
         const b = saCanon(cleanDesc);
         stats[b].total += Number(c.amount) || 0;
         stats[b].count += 1;
@@ -12517,10 +12525,10 @@
     const net = r.income - r.regularExpense - r.cardTotalSpendAll - r.remitSentTotal;
     const cell = (label, val) => `<div class="stat"><div class="num">${m(val)}</div><div class="label">${label}</div></div>`;
     // Card spend grouped under the same headings as Spend analysis
-    const H = ['Tea','Lunch','Dinner','Groceries','Groceries Mess','Others'];
+    const H = ['Tea','Lunch','Dinner','Groceries','Groceries Mess','EMI','Others'];
     const hb = {};
     r.cardsBySpend.forEach(c => {
-      const d = (c.desc || '').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim();
+      const d = c.emi ? 'EMI' : (c.desc || '').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim();
       const h = H.find(x => x.toLowerCase() === d.toLowerCase()) || 'Others';
       hb[h] = (hb[h] || 0) + Number(c.amount || 0);
     });
@@ -12539,7 +12547,28 @@
     document.addEventListener('change', (e) => { if(e.target && e.target.id === id) renderReportRange(); });
   });
 
+  function renderReportHomeSent(){
+    const out = document.getElementById('reportHomeSentOut');
+    if(!out) return;
+    const period = currentPeriod();
+    const all = (currentData().countries.UAE.homeSent || []).filter(x => inPeriod(x.date, period));
+    if(!all.length){ out.innerHTML = '<div class="empty" style="padding:6px 0;">Nothing sent to India in ' + escapeHtml(periodLabel(period)) + '.</div>'; return; }
+    const sum = (arr, k) => arr.reduce((t,x) => t + Number(x[k] || 0), 0);
+    const block = (kind, title) => {
+      const items = all.filter(x => x.kind === kind).sort((a,b) => (a.date || '').localeCompare(b.date || ''));
+      if(!items.length) return '';
+      const used = {};
+      items.forEach(x => (x.splits || []).forEach(sp => { const k = (sp.name || '(no name)').trim(); used[k] = (used[k] || 0) + Number(sp.inr || 0); }));
+      const usedRows = Object.keys(used).sort((a,b) => used[b] - used[a]).map(k => `<div class="sub-row"><span class="label">${escapeHtml(k)}</span><span>${inrFmt(used[k])}</span></div>`).join('');
+      const rows = items.map(x => `<div class="sub-row"><span class="label">${escapeHtml(x.date || '')}</span><span>${aedFmt(x.aed)} → ${inrFmt(x.inr)}</span></div>`).join('');
+      return `<div style="margin-bottom:12px;"><div style="font-weight:700;">${title} — ${aedFmt(sum(items,'aed'))} · ${inrFmt(sum(items,'inr'))}</div>${rows}${usedRows ? `<div style="font-size:11px;color:var(--ink-soft);margin:6px 0 2px;">Used for</div>${usedRows}` : ''}</div>`;
+    };
+    out.innerHTML = block('home','INDIA HOME') + block('investment','INDIA INVESTMENT')
+      + `<div style="font-weight:700;border-top:1px solid var(--line);padding-top:6px;">Total sent: ${aedFmt(sum(all,'aed'))} · ${inrFmt(sum(all,'inr'))}</div>`;
+  }
+
   function renderReport(){
+    try{ renderReportHomeSent(); }catch(e){ console.warn('home sent report failed', e); }
     try{ renderReportRange(); }catch(e){ console.warn('range report failed', e); }
     populateReportMonths();
     populateDueBankFilter();
@@ -18326,7 +18355,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.11.0', APP_VERSION_DATE = '6 Nov 2026';
+    const APP_VERSION = '1.11.1', APP_VERSION_DATE = '6 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
