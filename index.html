@@ -14357,6 +14357,11 @@
       const aed = body.querySelector('.hs-aed'), inr = body.querySelector('.hs-inr');
       body.querySelector('.hs-date').value = todayStr();
       aed.addEventListener('input', () => { const v = parseFloat(aed.value); inr.value = isNaN(v) ? '' : (v * (state.exchangeRate || 22.5)).toFixed(2); });
+      body.addEventListener('input', (e) => {
+        if(!e.target.classList.contains('hs-en-aed')) return;
+        const box = e.target.closest('.hs-en-box'); const v = parseFloat(e.target.value);
+        if(box) box.querySelector('.hs-en-inr').value = isNaN(v) ? '' : (v * (state.exchangeRate || 22.5)).toFixed(2);
+      });
       body.addEventListener('click', (e) => {
         if(e.target.closest('.hs-split-add')){ body.querySelector('.hs-splits').insertAdjacentHTML('beforeend', homeSplitRowHtml('', '')); return; }
         const del = e.target.closest('.hs-split-del');
@@ -14375,6 +14380,21 @@
           body.querySelector('.hs-splits').innerHTML = homeSplitRowHtml('', '');
           save(); renderHomeSent();
           return;
+        }
+        const enEdit = e.target.closest('.hs-en-edit');
+        if(enEdit){ window.__hsEntryEdit = enEdit.dataset.id; renderHomeSent(); return; }
+        const enCancel = e.target.closest('.hs-en-cancel');
+        if(enCancel){ window.__hsEntryEdit = null; renderHomeSent(); return; }
+        const enSave = e.target.closest('.hs-en-save');
+        if(enSave){
+          const box = enSave.closest('.hs-en-box');
+          const entry = homeSentList().find(x => x.id === enSave.dataset.id);
+          const a = parseFloat(box.querySelector('.hs-en-aed').value);
+          if(isNaN(a) || a <= 0){ alert('Enter the sent amount in AED.'); return; }
+          let n = parseFloat(box.querySelector('.hs-en-inr').value);
+          if(isNaN(n) || n <= 0) n = a * (state.exchangeRate || 22.5);
+          if(entry){ entry.date = box.querySelector('.hs-en-date').value || entry.date; entry.aed = a; entry.inr = n; save(); }
+          window.__hsEntryEdit = null; renderHomeSent(); return;
         }
         const spEdit = e.target.closest('.hs-sp-edit');
         if(spEdit){ window.__hsEdit = { id: spEdit.dataset.id, idx: Number(spEdit.dataset.idx) }; renderHomeSent(); return; }
@@ -14442,10 +14462,20 @@
         }).join('');
         const leftLine = (x.splits || []).length && Math.abs(left) > 0.5 ? `<div style="font-size:11px;color:var(--ink-soft);">${left > 0 ? 'Not yet split' : 'Split exceeds INR value by'}: ${inrFmt(Math.abs(left))}</div>` : '';
         return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          ${window.__hsEntryEdit === x.id ? `<div class="hs-en-box">
+            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+              <input type="date" class="hs-en-date" value="${escapeHtml(x.date || '')}" style="flex:1 1 130px;">
+              <input type="number" class="hs-en-aed" value="${x.aed}" step="0.01" placeholder="AED" style="flex:1 1 90px;max-width:120px;">
+              <input type="number" class="hs-en-inr" value="${x.inr}" step="0.01" placeholder="INR" style="flex:1 1 90px;max-width:130px;">
+              <button type="button" class="edit-btn hs-en-save" data-id="${x.id}" aria-label="Save entry">✓</button>
+              <button type="button" class="del-btn hs-en-cancel" aria-label="Cancel">↩</button>
+            </div></div>` : `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
             <div><strong>${escapeHtml(x.date || '')}</strong><div style="font-size:12px;color:var(--ink-soft);">${aedFmt(x.aed)} → ${inrFmt(x.inr)}</div></div>
-            <button type="button" class="del-btn hs-del" data-id="${x.id}" aria-label="Delete entry">×</button>
-          </div>
+            <span style="display:flex;gap:6px;align-items:center;">
+              <button type="button" class="edit-btn hs-en-edit" data-id="${x.id}" aria-label="Edit entry">✎</button>
+              <button type="button" class="del-btn hs-del" data-id="${x.id}" aria-label="Delete entry">×</button>
+            </span>
+          </div>`}
           ${splitLines ? `<div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;"><div style="font-size:11px;color:var(--ink-soft);">Used for</div>${splitLines}${leftLine}</div>` : ''}
         </div>`;
       }).join('');
@@ -18393,7 +18423,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.11.2', APP_VERSION_DATE = '6 Nov 2026';
+    const APP_VERSION = '1.11.3', APP_VERSION_DATE = '6 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
