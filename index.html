@@ -12561,7 +12561,9 @@
       items.forEach(x => (x.splits || []).forEach(sp => { const k = (sp.name || '(no name)').trim(); used[k] = (used[k] || 0) + Number(sp.inr || 0); }));
       const usedRows = Object.keys(used).sort((a,b) => used[b] - used[a]).map(k => `<div class="sub-row"><span class="label">${escapeHtml(k)}</span><span>${inrFmt(used[k])}</span></div>`).join('');
       const rows = items.map(x => `<div class="sub-row"><span class="label">${escapeHtml(x.date || '')}</span><span>${aedFmt(x.aed)} → ${inrFmt(x.inr)}</span></div>`).join('');
-      return `<div style="margin-bottom:12px;"><div style="font-weight:700;">${title} — ${aedFmt(sum(items,'aed'))} · ${inrFmt(sum(items,'inr'))}</div>${rows}${usedRows ? `<div style="font-size:11px;color:var(--ink-soft);margin:6px 0 2px;">Used for</div>${usedRows}` : ''}</div>`;
+      const spentK = Object.keys(used).reduce((t,k) => t + used[k], 0);
+      const balK = sum(items,'inr') - spentK;
+      return `<div style="margin-bottom:12px;"><div style="font-weight:700;">${title} — ${aedFmt(sum(items,'aed'))} · ${inrFmt(sum(items,'inr'))}</div>${rows}${usedRows ? `<div style="font-size:11px;color:var(--ink-soft);margin:6px 0 2px;">Used for</div>${usedRows}` : ''}<div class="sub-row" style="font-weight:700;"><span class="label">Spent</span><span>${inrFmt(spentK)}</span></div><div class="sub-row" style="font-weight:700;"><span class="label">${balK < -0.5 ? 'Over by' : 'Balance'}</span><span>${inrFmt(Math.abs(balK))}</span></div></div>`;
     };
     out.innerHTML = block('home','INDIA HOME') + block('investment','INDIA INVESTMENT')
       + `<div style="font-weight:700;border-top:1px solid var(--line);padding-top:6px;">Total sent: ${aedFmt(sum(all,'aed'))} · ${inrFmt(sum(all,'inr'))}</div>`;
@@ -14381,6 +14383,17 @@
           save(); renderHomeSent();
           return;
         }
+        const spAdd = e.target.closest('.hs-sp-add');
+        if(spAdd){
+          const line = spAdd.closest('.hs-sp-addrow');
+          const entry = homeSentList().find(x => x.id === spAdd.dataset.id);
+          const nm = line.querySelector('.hs-add-name').value.trim();
+          const amt = parseFloat(line.querySelector('.hs-add-amt').value) || 0;
+          if(!entry || (!nm && !(amt > 0))){ alert('Enter what it was used for and the INR amount.'); return; }
+          if(!Array.isArray(entry.splits)) entry.splits = [];
+          entry.splits.push({ name: nm, inr: amt });
+          save(); renderHomeSent(); return;
+        }
         const enEdit = e.target.closest('.hs-en-edit');
         if(enEdit){ window.__hsEntryEdit = enEdit.dataset.id; renderHomeSent(); return; }
         const enCancel = e.target.closest('.hs-en-cancel');
@@ -14440,7 +14453,8 @@
       const totInr = items.reduce((t,x) => t + Number(x.inr || 0), 0);
       const listEl = body.querySelector('.hs-list');
       if(!items.length){ listEl.innerHTML = '<div class="empty" style="padding:6px 0;">Nothing logged yet.</div>'; return; }
-      listEl.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">Total sent: ${aedFmt(totAed)} · ${inrFmt(totInr)}</div>` + items.map(x => {
+      const totUsed = items.reduce((t,x) => t + (x.splits || []).reduce((a,sp) => a + Number(sp.inr || 0), 0), 0);
+      listEl.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">Total sent: ${aedFmt(totAed)} · ${inrFmt(totInr)}<br>Spent: ${inrFmt(totUsed)} · ${totInr - totUsed < -0.5 ? 'Over by ' + inrFmt(totUsed - totInr) : 'Balance: ' + inrFmt(totInr - totUsed)}</div>` + items.map(x => {
         const used = (x.splits || []).reduce((t,sp) => t + Number(sp.inr || 0), 0);
         const left = Number(x.inr || 0) - used;
         const ed = window.__hsEdit;
@@ -14460,7 +14474,12 @@
               <button type="button" class="del-btn hs-sp-del" data-id="${x.id}" data-idx="${i}" aria-label="Delete split-up row">×</button>
             </span></div>`;
         }).join('');
-        const leftLine = (x.splits || []).length && Math.abs(left) > 0.5 ? `<div style="font-size:11px;color:var(--ink-soft);">${left > 0 ? 'Not yet split' : 'Split exceeds INR value by'}: ${inrFmt(Math.abs(left))}</div>` : '';
+        const leftLine = `<div style="font-size:12.5px;font-weight:700;margin-top:6px;padding:6px 8px;border-radius:8px;background:var(--paper-deep);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;"><span>Sent ${inrFmt(x.inr)}</span><span>Spent ${inrFmt(used)}</span><span style="color:${left < -0.5 ? '#b3261e' : 'var(--teal-dark, inherit)'};">${left < -0.5 ? 'Over by ' + inrFmt(-left) : 'Balance ' + inrFmt(left)}</span></div>`;
+        const addRow = `<div class="hs-sp-addrow" style="display:flex;gap:6px;align-items:center;margin-top:6px;">
+          <input type="text" class="hs-add-name" placeholder="Used for (e.g. Rent)" style="flex:2 1 120px;">
+          <input type="number" class="hs-add-amt" placeholder="INR" step="0.01" style="flex:1 1 80px;max-width:110px;">
+          <button type="button" class="add-btn hs-sp-add" data-id="${x.id}" style="padding:6px 10px;">+ Add split</button>
+        </div>`;
         return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
           ${window.__hsEntryEdit === x.id ? `<div class="hs-en-box">
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
@@ -14476,17 +14495,19 @@
               <button type="button" class="del-btn hs-del" data-id="${x.id}" aria-label="Delete entry">×</button>
             </span>
           </div>`}
-          ${splitLines ? `<div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;"><div style="font-size:11px;color:var(--ink-soft);">Used for</div>${splitLines}${leftLine}</div>` : ''}
+          <div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;"><div style="font-size:11px;color:var(--ink-soft);">Split-up (used for)</div>${splitLines || '<div style="font-size:12px;color:var(--ink-soft);">No split added yet.</div>'}${addRow}${leftLine}</div>
         </div>`;
       }).join('');
     });
     if(sumEl){
       const h = all.filter(x => x.kind === 'home'), iv = all.filter(x => x.kind === 'investment');
       const s = (arr, k) => arr.reduce((t,x) => t + Number(x[k] || 0), 0);
+      const spentAll = all.reduce((t,x) => t + (x.splits || []).reduce((a,sp) => a + Number(sp.inr || 0), 0), 0);
       sumEl.innerHTML = `<div style="font-size:12.5px;line-height:1.6;background:var(--paper-deep);border-radius:10px;padding:8px 12px;">
         India Home: <strong>${aedFmt(s(h,'aed'))}</strong> · ${inrFmt(s(h,'inr'))}<br>
         India Investment: <strong>${aedFmt(s(iv,'aed'))}</strong> · ${inrFmt(s(iv,'inr'))}<br>
-        All sent to India: <strong>${aedFmt(s(all,'aed'))}</strong> · ${inrFmt(s(all,'inr'))}</div>`;
+        All sent to India: <strong>${aedFmt(s(all,'aed'))}</strong> · ${inrFmt(s(all,'inr'))}<br>
+        Spent: <strong>${inrFmt(spentAll)}</strong> · Balance: <strong>${inrFmt(s(all,'inr') - spentAll)}</strong></div>`;
     }
   }
 
@@ -18423,7 +18444,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.11.3', APP_VERSION_DATE = '6 Nov 2026';
+    const APP_VERSION = '1.11.4', APP_VERSION_DATE = '6 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
