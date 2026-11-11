@@ -2945,6 +2945,20 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-monthly-split" style="margin-top:0;margin-bottom:12px;">
+              <button type="button" class="accordion-header"><span>💸 Monthly Investment Split</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">Enter what you can invest this month (e.g. 25000). Before splitting, you choose which sub-headings to rescan/refresh, then the amount is divided across the best stocks from those scans: Top Picks, Buffett value screen, Strong Buy / Buy holdings and watchlist, and Early Compounders. Sell-rated stocks and stocks with results within 3 days are held back.</div>
+                <div class="add-row" style="margin-bottom:8px;">
+                  <input type="number" id="msAmount" placeholder="Monthly amount ₹ (e.g. 25000)" step="100" min="0" inputmode="numeric" style="flex:1;">
+                  <button type="button" class="add-btn" id="msSplitBtn">Split</button>
+                </div>
+                <div id="msStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="msResult" style="margin-top:10px;"></div>
+                <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">A screening aid, not financial advice. Whole shares only, so a small amount is left over. Check prices at your broker before buying.</div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-fundamentals">
               <button type="button" class="accordion-header"><span>📋 Fundamentals — Market Cap to RSI</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -11559,6 +11573,169 @@
   if(scrCompBtn) scrCompBtn.addEventListener('click', () => runCompounder());
   try{ renderCompounder(); }catch(e){}
 
+  // ---- Monthly Investment Split: enter an amount, choose what to rescan, then divide it across the best stocks ----
+  const MS_MAX_STOCKS = 6, MS_CAP_PCT = 30, MS_MIN_TICKET = 2000;
+  const msFmt = v => '\u20b9' + Math.round(v).toLocaleString('en-IN');
+  function msGather(){
+    const scans = state.screenerScans || {};
+    const pool = {};
+    const get = (sym, name) => (pool[sym] = pool[sym] || { symbol: sym, name: name || sym, price: null, verdict: null, zone: null, bscore: null, tags: [], pts: 0, sell: false });
+    const vp = { 'Strong Buy': 30, 'Buy': 20, 'Neutral': 8 };
+    const addVerdict = (r, tag) => {
+      if(!r || r.error || !r.symbol) return;
+      const c = get(r.symbol, r.name);
+      if(r.price) c.price = r.price;
+      if(r.verdict){ c.verdict = r.verdict; if(r.verdict === 'Sell' || r.verdict === 'Strong Sell') c.sell = true; }
+      if(tag && c.tags.indexOf(tag) < 0) c.tags.push(tag);
+    };
+    ((scans.holdings && scans.holdings.results) || []).forEach(r => addVerdict(r, 'Holding'));
+    ((scans.custom && scans.custom.results) || []).forEach(r => addVerdict(r, 'Watchlist'));
+    ((scans.buffett && scans.buffett.results) || []).forEach(r => {
+      if(!r || r.error || !r.symbol) return;
+      if(r.zone !== 'ENTRY' && r.zone !== 'WATCH') return;
+      addVerdict(r, 'Buffett ' + (r.zone === 'ENTRY' ? 'entry' : 'watch'));
+      const c = pool[r.symbol]; c.zone = r.zone; c.bscore = r.score;
+    });
+    ((scans.toppicks && scans.toppicks.picks) || []).forEach(r => { addVerdict(r, 'Top pick'); const c = pool[r.symbol]; if(c){ c.zone = c.zone || r.zone; c.bscore = c.bscore != null ? c.bscore : r.score; } });
+    ((scans.compounder && scans.compounder.picks) || []).forEach(r => { addVerdict(Object.assign({}, r, { verdict: null }), 'Early compounder'); });
+    const earn = {};
+    ((scans.earnings && scans.earnings.rows) || []).forEach(r => { if(r.date && r.daysAway != null && r.daysAway >= 0 && r.daysAway <= 3) earn[r.symbol] = r; });
+    const cands = [], held = [];
+    Object.values(pool).forEach(c => {
+      if(!(c.price > 0)) return;
+      const isSignal = c.tags.some(t => t !== 'Holding' && t !== 'Watchlist') || c.verdict === 'Strong Buy' || c.verdict === 'Buy';
+      if(!isSignal) return;
+      if(c.sell){ held.push({ name: c.name, why: 'rated ' + c.verdict }); return; }
+      if(earn[c.symbol]){ held.push({ name: c.name, why: 'results in ' + earn[c.symbol].daysAway + ' day' + (earn[c.symbol].daysAway === 1 ? '' : 's') }); return; }
+      let pts = 5 + (vp[c.verdict] || 0);
+      if(c.bscore != null) pts += c.bscore * 0.4;
+      if(c.zone === 'ENTRY') pts += 15; else if(c.zone === 'WATCH') pts += 7;
+      if(c.tags.indexOf('Top pick') >= 0) pts += 15;
+      if(c.tags.indexOf('Early compounder') >= 0) pts += 10;
+      c.pts = pts; cands.push(c);
+    });
+    cands.sort((a, b) => b.pts - a.pts);
+    return { cands, held };
+  }
+  function msAllocate(amount, cands){
+    let n = Math.min(MS_MAX_STOCKS, cands.length, Math.max(1, Math.floor(amount / MS_MIN_TICKET)));
+    const picks = cands.slice(0, n).map(c => Object.assign({}, c));
+    if(!picks.length) return { rows: [], left: amount };
+    // proportional to points, capped per stock, excess redistributed
+    const cap = picks.length === 1 ? 1 : Math.max(MS_CAP_PCT / 100, 1 / picks.length);
+    let w = picks.map(p => p.pts), fixed = picks.map(() => false), share = picks.map(() => 0);
+    for(let iter = 0; iter < 10; iter++){
+      const freeW = w.reduce((a, x, i) => a + (fixed[i] ? 0 : x), 0);
+      const used = share.reduce((a, x, i) => a + (fixed[i] ? x : 0), 0);
+      let over = false;
+      picks.forEach((p, i) => { if(!fixed[i]) share[i] = freeW ? (1 - used) * w[i] / freeW : 0; });
+      picks.forEach((p, i) => { if(!fixed[i] && share[i] > cap + 1e-9){ share[i] = cap; fixed[i] = true; over = true; } });
+      if(!over) break;
+    }
+    const rows = picks.map((p, i) => ({ p, target: amount * share[i], qty: Math.floor(amount * share[i] / p.price) }));
+    let spent = rows.reduce((a, r) => a + r.qty * r.p.price, 0);
+    // use leftover cash on the stock furthest below its target
+    for(let g = 0; g < 200; g++){
+      const left = amount - spent;
+      const opts = rows.filter(r => r.p.price <= left + 1e-9).sort((a, b) => (b.target - b.qty * b.p.price) - (a.target - a.qty * a.p.price));
+      if(!opts.length) break;
+      const r = opts[0];
+      if(r.target - r.qty * r.p.price < r.p.price * 0.3 && g > 0 && rows.every(x => x.target - x.qty * x.p.price < x.p.price * 0.3)) break;
+      r.qty++; spent += r.p.price;
+    }
+    return { rows: rows.filter(r => r.qty > 0), left: amount - spent };
+  }
+  function msRender(plan){
+    const box = document.getElementById('msResult');
+    if(!box) return;
+    if(!plan){ box.innerHTML = ''; return; }
+    if(!plan.rows.length){
+      box.innerHTML = `<div class="empty" style="padding:8px 0;">No stock qualifies for fresh money right now (no Buy/Strong Buy or Entry-zone stock with a price). Rescan the sub-headings and try again.</div>` + msHeldHtml(plan.held);
+      return;
+    }
+    const body = plan.rows.map(r => {
+      const spent = r.qty * r.price;
+      return `<tr class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}<br><span style="font-size:9.5px;color:var(--ink-soft);">${escapeHtml(r.tags.join(' \u00b7 '))}${r.verdict ? ' \u00b7 ' + escapeHtml(r.verdict === 'Neutral' ? 'Hold' : r.verdict) : ''}</span></td><td style="text-align:right;">${msFmt(spent)}<br><span style="font-size:9.5px;color:var(--ink-soft);">${(spent / plan.amount * 100).toFixed(0)}%</span></td><td style="text-align:right;font-size:11px;">${r.qty} \u00d7 ${Number(r.price).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td></tr>`;
+    }).join('');
+    const invested = plan.amount - plan.left;
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Plan for ${msFmt(plan.amount)} \u00b7 calculated ${escapeHtml(plan.date)} \u00b7 max ${MS_CAP_PCT}% in any one stock</div>`
+      + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);"><td>Stock</td><td style="text-align:right;">Invest</td><td style="text-align:right;">Shares \u00d7 price</td></tr>${body}</table>`
+      + `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-top:8px;padding-top:6px;border-top:1px solid var(--line,#e5e5e5);"><span>Total invested</span><span>${msFmt(invested)}</span></div>`
+      + `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);"><span>Left over (part-share)</span><span>${msFmt(plan.left)}</span></div>`
+      + msHeldHtml(plan.held);
+  }
+  function msHeldHtml(held){
+    if(!held || !held.length) return '';
+    return `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Held back: ${held.map(h => escapeHtml(h.name) + ' (' + escapeHtml(h.why) + ')').join(', ')}</div>`;
+  }
+  function msCompute(amount){
+    const g = msGather();
+    const a = msAllocate(amount, g.cands);
+    const plan = { amount, date: todayStr(), rows: a.rows.map(r => Object.assign({ target: r.target, qty: r.qty }, { symbol: r.p.symbol, name: r.p.name, price: r.p.price, tags: r.p.tags, verdict: r.p.verdict })), left: a.left, held: g.held };
+    state.monthlyInvest = plan;
+    save();
+    msRender(plan);
+    const st = document.getElementById('msStatus');
+    if(st) st.textContent = plan.rows.length ? `\u2713 Split across ${plan.rows.length} stock${plan.rows.length === 1 ? '' : 's'}.` : 'No stock qualified.';
+  }
+  function msAgeLabel(key){
+    const sc = state.screenerScans && state.screenerScans[key];
+    if(!sc || !sc.date) return '<span style="color:#c0392b;">never run</span>';
+    return sc.date === todayStr() ? '<span style="color:#1e8449;">updated today</span>' : '<span style="color:#b9770e;">last ' + escapeHtml(sc.date) + '</span>';
+  }
+  function msAskRescan(amount){
+    return new Promise(resolve => {
+      const old = document.getElementById('msModal'); if(old) old.remove();
+      const items = [
+        ['holdings', 'My Holdings \u2014 Live Verdicts', true], ['custom', 'My Watchlist \u2014 Live Verdicts', true],
+        ['buffett', 'Warren Buffett \u2014 Value Screen (slow)', true], ['toppicks', 'Top Picks Today', true],
+        ['earnings', 'Earnings & Results Calendar', true], ['compounder', 'Early Compounder scan (very slow, a few minutes)', false]
+      ];
+      const m = document.createElement('div');
+      m.id = 'msModal';
+      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+      m.innerHTML = `<div style="background:var(--card,#fff);color:var(--ink,#222);border-radius:14px;max-width:420px;width:100%;padding:16px;max-height:90vh;overflow-y:auto;"><div style="font-weight:700;font-size:15px;margin-bottom:4px;">Rescan before splitting ${msFmt(amount)}?</div><div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Fresh scans give a better split. Tick the sub-headings to refresh.</div>${items.map(([k, l, on]) => `<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 0;"><input type="checkbox" data-k="${k}" ${on ? 'checked' : ''}><span style="flex:1;">${l}</span><span style="font-size:10px;">${msAgeLabel(k)}</span></label>`).join('')}<div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;"><button type="button" class="add-btn" id="msGo">\ud83d\udd04 Rescan selected &amp; calculate</button><button type="button" class="add-btn ghost" id="msSkip">Calculate with existing data</button><button type="button" class="add-btn ghost" id="msCancel">Cancel</button></div></div>`;
+      document.body.appendChild(m);
+      const done = v => { m.remove(); resolve(v); };
+      m.querySelector('#msGo').addEventListener('click', () => done([].slice.call(m.querySelectorAll('input[data-k]:checked')).map(x => x.dataset.k)));
+      m.querySelector('#msSkip').addEventListener('click', () => done([]));
+      m.querySelector('#msCancel').addEventListener('click', () => done(null));
+      m.addEventListener('click', e => { if(e.target === m) done(null); });
+    });
+  }
+  let msBusy = false;
+  async function msStart(){
+    if(msBusy) return;
+    const input = document.getElementById('msAmount'), st = document.getElementById('msStatus');
+    const amount = Math.round(Number(input && input.value));
+    if(!(amount > 0)){ if(st) st.textContent = 'Enter a monthly amount first, e.g. 25000.'; return; }
+    msBusy = true;
+    try{
+      const keys = await msAskRescan(amount);
+      if(keys === null){ if(st) st.textContent = 'Cancelled.'; return; }
+      const steps = { holdings: () => ensureHoldingsScan(true), custom: () => ensureCustomScan(true), buffett: () => ensureBuffettScan(true), toppicks: () => ensureTopPicks(true), earnings: () => ensureEarnings(true), compounder: () => runCompounder() };
+      const order = ['holdings', 'custom', 'buffett', 'toppicks', 'earnings', 'compounder'].filter(k => keys.indexOf(k) >= 0);
+      for(let i = 0; i < order.length; i++){
+        if(st) st.textContent = `Rescanning ${i + 1} of ${order.length}: ${order[i]}\u2026 (keep this screen open)`;
+        try{ await steps[order[i]](); }catch(e){}
+      }
+      if(st) st.textContent = 'Calculating split\u2026';
+      state.monthlyInvestAmount = amount;
+      msCompute(amount);
+    }catch(e){
+      if(st) st.textContent = '\u26a0\ufe0f Split failed: ' + (e && e.message ? e.message : 'unknown error');
+    }finally{ msBusy = false; }
+  }
+  const msBtn = document.getElementById('msSplitBtn'), msInput = document.getElementById('msAmount');
+  if(msBtn) msBtn.addEventListener('click', msStart);
+  if(msInput){
+    if(state.monthlyInvestAmount) msInput.value = state.monthlyInvestAmount;
+    msInput.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); msInput.blur(); } });
+    let msLast = msInput.value;
+    msInput.addEventListener('change', () => { if(msInput.value && msInput.value !== msLast){ msLast = msInput.value; msStart(); } });
+  }
+  try{ if(state.monthlyInvest) msRender(state.monthlyInvest); }catch(e){}
+
   // ---- Historical backtest: the technical half of the verdict (SMA50/200, RSI-14, MACD) replayed on 5 years of daily prices ----
   function btTechScores(c){
     const n = c.length, sc = new Array(n).fill(null);
@@ -18461,7 +18638,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.12.0', APP_VERSION_DATE = '6 Nov 2026';
+    const APP_VERSION = '1.13.0', APP_VERSION_DATE = '11 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
