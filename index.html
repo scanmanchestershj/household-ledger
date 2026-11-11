@@ -3098,6 +3098,23 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-multibagger" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🧬 Multibagger Blueprint — Early-Stage Picks</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">One 100-point score built from how well-known investors spot multibaggers early: <b>Kedia</b> (SMILE: small size, big market), <b>Mayer</b> (100-baggers: high return on capital, small size, owner-operators), <b>Lynch</b> (PEG: growth you don't overpay for), <b>O'Neil</b> (CAN SLIM: 25%+ earnings growth, leaders), <b>Jhunjhunwala</b> (earnings, management, long runway, sell when P/E is unsustainable) and <b>Minervini</b> (Stage 2 trend template). Tap any stock for its verdict, graph, buy/wait price, stop and exit levels.</div>
+                <details style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;"><summary style="cursor:pointer;font-weight:600;">How the 100 points are split</summary>Size &amp; runway 15 · Quality &amp; reinvestment 20 (ROCE, debt, cash flow, margin) · Growth engine 25 (sales, profit, latest quarter) · Price discipline 12 (PEG) · Skin in the game &amp; still under-researched 10 (promoter holding, institutions) · Trend / Stage 2 18 (8 trend-template rules). <b>Strong Buy</b> needs 75+, passing quality/growth gates and a confirmed Stage 2 uptrend. <b>Buy</b> needs 62+ and a price above the 200-day average.</details>
+                <div class="add-row" style="margin-bottom:8px;">
+                  <input type="text" id="scrBpInput" placeholder="Check any stock, e.g. Kross" style="flex:1;">
+                  <button type="button" class="add-btn" id="scrBpCheck">Check</button>
+                </div>
+                <button type="button" class="add-btn full-width" id="scrBpMine">🧬 Scan my holdings, watchlist &amp; shortlists (fast)</button>
+                <button type="button" class="add-btn ghost full-width" id="scrBpFull" style="margin-top:6px;">🔭 Scan all Midcap + Smallcap (several minutes)</button>
+                <div id="scrBpStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
+                <div id="scrBpResult" style="margin-top:10px;max-height:620px;overflow-y:auto;"></div>
+                <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;line-height:1.5;">A shortlist to research, not a buy list. Data is from unofficial Yahoo Finance feeds, so some fields can be missing. <b>Promoter pledge, governance and the latest results are not checked here, verify them on the exchange site.</b> Early-stage small caps can fall 50% or more, so keep each position small.</div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-track" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>📈 Signal Track Record</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -10631,6 +10648,28 @@
     { key: '5y', label: '5Y' }, { key: 'max', label: 'All' }
   ];
   let stockChartState = { symbol: null, name: null, range: '3mo' };
+  // Optional horizontal price levels drawn on the chart (entry / stop / trims from the Multibagger Blueprint).
+  let stockChartLevels = null, stockChartLast = null, bpToken = 0;
+  const bpCache = {};
+  function stockChartExtent(closes){
+    let min = Math.min(...closes), max = Math.max(...closes);
+    (stockChartLevels || []).forEach(l => { if(l.scale && l.v > 0){ min = Math.min(min, l.v); max = Math.max(max, l.v); } });
+    return [min, max];
+  }
+  function stockChartLevelsSvg(min, spread, w, h, pad){
+    if(!stockChartLevels) return '';
+    return stockChartLevels.map(l => {
+      if(!(l.v >= min && l.v <= min + spread)) return '';
+      const y = pad + (h - pad * 2) * (1 - (l.v - min) / spread);
+      return `<line x1="${pad}" x2="${w - pad}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" style="stroke:${l.color};stroke-width:1;stroke-dasharray:4,3;opacity:.85;"></line><text x="${w - pad - 2}" y="${(y - 2).toFixed(1)}" text-anchor="end" style="font-size:9px;fill:${l.color};font-weight:600;">${escapeHtml(l.label)}</text>`;
+    }).join('');
+  }
+  function redrawStockChart(){
+    const areaEl = document.getElementById('stockChartArea');
+    if(!areaEl || !stockChartLast) return;
+    areaEl.innerHTML = renderStockSparkline(stockChartLast.points, stockChartLast.isUp, stockChartLast.range);
+    wireStockChartDrag(stockChartLast.points, stockChartLast.range, stockChartLast.currency);
+  }
 
   function fmtChartDate(ms, range){
     const d = new Date(ms);
@@ -10642,7 +10681,7 @@
     if(!points || points.length < 2) return '<div class="empty" style="padding:20px 0;">Not enough data to chart.</div>';
     const w = 480, h = 180, pad = 10;
     const closes = points.map(p => p.c);
-    const min = Math.min(...closes), max = Math.max(...closes);
+    const [min, max] = stockChartExtent(closes);
     const spread = (max - min) || 1;
     const stepX = (w - pad * 2) / (points.length - 1);
     const coords = points.map((p, i) => {
@@ -10657,6 +10696,7 @@
         <svg id="stockChartSvg" viewBox="0 0 ${w} ${h}" style="width:100%;height:180px;display:block;">
           <path d="${areaPath}" style="fill:${colorVar};opacity:.12;stroke:none;"></path>
           <path d="${linePath}" style="fill:none;stroke:${colorVar};stroke-width:2;"></path>
+          ${stockChartLevelsSvg(min, spread, w, h, pad)}
           <line id="stockChartCrosshair" x1="0" y1="${pad}" x2="0" y2="${h - pad}" style="stroke:var(--ink-soft);stroke-width:1;stroke-dasharray:3,3;display:none;"></line>
           <circle id="stockChartDot" r="4" style="fill:${colorVar};stroke:#fff;stroke-width:1.5;display:none;"></circle>
         </svg>
@@ -10678,7 +10718,7 @@
     if(!svg || !points || points.length < 2) return;
     const w = 480, h = 180, pad = 10;
     const closes = points.map(p => p.c);
-    const min = Math.min(...closes), max = Math.max(...closes);
+    const [min, max] = stockChartExtent(closes);
     const spread = (max - min) || 1;
     const stepX = (w - pad * 2) / (points.length - 1);
 
@@ -10912,6 +10952,7 @@
         <div id="stockChartRangeTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;"></div>
         <div id="stockChartArea" style="width:100%;min-height:180px;"></div>
         <div id="stockChartStatus" style="font-size:11px;color:var(--ink-soft);margin-top:6px;"></div>
+        <div id="stockChartBlueprint" style="margin-top:12px;"></div>
         <div id="stockChartAction" style="margin-top:12px;"></div>
         <div id="stockChartPlaybook" style="margin-top:12px;"></div>
         <div id="stockChartScoreBreakdown" style="margin-top:12px;"></div>
@@ -10949,6 +10990,7 @@
       const isUp = data.changePct == null || data.changePct >= 0;
       const changeStr = data.changePct != null ? `${isUp ? '▲' : '▼'} ${Math.abs(data.changePct).toFixed(2)}%` : '';
       priceEl.innerHTML = `${data.price != null ? data.price.toFixed(2) : '—'} ${escapeHtml(data.currency || '')} <span style="color:${isUp ? 'var(--teal-dark)' : 'var(--coral)'};font-weight:600;">${changeStr}</span>`;
+      stockChartLast = { points: data.points, isUp, range, currency: data.currency };
       areaEl.innerHTML = renderStockSparkline(data.points, isUp, range);
       wireStockChartDrag(data.points, range, data.currency);
       const rangeLabel = (STOCK_CHART_RANGES.find(r => r.key === range) || {}).label || range;
@@ -10960,8 +11002,12 @@
   }
 
   function openStockChartModal(symbol, name){
+    stockChartLevels = null; stockChartLast = null;
+    ensureStockChartModal();
+    const bpEl = document.getElementById('stockChartBlueprint'); if(bpEl) bpEl.innerHTML = '';
     loadStockChart(symbol, name, stockChartState.range || '3mo');
     loadStockActionAndHistory(symbol);
+    try{ loadBlueprintPanel(symbol, name); }catch(e){}
   }
 
   document.addEventListener('click', (e) => {
@@ -11588,6 +11634,171 @@
   if(scrCompBtn) scrCompBtn.addEventListener('click', () => runCompounder());
   try{ renderCompounder(); }catch(e){}
 
+  // ---- Multibagger Blueprint: early-stage multibagger score (Kedia SMILE, Mayer SQGLP, Lynch PEG, O'Neil CAN SLIM, Jhunjhunwala, Minervini) ----
+  const BP_PILLARS = [['size', 'Size & runway', 15], ['quality', 'Quality & reinvestment', 20], ['growth', 'Growth engine', 25], ['price', 'Price discipline (PEG)', 12], ['skin', 'Skin in game & under-researched', 10], ['trend', 'Trend (Stage 2)', 18]];
+  const BP_VERDICT = { 'Strong Buy': ['\ud83d\ude80', '#1e8449'], 'Buy': ['\u2705', '#27ae60'], 'Hold': ['\ud83d\udc40', '#b8860b'], 'Avoid': ['\u26d4', '#c0392b'] };
+  const bpName = v => v === 'Hold' ? 'Watch' : v;
+  const bpRs = v => '\u20b9' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  function bpEntryLine(r){
+    const L = r && r.levels;
+    if(!L) return '<span style="color:var(--ink-soft);">Levels need a full year of price history</span>';
+    if(L.mode === 'avoid') return `<span style="color:#c0392b;font-weight:600;">Avoid for now, wait for a close above its 200-day${L.reclaim ? ' (about ' + bpRs(L.reclaim) + ')' : ''}</span>`;
+    if(L.mode === 'wait') return `<span style="color:#b9770e;font-weight:600;">Wait: buy at \u2264 ${bpRs(L.limit)} (${((1 - L.limit / r.price) * 100).toFixed(1)}% lower)</span>`;
+    return `<span style="color:#1e8449;font-weight:600;">Buy now \u2264 ${bpRs(L.limit)}</span>`;
+  }
+  function bpPillarBars(p){
+    return BP_PILLARS.map(([k, label, max]) => `<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ink-soft);margin:1px 0;"><span style="width:132px;">${label}</span><span style="flex:1;height:6px;background:var(--line,#e5e5e5);border-radius:3px;overflow:hidden;"><span style="display:block;height:100%;width:${Math.round((p[k] || 0) / max * 100)}%;background:${(p[k] || 0) / max >= 0.7 ? '#1e8449' : (p[k] || 0) / max >= 0.4 ? '#b8860b' : '#c0392b'};"></span></span><span style="width:34px;text-align:right;">${p[k] || 0}/${max}</span></div>`).join('');
+  }
+  function bpCompact(r){
+    const c = Object.assign({}, r);
+    delete c.why;
+    if(c.trend){ c.trend = { passed: c.trend.passed, pctFromHigh: c.trend.pctFromHigh, pctAboveLow: c.trend.pctAboveLow }; }
+    return c;
+  }
+  function renderBlueprint(){
+    const box = document.getElementById('scrBpResult');
+    if(!box) return;
+    const sc = state.screenerScans && state.screenerScans.blueprint;
+    if(!sc || !sc.results || !sc.results.length){ box.innerHTML = '<div class="empty" style="padding:8px 0;">Not run yet. Check one stock above, or tap a scan button.</div>'; return; }
+    const order = { 'Strong Buy': 0, 'Buy': 1, 'Hold': 2, 'Avoid': 3 };
+    const rows = sc.results.slice().sort((a, b) => (order[a.verdict] - order[b.verdict]) || (b.score - a.score));
+    const n = v => rows.filter(r => r.verdict === v).length;
+    const f1 = v => v == null ? '\u2014' : Number(v).toFixed(0);
+    const cards = rows.map((r, i) => {
+      const vs = BP_VERDICT[r.verdict] || BP_VERDICT.Hold, L = r.levels;
+      const exit = L ? `<span style="font-size:10px;color:var(--ink-soft);">Stop ${bpRs(L.stop)} \u00b7 Trim ${bpRs(L.trim1)} / ${bpRs(L.trim2)}</span>` : '';
+      return `<div class="stock-row" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}" style="padding:8px 0;border-bottom:1px solid var(--line,#e5e5e5);"><div style="display:flex;justify-content:space-between;gap:8px;"><div style="min-width:0;"><b>${i + 1}. ${escapeHtml(r.name)}</b><br><span style="font-size:10px;color:var(--ink-soft);">${r.industry ? escapeHtml(r.industry) + ' \u00b7 ' : ''}${r.mcapCr ? '\u20b9' + Math.round(r.mcapCr).toLocaleString('en-IN') + ' cr \u00b7 ' : ''}ROCE ${f1(r.roce)}% \u00b7 Profit growth ${f1(r.profitG)}%${r.peg != null ? ' \u00b7 PEG ' + r.peg.toFixed(1) : ''}</span></div><div style="text-align:right;white-space:nowrap;"><b style="color:${vs[1]};">${vs[0]} ${bpName(r.verdict)}</b><br><span style="font-size:11px;font-weight:700;">${r.score}/100</span></div></div><div style="margin-top:3px;font-size:11.5px;">${bpEntryLine(r)}</div><div>${exit}</div><div style="margin-top:4px;">${bpPillarBars(r.pillars || {})}</div></div>`;
+    }).join('');
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Last run ${escapeHtml(sc.date)} \u00b7 ${rows.length} stocks shown \u00b7 \ud83d\ude80 ${n('Strong Buy')} Strong Buy \u00b7 \u2705 ${n('Buy')} Buy \u00b7 \ud83d\udc40 ${n('Hold')} Watch \u00b7 \u26d4 ${n('Avoid')} Avoid${sc.universe ? ' \u00b7 scanned ' + sc.ok + ' of ' + sc.universe : ''}</div>${cards}`;
+  }
+  function bpMerge(results, meta){
+    if(!state.screenerScans) state.screenerScans = {};
+    const prev = state.screenerScans.blueprint;
+    const map = {};
+    ((prev && prev.results) || []).forEach(r => { map[r.symbol] = r; });
+    results.forEach(r => { map[r.symbol] = bpCompact(r); });
+    const merged = Object.values(map).sort((a, b) => b.score - a.score).slice(0, 40);
+    state.screenerScans.blueprint = Object.assign({ date: todayStr(), results: merged }, meta || {});
+  }
+  async function bpFetch(symbols){
+    const d = await buffettGet('/api/compounder-scan?mode=blueprint&symbols=' + encodeURIComponent(symbols.join(',')));
+    return d.results || [];
+  }
+  async function bpSymbolsMine(statusEl){
+    const set = {};
+    const scans = state.screenerScans || {};
+    ['holdings', 'custom', 'buffett', 'toppicks', 'compounder'].forEach(k => {
+      const sc = scans[k]; if(!sc) return;
+      (sc.results || sc.picks || []).forEach(r => { if(r && r.symbol && /\.(NS|BO)$/i.test(r.symbol) && !r.error) set[r.symbol.toUpperCase()] = 1; });
+    });
+    (scans.toppicks && scans.toppicks.near || []).forEach(r => { if(r && r.symbol && /\.(NS|BO)$/i.test(r.symbol)) set[r.symbol.toUpperCase()] = 1; });
+    try{
+      const held = investmentGroupByName('India', 'stocks').filter(g => g.qty > 0.0000001 && !isEtfName(g.name));
+      for(const g of held){ try{ const sym = await divSymbolFor(g.name, 'IN'); if(sym) set[sym.toUpperCase()] = 1; }catch(e){} }
+    }catch(e){}
+    (state.customWatchlist || []).forEach(w => { if(w && w.symbol && /\.(NS|BO)$/i.test(w.symbol)) set[w.symbol.toUpperCase()] = 1; });
+    return Object.keys(set).slice(0, 80);
+  }
+  let bpRunning = false;
+  async function runBlueprint(scope){
+    if(bpRunning) return;
+    bpRunning = true;
+    const statusEl = document.getElementById('scrBpStatus');
+    try{
+      let list = [];
+      if(scope === 'full'){
+        if(statusEl) statusEl.textContent = 'Loading Midcap and Smallcap lists\u2026';
+        const ld = await buffettGet('/api/nifty500?all=1');
+        list = (ld.list || []).filter(x => x.symbol && (x.cap === 'MIDCAP' || x.cap === 'SMALLCAP')).map(x => x.symbol);
+        if(list.length < 50) throw new Error('stock list unavailable');
+      } else {
+        if(statusEl) statusEl.textContent = 'Collecting your holdings, watchlist and shortlists\u2026';
+        list = await bpSymbolsMine(statusEl);
+        if(!list.length) throw new Error('nothing to scan yet. Add stocks, or run the Top Picks / Warren Buffett scans first');
+      }
+      const chunks = []; for(let k = 0; k < list.length; k += 3) chunks.push(list.slice(k, k + 3));
+      const all = [];
+      let ci = 0, done = 0;
+      async function worker(){
+        while(ci < chunks.length){
+          const ch = chunks[ci++];
+          try{ (await bpFetch(ch)).forEach(r => all.push(r)); }catch(e){}
+          done++;
+          if(statusEl) statusEl.textContent = `Scoring ${Math.min(done * 3, list.length)} of ${list.length} stocks\u2026 (keep this screen open)`;
+          if(done % 6 === 0){ try{ bpMerge(all, { scope, universe: list.length, ok: all.length }); renderBlueprint(); }catch(e){} }
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      if(!all.length) throw new Error('no stock returned data');
+      bpMerge(all, { scope, universe: list.length, ok: all.length });
+      all.forEach(r => { bpCache[r.symbol] = r; });
+      try{ logSignals('blueprint', all.filter(r => r.verdict === 'Strong Buy')); }catch(e){}
+      save();
+      renderBlueprint();
+      if(statusEl) statusEl.textContent = `\u2713 Done: ${all.filter(r => r.verdict === 'Strong Buy').length} Strong Buy, ${all.filter(r => r.verdict === 'Buy').length} Buy out of ${all.length} scored.`;
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f Scan failed: ' + (e && e.message ? e.message : 'unknown error'); }
+    bpRunning = false;
+  }
+  async function bpCheckOne(){
+    const input = document.getElementById('scrBpInput'), statusEl = document.getElementById('scrBpStatus');
+    const q = (input && input.value || '').trim();
+    if(!q){ if(statusEl) statusEl.textContent = 'Type a stock name or NSE code first.'; return; }
+    try{
+      if(statusEl) statusEl.textContent = 'Finding ' + q + '\u2026';
+      const sym = /\.(NS|BO)$/i.test(q) ? q.toUpperCase() : await divSymbolFor(q, 'IN');
+      if(!sym) throw new Error('could not find that stock on NSE/BSE');
+      if(statusEl) statusEl.textContent = 'Scoring ' + sym + '\u2026';
+      const r = (await bpFetch([sym]))[0];
+      if(!r) throw new Error('no data for ' + sym);
+      bpCache[r.symbol] = r;
+      bpMerge([r], state.screenerScans && state.screenerScans.blueprint ? {} : {});
+      save(); renderBlueprint();
+      if(statusEl) statusEl.textContent = `\u2713 ${r.name}: ${bpName(r.verdict)} (${r.score}/100).`;
+      openStockChartModal(r.symbol, r.name);
+    }catch(e){ if(statusEl) statusEl.textContent = '\u26a0\ufe0f ' + (e && e.message ? e.message : 'failed'); }
+  }
+  function bpLevelsFor(r){
+    const L = r && r.levels; if(!L) return null;
+    const out = [];
+    if(L.mode !== 'avoid'){ out.push({ v: L.limit, label: 'Entry \u2264 ' + L.limit, color: '#1e8449', scale: true }); }
+    out.push({ v: L.stop, label: 'Stop ' + L.stop, color: '#c0392b', scale: true });
+    if(r.trend && r.trend.sma200) out.push({ v: r.trend.sma200, label: '200-day', color: '#7f8c8d', scale: false });
+    out.push({ v: L.trim1, label: 'Trim 1 ' + L.trim1, color: '#2471a3', scale: false });
+    return out;
+  }
+  function bpPanelHtml(r){
+    const vs = BP_VERDICT[r.verdict] || BP_VERDICT.Hold, L = r.levels;
+    const why = (r.why || []).map(w => `<div style="font-size:11px;margin:3px 0;line-height:1.4;">${w.ok ? '\u2705' : '\u26a0\ufe0f'} <b>${escapeHtml(w.who)}:</b> ${escapeHtml(w.txt)}</div>`).join('');
+    const items = (r.trend && r.trend.items || []).map(i => `<div style="font-size:10.5px;color:${i.ok ? '#1e8449' : 'var(--ink-soft)'};">${i.ok ? '\u2713' : '\u2717'} ${escapeHtml(i.k)}</div>`).join('');
+    const headline = r.verdict === 'Strong Buy' ? 'Multibagger candidate: all the early-stage traits line up.' : r.verdict === 'Buy' ? 'Good early-stage profile, a few traits missing.' : r.verdict === 'Hold' ? 'Interesting but not ready. Keep on watch.' : 'Does not fit the early-stage multibagger profile right now.';
+    let levels = '';
+    if(L){
+      levels = `<div style="margin-top:8px;padding:8px;border:1px solid var(--line,#e5e5e5);border-radius:8px;"><div style="font-size:13px;">${bpEntryLine(r)}</div><div style="font-size:11px;color:var(--ink-soft);margin-top:4px;line-height:1.5;">${L.mode !== 'avoid' ? 'Better value zone ' + bpRs(L.entryLow) + ' to ' + bpRs(L.limit) + '. ' : ''}<b style="color:#c0392b;">Stop ${bpRs(L.stop)}</b> (${((1 - L.stop / Math.min(r.price, L.limit)) * 100).toFixed(0)}% below entry, just under the 200-day). <b>Exit plan:</b> sell a quarter at ${bpRs(L.trim1)} (+50%), another quarter at ${bpRs(L.trim2)} (+100%), then hold the rest while it stays above its 200-day average${L.valueCap ? '. Trim anyway above ' + bpRs(L.valueCap) + ' (P/E would be about twice its growth, the "expectations are peaking" signal)' : ''}.</div></div>`;
+    }
+    return `<div style="border:1px solid ${vs[1]};border-radius:10px;padding:10px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:800;font-size:15px;color:${vs[1]};">${vs[0]} ${bpName(r.verdict)} \u00b7 Multibagger Blueprint</div><div style="font-weight:800;">${r.score}/100</div></div><div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">${headline}</div>${levels}<div style="margin-top:8px;">${bpPillarBars(r.pillars || {})}</div><details style="margin-top:8px;"><summary style="font-size:11.5px;font-weight:600;cursor:pointer;">Why: checks from famous investors</summary><div style="margin-top:4px;">${why}</div><div style="font-weight:600;font-size:11px;margin-top:6px;">Minervini trend template (${r.trend ? r.trend.passed : 0} of 8)</div>${items}</details><div style="font-size:9.5px;color:var(--ink-soft);margin-top:6px;line-height:1.4;">A screening aid, not advice. Promoter pledge and governance are not checked; verify on the exchange site. Dashed lines on the graph show entry, stop, 200-day and first trim.</div></div>`;
+  }
+  async function loadBlueprintPanel(symbol, name){
+    const el = document.getElementById('stockChartBlueprint');
+    if(!el || !/\.(NS|BO)$/i.test(symbol || '')) return;
+    const token = ++bpToken;
+    let r = bpCache[symbol];
+    if(!r){
+      el.innerHTML = '<div style="font-size:11px;color:var(--ink-soft);">Scoring with the Multibagger Blueprint\u2026</div>';
+      try{ r = (await bpFetch([symbol]))[0]; if(r) bpCache[symbol] = r; }catch(e){ r = null; }
+    }
+    if(token !== bpToken) return;
+    if(!r){ el.innerHTML = ''; return; }
+    el.innerHTML = bpPanelHtml(r);
+    stockChartLevels = bpLevelsFor(r);
+    redrawStockChart();
+  }
+  const scrBpMineBtn = document.getElementById('scrBpMine'), scrBpFullBtn = document.getElementById('scrBpFull'), scrBpCheckBtn = document.getElementById('scrBpCheck'), scrBpInputEl = document.getElementById('scrBpInput');
+  if(scrBpMineBtn) scrBpMineBtn.addEventListener('click', () => runBlueprint('mine'));
+  if(scrBpFullBtn) scrBpFullBtn.addEventListener('click', () => runBlueprint('full'));
+  if(scrBpCheckBtn) scrBpCheckBtn.addEventListener('click', bpCheckOne);
+  if(scrBpInputEl) scrBpInputEl.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); bpCheckOne(); } });
+  try{ renderBlueprint(); }catch(e){}
+
   // ---- Monthly Investment Split: amount -> rescan popup -> diversified split (core + satellite) with limit prices, alerts and monthly history ----
   const MS_MAX_STOCKS = 6, MS_CAP_PCT = 30, MS_MIN_TICKET = 2000, MS_SECTOR_MAX = 2;
   const MS_CORE = { NIFTYBEES: ['Nifty 50 ETF (Nifty BeES)', 'NIFTYBEES.NS'], GOLDBEES: ['Gold ETF (Gold BeES)', 'GOLDBEES.NS'], JUNIORBEES: ['Nifty Next 50 ETF (Junior BeES)', 'JUNIORBEES.NS'] };
@@ -11597,6 +11808,7 @@
   function msLimit(c){
     // Returns { limit, mode }: mode 'now' = price is already in a sensible buy area, 'wait' = better to buy at/below limit.
     const price = c.price;
+    if(c.bp && c.bp.levels && c.bp.levels.mode !== 'avoid') return c.bp.levels.mode === 'now' ? { limit: price, mode: 'now' } : { limit: c.bp.levels.limit, mode: 'wait' };
     let ee = null; try{ ee = c.raw ? computeEntryExitPrice(c.raw) : null; }catch(e){}
     if(c.zone === 'ENTRY') return { limit: price, mode: 'now' };
     if(ee && ee.mode === 'plan' && ee.entry != null){
@@ -11632,6 +11844,11 @@
     });
     ((scans.toppicks && scans.toppicks.picks) || []).forEach(r => { addVerdict(r, 'Top pick'); const c = pool[r.symbol]; if(c){ c.zone = c.zone || r.zone; c.bscore = c.bscore != null ? c.bscore : r.score; const tr = (r.entryTranches || []).filter(x => x != null); if(c.tranHi == null && tr.length) c.tranHi = Math.max.apply(null, tr); } });
     ((scans.compounder && scans.compounder.picks) || []).forEach(r => { addVerdict(Object.assign({}, r, { verdict: null }), 'Early compounder'); });
+    ((scans.blueprint && scans.blueprint.results) || []).forEach(r => {
+      if(!r || r.error || !r.symbol || (r.verdict !== 'Strong Buy' && r.verdict !== 'Buy')) return;
+      addVerdict({ symbol: r.symbol, name: r.name, price: r.price, industry: r.industry, verdict: null }, 'Multibagger ' + r.verdict);
+      pool[r.symbol].bp = r;
+    });
     const earn = {};
     ((scans.earnings && scans.earnings.rows) || []).forEach(r => { if(r.date && r.daysAway != null && r.daysAway >= 0 && r.daysAway <= 3) earn[r.symbol] = r; });
     // Portfolio context for diversification
@@ -11656,6 +11873,7 @@
       if(c.zone === 'ENTRY') pts += 15; else if(c.zone === 'WATCH') pts += 7;
       if(c.tags.indexOf('Top pick') >= 0) pts += 15;
       if(c.tags.indexOf('Early compounder') >= 0) pts += 10;
+      if(c.bp) pts += c.bp.score * 0.35;
       // diversification: size of the existing position, then sector crowding
       const h = heldMap[normStockName(c.name)];
       if(h){
@@ -11854,7 +12072,7 @@
       const items = [
         ['holdings', 'My Holdings \u2014 Live Verdicts', true], ['custom', 'My Watchlist \u2014 Live Verdicts', true],
         ['buffett', 'Warren Buffett \u2014 Value Screen (slow)', true], ['toppicks', 'Top Picks Today', true],
-        ['earnings', 'Earnings & Results Calendar', true], ['holdingsLT', 'Holdings long-term check (for diversification)', true], ['compounder', 'Early Compounder scan (very slow, a few minutes)', false]
+        ['earnings', 'Earnings & Results Calendar', true], ['blueprint', 'Multibagger Blueprint (my stocks &amp; shortlists)', false], ['holdingsLT', 'Holdings long-term check (for diversification)', true], ['compounder', 'Early Compounder scan (very slow, a few minutes)', false]
       ];
       const m = document.createElement('div');
       m.id = 'msModal';
@@ -11878,8 +12096,8 @@
     try{
       const keys = await msAskRescan(amount);
       if(keys === null){ if(st) st.textContent = 'Cancelled.'; return; }
-      const steps = { holdings: () => ensureHoldingsScan(true), custom: () => ensureCustomScan(true), buffett: () => ensureBuffettScan(true), toppicks: () => ensureTopPicks(true), earnings: () => ensureEarnings(true), holdingsLT: () => ensureHoldingsLongTermScan(true), compounder: () => runCompounder() };
-      const order = ['holdings', 'custom', 'buffett', 'toppicks', 'earnings', 'holdingsLT', 'compounder'].filter(k => keys.indexOf(k) >= 0);
+      const steps = { holdings: () => ensureHoldingsScan(true), custom: () => ensureCustomScan(true), buffett: () => ensureBuffettScan(true), toppicks: () => ensureTopPicks(true), earnings: () => ensureEarnings(true), holdingsLT: () => ensureHoldingsLongTermScan(true), compounder: () => runCompounder(), blueprint: () => runBlueprint('mine') };
+      const order = ['holdings', 'custom', 'buffett', 'toppicks', 'earnings', 'holdingsLT', 'compounder', 'blueprint'].filter(k => keys.indexOf(k) >= 0);
       for(let i = 0; i < order.length; i++){
         if(st) st.textContent = `Rescanning ${i + 1} of ${order.length}: ${order[i]}\u2026 (keep this screen open)`;
         try{ await steps[order[i]](); }catch(e){}
@@ -12071,6 +12289,7 @@
     if(acc.dataset.key === 'screen-toppicks') ensureTopPicks(false);
     if(acc.dataset.key === 'screen-earnings') ensureEarnings(false);
     if(acc.dataset.key === 'screen-track') renderSignalTrack();
+    if(acc.dataset.key === 'screen-multibagger') renderBlueprint();
   });
   renderWatchlistItems();
   renderBatchResults('uaeindex', 'scrUaeResult');
@@ -18852,7 +19071,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.14.0', APP_VERSION_DATE = '11 Nov 2026';
+    const APP_VERSION = '1.15.0', APP_VERSION_DATE = '11 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
