@@ -132,7 +132,20 @@ async function oneBlueprint(sym, sess, bench6m) {
     ins: ins != null ? ins * 100 : null, inst: inst != null ? inst * 100 : null
   };
   const ev = bpEvaluate(m);
+  // Approximate Shariah screen (AAOIFI-style): excluded industries, debt and cash+investments each under 33% of market cap.
+  // Interest income and other impermissible revenue are NOT available here, so this is a first filter only.
+  const sharia = (() => {
+    const ind = ((R.assetProfile?.industry || '') + ' ' + (R.assetProfile?.sector || '')).toLowerCase();
+    if (/bank|insurance|credit|mortgage|capital markets|financial|asset management|brewer|distiller|vintner|wine|alcohol|tobacco|gambl|casino|aerospace|defense|broadcasting|entertainment|publishing|adult/.test(ind)) return { ok: false, why: 'business: ' + (R.assetProfile?.industry || R.assetProfile?.sector) };
+    const mc = mcap, td = raw(R.financialData?.totalDebt) != null ? raw(R.financialData?.totalDebt) : lastDebt, tc = raw(R.financialData?.totalCash);
+    if (!(mc > 0) || td == null) return { ok: null, why: 'data missing' };
+    const debtPct = td / mc * 100, cashPct = tc != null ? tc / mc * 100 : null;
+    if (debtPct >= 33) return { ok: false, debtPct, cashPct, why: 'debt ' + debtPct.toFixed(0) + '% of market cap (limit 33%)' };
+    if (cashPct != null && cashPct >= 33) return { ok: false, debtPct, cashPct, why: 'cash & deposits ' + cashPct.toFixed(0) + '% of market cap (limit 33%)' };
+    return { ok: cashPct != null ? true : null, debtPct, cashPct, why: cashPct != null ? 'passes ratio screen' : 'cash data missing' };
+  })();
   return {
+    sharia,
     symbol: sym, name: R.price?.longName || R.price?.shortName || sym, price, industry: R.assetProfile?.industry || null, sector: R.assetProfile?.sector || null,
     mcapCr: m.mcapCr, pe, roce: m.roce, de: m.de, salesG: m.salesG, profitG: m.profitG, qEarn: m.qEarn, ins: m.ins, inst: m.inst, grossMargin,
     trend: trend ? { passed: trend.passed, items: trend.items, sma50: trend.sma50, sma150: trend.sma150, sma200: trend.sma200, hi52: trend.hi52, lo52: trend.lo52, pctFromHigh: trend.pctFromHigh, pctAboveLow: trend.pctAboveLow, tight15: trend.tight15 } : null,

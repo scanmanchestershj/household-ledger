@@ -2958,6 +2958,10 @@
                   <select id="msCorePct" style="width:130px;"><option value="0">No core (all stocks)</option><option value="20">20% core</option><option value="30">30% core</option><option value="40">40% core</option><option value="50">50% core</option><option value="60">60% core</option></select>
                 </div>
                 <div style="font-size:10.5px;color:var(--ink-soft);margin:-4px 0 8px 0;line-height:1.5;">Core &amp; satellite: the core share goes into one steady ETF; the rest is split across screener stocks (satellite). If no stock qualifies, the satellite share also goes to the core.</div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:2px 0 2px;"><input type="checkbox" id="msSharia"> ☪️ Shariah-compliant stocks only</label>
+                <div style="font-size:10px;color:var(--ink-soft);margin:0 0 8px 0;line-height:1.45;">Ticking this rescans and splits again using only stocks that pass an approximate Shariah screen: no banks, insurance, alcohol, tobacco, gambling or defence, and debt and cash each under 33% of market cap. Interest income and other impermissible revenue are not checked, so confirm each stock on Zoya or Musaffa before buying. The core ETF is skipped in this mode because ETFs are not screened.</div>
+                <div class="add-row" style="margin-bottom:4px;"><button type="button" class="add-btn ghost" id="mktScanBtn" style="flex:1;">🌐 Scan all NSE + BSE stocks (very slow)</button><button type="button" class="add-btn ghost" id="mktStopBtn" style="display:none;">⏹ Stop</button></div>
+                <div id="mktStatus" style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;"></div>
                 <div id="msStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
                 <div id="msResult" style="margin-top:10px;"></div>
                 <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;">A screening aid, not financial advice. Whole shares only, so a small amount is left over. Check prices at your broker before buying.</div>
@@ -3094,6 +3098,7 @@
                 <button type="button" class="add-btn full-width" id="scrCompRun">🌱 Run scan (a few minutes)</button>
                 <div id="scrCompStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
                 <div id="scrCompResult" style="margin-top:10px;max-height:560px;overflow-y:auto;"></div>
+                <div id="scrCompAlerts"></div>
                 <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;line-height:1.5;">A shortlist to research, not a buy list. <b>Promoter pledge is not available from this data source, so check it yourself</b> (a high pledge is a serious warning), along with governance, valuation and why the growth can continue. ROCE is a pre-tax estimate. Smallcaps can fall 50% or more, and most stocks that pass any screen do not become multibaggers.</div>
               </div>
             </div>
@@ -3111,6 +3116,7 @@
                 <button type="button" class="add-btn ghost full-width" id="scrBpFull" style="margin-top:6px;">🔭 Scan all Midcap + Smallcap (several minutes)</button>
                 <div id="scrBpStatus" style="font-size:10.5px;color:var(--ink-soft);margin-top:3px;"></div>
                 <div id="scrBpResult" style="margin-top:10px;max-height:620px;overflow-y:auto;"></div>
+                <div id="scrBpAlerts"></div>
                 <div style="font-size:10px;color:var(--ink-soft);margin-top:8px;line-height:1.5;">A shortlist to research, not a buy list. Data is from unofficial Yahoo Finance feeds, so some fields can be missing. <b>Promoter pledge, governance and the latest results are not checked here, verify them on the exchange site.</b> Early-stage small caps can fall 50% or more, so keep each position small.</div>
               </div>
             </div>
@@ -11586,6 +11592,107 @@
   if(scrTrackBtn) scrTrackBtn.addEventListener('click', () => ensureSignalTrack());
   try{ renderSignalTrack(); }catch(e){}
 
+  // ---- Accumulate / sell alerts for Early Compounder + Multibagger Blueprint (long-term investor style) ----
+  function invPush(kind, banners){
+    if(!banners || !banners.length) return;
+    if(!state.investAlerts) state.investAlerts = [];
+    banners.forEach(b => state.investAlerts.unshift({ k: kind, d: todayStr(), t: b.title, b: b.body }));
+    state.investAlerts = state.investAlerts.slice(0, 40);
+    try{ notifyForBanners(banners); }catch(e){}
+    invRender();
+  }
+  function invRender(){
+    [['comp', 'scrCompAlerts'], ['bp', 'scrBpAlerts']].forEach(([k, id]) => {
+      const el = document.getElementById(id); if(!el) return;
+      const rows = (state.investAlerts || []).filter(a => a.k === k).slice(0, 8);
+      el.innerHTML = '<div style="font-size:11px;font-weight:600;margin-top:10px;">\ud83d\udd14 Accumulate &amp; sell alerts</div>' + (rows.length
+        ? rows.map(a => `<div style="font-size:10.5px;padding:3px 0;border-bottom:1px solid var(--line,#e5e5e5);">${escapeHtml(a.d)} \u00b7 <b>${escapeHtml(a.t)}</b><br><span style="color:var(--ink-soft);">${escapeHtml(a.b)}</span></div>`).join('')
+        : '<div style="font-size:10.5px;color:var(--ink-soft);line-height:1.45;">No alerts yet. You get a notification when a stock enters its buy zone (accumulate) and when it hits its stop, a profit target or an exit signal. Alerts are checked on every scan. Once notifications are allowed, the Blueprint also refreshes your holdings and shortlists once a day when you open the app.</div>');
+    });
+  }
+  function bpAlerts(prev, results){
+    const out = [], rs = v => '\u20b9' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    results.forEach(r => {
+      if(!r || r.error || !r.symbol || !(r.price > 0)) return;
+      const p = prev[r.symbol], L = r.levels, nm = r.name || r.symbol, buyish = r.verdict === 'Strong Buy' || r.verdict === 'Buy';
+      const wasNow = p && (p.verdict === 'Strong Buy' || p.verdict === 'Buy') && p.levels && p.levels.mode === 'now';
+      if(buyish && L && L.mode === 'now' && !wasNow) out.push({ key: 'bp_' + r.symbol + '_acc', title: '\ud83d\udfe2 Accumulate: ' + nm, body: r.verdict + ' at ' + rs(r.price) + ', inside its buy zone (up to ' + rs(L.limit) + '). Stop ' + rs(L.stop) + '. Add in small steps.' });
+      const PL = p && p.levels;
+      if(PL){
+        if(r.price <= PL.stop) out.push({ key: 'bp_' + r.symbol + '_stop', title: '\ud83d\udd34 Sell: stop hit, ' + nm, body: 'Now ' + rs(r.price) + ', at or below the stop ' + rs(PL.stop) + '. If you hold it, this is the exit level.' });
+        else if(r.price >= PL.trim2) out.push({ key: 'bp_' + r.symbol + '_t2', title: '\ud83d\udfe0 Book profit: 2nd target, ' + nm, body: 'Now ' + rs(r.price) + ', at or above ' + rs(PL.trim2) + ' (2x). Consider selling a larger part.' });
+        else if(r.price >= PL.trim1) out.push({ key: 'bp_' + r.symbol + '_t1', title: '\ud83d\udfe0 Trim: 1st target, ' + nm, body: 'Now ' + rs(r.price) + ', at or above ' + rs(PL.trim1) + ' (1.5x). Consider selling a part.' });
+      }
+      if(p && (p.verdict === 'Strong Buy' || p.verdict === 'Buy') && (r.verdict === 'Avoid' || (L && L.mode === 'avoid'))) out.push({ key: 'bp_' + r.symbol + '_exit', title: '\ud83d\udd34 Exit signal: ' + nm, body: 'Fell below its 200-day average and the score dropped to ' + bpName(r.verdict) + '. If you hold it, review it now.' });
+    });
+    return out;
+  }
+  async function msEnsureSharia(syms){
+    if(!state.shariaCache) state.shariaCache = {};
+    const cutoff = Date.now() - 30 * 864e5;
+    const need = Array.from(new Set(syms)).filter(x => { const c = state.shariaCache[x]; return !c || !(c.t > cutoff); });
+    const chunks = []; for(let k = 0; k < need.length; k += 3) chunks.push(need.slice(k, k + 3));
+    let ci = 0, done = 0; const st = document.getElementById('msStatus');
+    async function worker(){
+      while(ci < chunks.length){
+        const ch = chunks[ci++];
+        try{ (await bpFetch(ch)).forEach(r => { if(r && r.symbol && r.sharia) state.shariaCache[r.symbol] = Object.assign({ t: Date.now() }, r.sharia); }); }catch(e){}
+        done++; if(st) st.textContent = 'Checking Shariah compliance: ' + Math.min(done * 3, need.length) + ' of ' + need.length + '\u2026';
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+    save();
+  }
+  // ---- Whole market: every listed NSE stock plus BSE-only stocks, scored with the Multibagger Blueprint ----
+  let mktRunning = false, mktStop = false;
+  async function runMarketScan(){
+    if(mktRunning) return;
+    mktRunning = true; mktStop = false;
+    const stEl = document.getElementById('mktStatus'), stopBtn = document.getElementById('mktStopBtn'), goBtn = document.getElementById('mktScanBtn');
+    if(stopBtn) stopBtn.style.display = ''; if(goBtn) goBtn.disabled = true;
+    const say = t => { if(stEl) stEl.textContent = t; };
+    try{
+      say('Loading the NSE and BSE stock lists\u2026');
+      const ld = await buffettGet('/api/nifty500?universe=full');
+      const list = (ld.list || []).filter(x => x && x.symbol);
+      if(list.length < 500) throw new Error('stock list unavailable');
+      if(!state.screenerScans) state.screenerScans = {};
+      let m = state.screenerScans.market;
+      const resume = m && !m.done && m.total === list.length && m.date && (Date.now() - new Date(m.date).getTime()) < 4 * 864e5;
+      if(!resume) m = state.screenerScans.market = { date: todayStr(), total: list.length, cursor: 0, scanned: 0, picks: [], done: false, bseOk: !!ld.bseOk };
+      if(!state.shariaCache) state.shariaCache = {};
+      const chunks = []; for(let k = m.cursor; k < list.length; k += 3) chunks.push(list.slice(k, k + 3).map(x => x.symbol));
+      const meta = {}; list.forEach(x => { meta[x.symbol] = x; });
+      let ci = 0, done = 0; const t0 = Date.now();
+      async function worker(){
+        while(ci < chunks.length && !mktStop){
+          const idx = ci++, ch = chunks[idx];
+          try{
+            (await bpFetch(ch)).forEach(r => {
+              m.scanned++;
+              if(r.sharia) state.shariaCache[r.symbol] = Object.assign({ t: Date.now() }, r.sharia);
+              if(r.verdict === 'Strong Buy' || r.verdict === 'Buy') m.picks.push({ symbol: r.symbol, name: r.name || (meta[r.symbol] && meta[r.symbol].name) || r.symbol, price: r.price, industry: r.industry, sector: r.sector, mcapCr: r.mcapCr, score: r.score, verdict: r.verdict, levels: r.levels, sharia: r.sharia });
+            });
+          }catch(e){}
+          done++;
+          if(done % 20 === 0){
+            m.picks.sort((a, b) => b.score - a.score); m.picks = m.picks.slice(0, 150);
+            m.cursor = Math.max(0, list.length - (chunks.length - Math.max(0, ci - 3)) * 3); m.date = todayStr(); save();
+          }
+          const rate = done / Math.max(1, (Date.now() - t0) / 60000), left = Math.round((chunks.length - done) / Math.max(rate, 0.1));
+          say('Scanning ' + Math.min(m.cursor + done * 3, list.length) + ' of ' + list.length + ' stocks, ' + m.picks.length + ' Buy or Strong Buy so far (about ' + left + ' min left). Keep this screen open.');
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      m.picks.sort((a, b) => b.score - a.score); m.picks = m.picks.slice(0, 150);
+      if(mktStop){ m.cursor = Math.max(0, list.length - (chunks.length - Math.max(0, ci - 3)) * 3); m.date = todayStr(); save(); say('Stopped. Progress is saved, tap scan again to continue. ' + m.picks.length + ' picks so far.'); }
+      else { m.done = true; m.cursor = list.length; m.date = todayStr(); save(); say('\u2713 Whole market scanned: ' + m.scanned + ' stocks with data, ' + m.picks.length + ' Buy or Strong Buy' + (m.bseOk ? ' (NSE + BSE).' : ' (NSE only, the BSE list could not be loaded).') + ' They now feed the Monthly Split.'); }
+    }catch(e){ say('\u26a0\ufe0f Market scan failed: ' + (e && e.message ? e.message : 'unknown error')); }
+    mktRunning = false;
+    if(stopBtn) stopBtn.style.display = 'none'; if(goBtn) goBtn.disabled = false;
+  }
+  (function(){ const b = document.getElementById('mktScanBtn'), s2 = document.getElementById('mktStopBtn'); if(b) b.addEventListener('click', () => runMarketScan()); if(s2) s2.addEventListener('click', () => { mktStop = true; }); })();
+
   // ---- Early Compounder scan ----
   function renderCompounder(){
     const box = document.getElementById('scrCompResult');
@@ -11622,6 +11729,16 @@
       if(all.length < 30) throw new Error('too few stocks returned data (' + all.length + ')');
       const picks = all.filter(r => r.pass).map(r => Object.assign({}, r, { name: meta[r.symbol].name, cap: meta[r.symbol].cap })).sort((a, b) => b.score - a.score).slice(0, 25);
       if(!state.screenerScans) state.screenerScans = {};
+      try{
+        const prevC = state.screenerScans.compounder;
+        if(prevC && prevC.picks){
+          const had = {}, nowMap = {}; prevC.picks.forEach(x => { had[x.symbol] = 1; }); all.forEach(r => { nowMap[r.symbol] = r; });
+          const rs = v => '\u20b9' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }), bn = [];
+          picks.forEach(r => { if(!had[r.symbol]) bn.push({ key: 'comp_' + r.symbol + '_acc', title: '\ud83d\udfe2 Accumulate: ' + r.name, body: 'New Early Compounder at ' + rs(r.price) + ', score ' + r.score + '. Passes all four gates. Build the position in small steps.' }); });
+          prevC.picks.forEach(x => { const r = nowMap[x.symbol]; if(r && !r.pass) bn.push({ key: 'comp_' + x.symbol + '_sell', title: '\ud83d\udd34 Review / sell: ' + x.name, body: 'No longer passes the Early Compounder gates (growth, returns or debt slipped). If you hold it, review it now.' }); });
+          invPush('comp', bn);
+        }
+      }catch(e){}
       state.screenerScans.compounder = { date: todayStr(), universe: uni.length, ok: all.length, picks };
       try{ logSignals('compounder', picks); }catch(e){}
       save();
@@ -11704,6 +11821,8 @@
     if(bpRunning) return;
     bpRunning = true;
     const statusEl = document.getElementById('scrBpStatus');
+    const bpPrev = {}, bpHadScan = !!(state.screenerScans && state.screenerScans.blueprint && state.screenerScans.blueprint.results);
+    ((state.screenerScans && state.screenerScans.blueprint && state.screenerScans.blueprint.results) || []).forEach(r => { bpPrev[r.symbol] = r; });
     try{
       let list = [];
       if(scope === 'full'){
@@ -11730,6 +11849,7 @@
       }
       await Promise.all([worker(), worker(), worker()]);
       if(!all.length) throw new Error('no stock returned data');
+      if(bpHadScan){ try{ invPush('bp', bpAlerts(bpPrev, all)); }catch(e){} }
       bpMerge(all, { scope, universe: list.length, ok: all.length });
       all.forEach(r => { bpCache[r.symbol] = r; });
       try{ logSignals('blueprint', all.filter(r => r.verdict === 'Strong Buy')); }catch(e){}
@@ -11798,13 +11918,15 @@
   if(scrBpCheckBtn) scrBpCheckBtn.addEventListener('click', bpCheckOne);
   if(scrBpInputEl) scrBpInputEl.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); bpCheckOne(); } });
   try{ renderBlueprint(); }catch(e){}
+  try{ invRender(); }catch(e){}
+  setTimeout(() => { try{ const sc = state.screenerScans && state.screenerScans.blueprint; if(sc && sc.date !== todayStr() && 'Notification' in window && Notification.permission === 'granted') runBlueprint('mine'); }catch(e){} }, 8000);
 
   // ---- Monthly Investment Split: amount -> rescan popup -> diversified split (core + satellite) with limit prices, alerts and monthly history ----
   const MS_MAX_STOCKS = 6, MS_CAP_PCT = 30, MS_MIN_TICKET = 2000, MS_SECTOR_MAX = 2;
   const MS_CORE = { NIFTYBEES: ['Nifty 50 ETF (Nifty BeES)', 'NIFTYBEES.NS'], GOLDBEES: ['Gold ETF (Gold BeES)', 'GOLDBEES.NS'], JUNIORBEES: ['Nifty Next 50 ETF (Junior BeES)', 'JUNIORBEES.NS'] };
   const msFmt = v => '\u20b9' + Math.round(v).toLocaleString('en-IN');
   const msPx = v => Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-  function msCfg(){ const c = state.monthlyInvestCfg || {}; return { corePct: Number(c.corePct) || 0, core: MS_CORE[c.core] ? c.core : 'NIFTYBEES' }; }
+  function msCfg(){ const c = state.monthlyInvestCfg || {}; return { corePct: Number(c.corePct) || 0, core: MS_CORE[c.core] ? c.core : 'NIFTYBEES', sharia: !!c.sharia }; }
   function msLimit(c){
     // Returns { limit, mode }: mode 'now' = price is already in a sensible buy area, 'wait' = better to buy at/below limit.
     const price = c.price;
@@ -11818,7 +11940,7 @@
     if(c.tranHi != null && c.tranHi < price * 0.99) return { limit: Math.round(c.tranHi * 100) / 100, mode: 'wait' };
     return { limit: price, mode: 'now' };
   }
-  function msGather(){
+  function msGather(shOnly, collect){
     const scans = state.screenerScans || {};
     const pool = {};
     const get = (sym, name) => (pool[sym] = pool[sym] || { symbol: sym, name: name || sym, price: null, verdict: null, zone: null, bscore: null, tags: [], notes: [], pts: 0, sell: false, raw: null, industry: null, tranHi: null });
@@ -11844,6 +11966,11 @@
     });
     ((scans.toppicks && scans.toppicks.picks) || []).forEach(r => { addVerdict(r, 'Top pick'); const c = pool[r.symbol]; if(c){ c.zone = c.zone || r.zone; c.bscore = c.bscore != null ? c.bscore : r.score; const tr = (r.entryTranches || []).filter(x => x != null); if(c.tranHi == null && tr.length) c.tranHi = Math.max.apply(null, tr); } });
     ((scans.compounder && scans.compounder.picks) || []).forEach(r => { addVerdict(Object.assign({}, r, { verdict: null }), 'Early compounder'); });
+    ((scans.market && scans.market.picks) || []).forEach(r => {
+      if(!r || !r.symbol || (r.verdict !== 'Strong Buy' && r.verdict !== 'Buy')) return;
+      addVerdict({ symbol: r.symbol, name: r.name, price: r.price, industry: r.industry, verdict: null }, 'NSE/BSE scan ' + r.verdict);
+      if(!pool[r.symbol].bp) pool[r.symbol].bp = r;
+    });
     ((scans.blueprint && scans.blueprint.results) || []).forEach(r => {
       if(!r || r.error || !r.symbol || (r.verdict !== 'Strong Buy' && r.verdict !== 'Buy')) return;
       addVerdict({ symbol: r.symbol, name: r.name, price: r.price, industry: r.industry, verdict: null }, 'Multibagger ' + r.verdict);
@@ -11868,6 +11995,12 @@
       if(!isSignal) return;
       if(c.sell){ held.push({ name: c.name, why: 'rated ' + c.verdict }); return; }
       if(earn[c.symbol]){ held.push({ name: c.name, why: 'results in ' + earn[c.symbol].daysAway + ' day' + (earn[c.symbol].daysAway === 1 ? '' : 's') }); return; }
+      if(collect){ collect.push(c.symbol); return; }
+      if(shOnly){
+        const sh = (state.shariaCache || {})[c.symbol];
+        if(!sh || sh.ok !== true){ held.push({ name: c.name, why: !sh || sh.ok === null ? 'Shariah status unverified' : 'not Shariah-compliant: ' + sh.why }); return; }
+        c.tags.push('Shariah \u2713');
+      }
       let pts = 5 + (vp[c.verdict] || 0);
       if(c.bscore != null) pts += c.bscore * 0.4;
       if(c.zone === 'ENTRY') pts += 15; else if(c.zone === 'WATCH') pts += 7;
@@ -11928,7 +12061,7 @@
   }
   function msHeldHtml(held){
     if(!held || !held.length) return '';
-    return `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Held back: ${held.map(h => escapeHtml(h.name) + ' (' + escapeHtml(h.why) + ')').join(', ')}</div>`;
+    return `<div style="font-size:10.5px;color:var(--ink-soft);margin-top:8px;">Held back: ${held.slice(0, 12).map(h => escapeHtml(h.name) + ' (' + escapeHtml(h.why) + ')').join(', ')}${held.length > 12 ? ' and ' + (held.length - 12) + ' more' : ''}</div>`;
   }
   function msRender(plan){
     const box = document.getElementById('msResult');
@@ -11952,7 +12085,7 @@
     }
     const invested = plan.amount - plan.left;
     const waits = plan.rows.some(r => r.mode === 'wait' && r.limit);
-    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Plan for ${msFmt(plan.amount)} \u00b7 calculated ${escapeHtml(plan.date)} \u00b7 max ${MS_CAP_PCT}% in any one stock, ${MS_SECTOR_MAX} per sector</div>`
+    box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Plan for ${msFmt(plan.amount)} \u00b7 calculated ${escapeHtml(plan.date)} \u00b7 max ${MS_CAP_PCT}% in any one stock, ${MS_SECTOR_MAX} per sector${plan.sharia ? ' \u00b7 \u262a\ufe0f Shariah-compliant only (approximate screen)' : ''}</div>`
       + `<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="font-size:10px;color:var(--ink-soft);"><td>Stock</td><td style="text-align:right;">Invest</td><td style="text-align:right;">Shares \u00d7 price</td></tr>${coreRow}${stockRows}</table>`
       + `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-top:8px;padding-top:6px;border-top:1px solid var(--line,#e5e5e5);"><span>Total invested</span><span>${msFmt(invested)}</span></div>`
       + `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);"><span>Left over (part-share)</span><span>${msFmt(plan.left)}</span></div>`
@@ -12033,8 +12166,10 @@
     if(st) st.textContent = `\u2713 Updated ${ok} of ${list.length} prices on ${todayStr()}.`;
   }
   async function msCompute(amount){
-    const cfg = msCfg(), g = msGather();
-    let coreAmt = cfg.corePct > 0 ? amount * cfg.corePct / 100 : 0;
+    const cfg = msCfg(), sh = !!cfg.sharia, stEl = document.getElementById('msStatus');
+    if(sh){ const need = []; msGather(false, need); if(stEl) stEl.textContent = 'Checking Shariah compliance of ' + need.length + ' stocks\u2026'; await msEnsureSharia(need); }
+    const g = msGather(sh);
+    let coreAmt = cfg.corePct > 0 && !sh ? amount * cfg.corePct / 100 : 0;
     const satAmt = amount - coreAmt;
     const a = msAllocate(satAmt, g.cands);
     let satLeft = a.left, extra = false;
@@ -12049,7 +12184,7 @@
       coreLeft = price ? coreAmt - qty * price : 0;
     }
     const plan = {
-      amount, date: todayStr(), corePct: cfg.corePct,
+      amount, date: todayStr(), corePct: sh ? 0 : cfg.corePct, sharia: sh,
       rows: a.rows.map(r => ({ symbol: r.p.symbol, name: r.p.name, price: r.p.price, qty: r.qty, tags: r.p.tags, verdict: r.p.verdict, notes: r.p.notes, limit: r.p.limit, mode: r.p.mode })),
       core, left: satLeft + coreLeft, held: g.held
     };
@@ -12072,7 +12207,7 @@
       const items = [
         ['holdings', 'My Holdings \u2014 Live Verdicts', true], ['custom', 'My Watchlist \u2014 Live Verdicts', true],
         ['buffett', 'Warren Buffett \u2014 Value Screen (slow)', true], ['toppicks', 'Top Picks Today', true],
-        ['earnings', 'Earnings & Results Calendar', true], ['blueprint', 'Multibagger Blueprint (my stocks &amp; shortlists)', false], ['holdingsLT', 'Holdings long-term check (for diversification)', true], ['compounder', 'Early Compounder scan (very slow, a few minutes)', false]
+        ['earnings', 'Earnings & Results Calendar', true], ['blueprint', 'Multibagger Blueprint (my stocks &amp; shortlists)', false], ['holdingsLT', 'Holdings long-term check (for diversification)', true], ['compounder', 'Early Compounder scan (very slow, a few minutes)', false], ['market', 'All NSE + BSE stocks (entire market, 15 to 45+ minutes, resumes if stopped)', false]
       ];
       const m = document.createElement('div');
       m.id = 'msModal';
@@ -12096,8 +12231,8 @@
     try{
       const keys = await msAskRescan(amount);
       if(keys === null){ if(st) st.textContent = 'Cancelled.'; return; }
-      const steps = { holdings: () => ensureHoldingsScan(true), custom: () => ensureCustomScan(true), buffett: () => ensureBuffettScan(true), toppicks: () => ensureTopPicks(true), earnings: () => ensureEarnings(true), holdingsLT: () => ensureHoldingsLongTermScan(true), compounder: () => runCompounder(), blueprint: () => runBlueprint('mine') };
-      const order = ['holdings', 'custom', 'buffett', 'toppicks', 'earnings', 'holdingsLT', 'compounder', 'blueprint'].filter(k => keys.indexOf(k) >= 0);
+      const steps = { holdings: () => ensureHoldingsScan(true), custom: () => ensureCustomScan(true), buffett: () => ensureBuffettScan(true), toppicks: () => ensureTopPicks(true), earnings: () => ensureEarnings(true), holdingsLT: () => ensureHoldingsLongTermScan(true), compounder: () => runCompounder(), market: () => runMarketScan(), blueprint: () => runBlueprint('mine') };
+      const order = ['holdings', 'custom', 'buffett', 'toppicks', 'earnings', 'holdingsLT', 'compounder', 'market', 'blueprint'].filter(k => keys.indexOf(k) >= 0);
       for(let i = 0; i < order.length; i++){
         if(st) st.textContent = `Rescanning ${i + 1} of ${order.length}: ${order[i]}\u2026 (keep this screen open)`;
         try{ await steps[order[i]](); }catch(e){}
@@ -12120,8 +12255,13 @@
   const msCoreSel = document.getElementById('msCore'), msPctSel = document.getElementById('msCorePct');
   if(msCoreSel && msPctSel){
     const c0 = msCfg(); msCoreSel.value = c0.core; msPctSel.value = String(c0.corePct);
-    const saveCfg = () => { state.monthlyInvestCfg = { core: msCoreSel.value, corePct: Number(msPctSel.value) || 0 }; save(); };
+    const saveCfg = () => { state.monthlyInvestCfg = Object.assign({}, state.monthlyInvestCfg || {}, { core: msCoreSel.value, corePct: Number(msPctSel.value) || 0 }); save(); };
     msCoreSel.addEventListener('change', saveCfg); msPctSel.addEventListener('change', saveCfg);
+  }
+  const msShChk = document.getElementById('msSharia');
+  if(msShChk){
+    msShChk.checked = !!msCfg().sharia;
+    msShChk.addEventListener('change', () => { state.monthlyInvestCfg = Object.assign({}, state.monthlyInvestCfg || {}, { sharia: msShChk.checked }); save(); msStart(); });
   }
   const msResultBox = document.getElementById('msResult');
   if(msResultBox) msResultBox.addEventListener('click', e => {
@@ -19071,7 +19211,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.15.0', APP_VERSION_DATE = '11 Nov 2026';
+    const APP_VERSION = '1.16.0', APP_VERSION_DATE = '12 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;

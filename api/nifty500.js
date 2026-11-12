@@ -70,6 +70,29 @@ function parseCsv(text) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=172800');
+  if (String((req.query || {}).universe || '') === 'full') {
+    // Every listed NSE equity (EQUITY_L.csv) plus BSE-only equities (matched by ISIN so nothing is scanned twice).
+    const wt = (p, ms) => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), ms))]);
+    const list = [], isins = new Set(); let nseOk = false, bseOk = false;
+    try {
+      const r = await wt(fetch('https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv', { headers: { 'User-Agent': UA, Referer: 'https://www.nseindia.com/' } }), 9000);
+      const lines = (await r.text()).split(/\r?\n/).slice(1);
+      lines.forEach(l => { const c = l.split(','); if (c.length < 7) return; const sym = c[0].trim(), series = c[2].trim();
+        if (!/^[A-Z0-9&\-]{1,20}$/.test(sym) || (series !== 'EQ' && series !== 'BE' && series !== 'SM')) return;
+        list.push({ symbol: sym + '.NS', name: c[1].trim(), ex: 'NSE' }); isins.add(c[6].trim()); });
+      nseOk = list.length > 500;
+    } catch (e) { /* fall through, reported in the response */ }
+    try {
+      const r = await wt(fetch('https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active', { headers: { 'User-Agent': UA, Referer: 'https://www.bseindia.com/', Accept: 'application/json' } }), 9000);
+      const j = await r.json(); const n0 = list.length;
+      (Array.isArray(j) ? j : []).forEach(x => { const code = String(x.SCRIP_CD || '').trim(), isin = String(x.ISIN_NUMBER || '').trim();
+        if (/^\d{6}$/.test(code) && isin && !isins.has(isin)) { list.push({ symbol: code + '.BO', name: String(x.Scrip_Name || x.SCRIP_ID || code).trim(), ex: 'BSE' }); isins.add(isin); } });
+      bseOk = list.length > n0;
+    } catch (e) { /* BSE list is best effort */ }
+    if (!list.length) { res.status(502).json({ error: 'NSE/BSE stock list unavailable right now' }); return; }
+    res.status(200).json({ list, nseOk, bseOk, count: list.length });
+    return;
+  }
   const all = !!(req.query && (req.query.all === '1' || req.query.all === 'true'));
   try {
     const base = await fetchCsv(CSV_URL);
