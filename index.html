@@ -1452,7 +1452,7 @@
       <div class="accordion" data-key="report-date-range">
         <button type="button" class="accordion-header"><span>Report by date range</span><span class="accordion-arrow">▸</span></button>
         <div class="accordion-body">
-          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Pick any From and To date. Follows the Both / Resident / Home selector above.</div>
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Pick any From and To date. Follows the Both / Resident / Home selector above. Below the totals, tick the card categories you want (Tea, Room rent, Groceries and so on) to see them month by month.</div>
           <div class="form-grid">
             <div><label class="field-label">From date</label><input type="date" id="reportRangeFrom"></div>
             <div><label class="field-label">To date</label><input type="date" id="reportRangeTo"></div>
@@ -13300,6 +13300,35 @@
       hb[h] = (hb[h] || 0) + Number(c.amount || 0);
     });
     const catRows = H.filter(h => hb[h] > 0).map(h => `<div class="sub-row"><span class="label">${h}</span><span>${m(hb[h])}</span></div>`).join('');
+    // Month-by-month card spend for the categories ticked below (categories come from the real card descriptions, e.g. Tea, Room rent, Groceries)
+    const normDesc = c => c.emi ? 'EMI' : ((c.desc || '').replace(/\s+—\s+installment\s+\d+\/\d+\s*$/i, '').trim() || 'No description');
+    const catMap = {};
+    r.cardsBySpend.forEach(c => { const d = normDesc(c), k = d.toLowerCase(); (catMap[k] = catMap[k] || { label: d, total: 0 }).total += Number(c.amount || 0); });
+    const cats = Object.keys(catMap).sort((a, b) => catMap[b].total - catMap[a].total);
+    const off = state.reportRangeOff || [];
+    const sel = cats.filter(k => off.indexOf(k) < 0);
+    let monthHtml = '';
+    if(cats.length){
+      const boxes = cats.map(k => `<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;margin:2px 12px 2px 0;"><input type="checkbox" class="rrCat" data-k="${escapeHtml(k)}"${off.indexOf(k) < 0 ? ' checked' : ''}> ${escapeHtml(catMap[k].label)}</label>`).join('');
+      const months = []; let [yy, mo] = from.slice(0, 7).split('-').map(Number); const [ty, tm] = to.slice(0, 7).split('-').map(Number);
+      while(yy < ty || (yy === ty && mo <= tm)){ months.push(yy + '-' + String(mo).padStart(2, '0')); mo++; if(mo > 12){ mo = 1; yy++; } }
+      const grid = {};
+      r.cardsBySpend.forEach(c => { const k = normDesc(c).toLowerCase(); if(sel.indexOf(k) < 0) return; const mk = String(c.date).slice(0, 7); grid[mk] = grid[mk] || {}; grid[mk][k] = (grid[mk][k] || 0) + Number(c.amount || 0); });
+      const mLabel = mk => { const a = mk.split('-').map(Number); return new Date(a[0], a[1] - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }); };
+      const th = 'padding:4px 6px;text-align:right;white-space:nowrap;font-size:11px;color:var(--ink-soft);font-weight:600;';
+      const td = 'padding:4px 6px;text-align:right;white-space:nowrap;font-size:12px;border-top:1px solid var(--line,#e5e5e5);';
+      const colTot = {}; let grand = 0;
+      const rows = months.map(mk => {
+        const g = grid[mk] || {}; let rt = 0;
+        const cells = sel.map(k => { const v = g[k] || 0; rt += v; colTot[k] = (colTot[k] || 0) + v; return `<td style="${td}">${v ? m(v) : '\u2014'}</td>`; }).join('');
+        grand += rt;
+        return `<tr><td style="${td}text-align:left;font-weight:600;">${mLabel(mk)}</td>${cells}<td style="${td}font-weight:700;">${rt ? m(rt) : '\u2014'}</td></tr>`;
+      }).join('');
+      const table = sel.length
+        ? `<div style="overflow-x:auto;margin-top:8px;"><table style="border-collapse:collapse;width:100%;"><tr><td style="${th}text-align:left;">Month</td>${sel.map(k => `<td style="${th}">${escapeHtml(catMap[k].label)}</td>`).join('')}<td style="${th}">Total</td></tr>${rows}<tr><td style="${td}text-align:left;font-weight:700;">Total</td>${sel.map(k => `<td style="${td}font-weight:700;">${m(colTot[k] || 0)}</td>`).join('')}<td style="${td}font-weight:800;">${m(grand)}</td></tr></table></div>`
+        : '<div class="empty" style="padding:8px 0;">Tick at least one category.</div>';
+      monthHtml = `<div style="margin-top:14px;"><div style="font-size:12px;font-weight:600;margin-bottom:2px;">Card spend by month, only the ticked categories</div><div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:4px;">Only card swipes dated between ${from} and ${to} are counted. <a href="#" class="rrAll" style="color:inherit;">Tick all</a> \u00b7 <a href="#" class="rrNone" style="color:inherit;">Clear</a></div><div>${boxes}</div>${table}</div>`;
+    }
     out.innerHTML = `<div style="font-weight:600;margin-bottom:6px;">${from} → ${to}</div>
       <div class="report-grid">
         ${cell('income', r.income)}
@@ -13308,8 +13337,19 @@
         ${(!scope || scope === 'UAE') ? cell('remittance sent', r.remitSentTotal) : cell('remittance received', r.remitReceivedTotal)}
         ${cell('net (income − outflow)', net)}
       </div>
-      ${catRows ? `<div style="margin-top:8px;"><div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">Card spend by category</div>${catRows}</div>` : ''}`;
+      ${catRows ? `<div style="margin-top:8px;"><div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">Card spend by category</div>${catRows}</div>` : ''}${monthHtml}`;
   }
+  document.addEventListener('change', (e) => {
+    const t = e.target; if(!t || !t.classList || !t.classList.contains('rrCat')) return;
+    const off = (state.reportRangeOff || []).filter(k => k !== t.dataset.k); if(!t.checked) off.push(t.dataset.k);
+    state.reportRangeOff = off; save(); renderReportRange();
+  });
+  document.addEventListener('click', (e) => {
+    const a = e.target && e.target.closest ? e.target.closest('.rrAll, .rrNone') : null; if(!a) return;
+    e.preventDefault();
+    state.reportRangeOff = a.classList.contains('rrNone') ? Array.from(document.querySelectorAll('.rrCat')).map(x => x.dataset.k) : [];
+    save(); renderReportRange();
+  });
   ['reportRangeFrom','reportRangeTo'].forEach(id => {
     document.addEventListener('change', (e) => { if(e.target && e.target.id === id) renderReportRange(); });
   });
@@ -19211,7 +19251,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.16.0', APP_VERSION_DATE = '12 Nov 2026';
+    const APP_VERSION = '1.17.0', APP_VERSION_DATE = '12 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
