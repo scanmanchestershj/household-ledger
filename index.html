@@ -3121,6 +3121,343 @@
               </div>
             </div>
 
+            <div class="accordion" data-key="screen-mei" style="margin-top:12px;">
+              <button type="button" class="accordion-header"><span>🔎 ChatG Multibagger Early Identifier</span><span class="accordion-arrow">▸</span></button>
+              <div class="accordion-body">
+                <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;line-height:1.5;">A second, independent 100-point checklist (growth, returns, margins, balance sheet, cash flow, promoter holding, valuation, momentum) designed in ChatGPT. It fetches live prices and fundamentals itself. Pick how wide to search, then tap <b>Rescan live data</b>. New high scorers trigger a notification.</div>
+                <div class="add-row" style="margin-bottom:6px;">
+                  <select id="meiScope" style="flex:1;">
+                    <option value="mine">My holdings, watchlist &amp; shortlists (fast)</option>
+                    <option value="midsmall">All Midcap + Smallcap (several minutes)</option>
+                    <option value="market">Entire NSE + BSE market (very long, resumable)</option>
+                  </select>
+                  <button type="button" class="add-btn ghost" id="meiStopBtn" style="display:none;">⏹ Stop</button>
+                </div>
+                <div id="meiHostStatus" style="font-size:10.5px;color:var(--ink-soft);margin-bottom:4px;"></div>
+                <style>
+#mei{--mei-bg:#0b1220;--mei-panel:#111c2e;--mei-panel2:#16243a;--mei-line:#263852;--mei-text:#e8eef8;--mei-muted:#9aabc2;--mei-blue:#69a7ff;--mei-green:#35c98b;--mei-amber:#f5bd54;--mei-red:#ff7777;color:var(--mei-text);background:var(--mei-bg);font:14px/1.5 Inter,system-ui,Segoe UI,Arial,sans-serif;padding:16px;border-radius:14px;margin-top:10px;max-width:100%;box-sizing:border-box}
+#mei *{box-sizing:border-box}
+#mei h1,#mei h2,#mei h3,#mei p{margin-top:0}
+#mei h1{font-size:20px;margin-bottom:5px}
+#mei h2{font-size:18px;margin-bottom:12px}
+#mei h3{font-size:15px;margin-bottom:8px}
+#mei .sub{color:var(--mei-muted);margin-bottom:18px}
+#mei .bar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}
+#mei .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:99px;background:#1b3452;color:#a9ceff;font-size:11px;font-weight:700}
+#mei .dot{width:7px;height:7px;border-radius:50%;background:var(--mei-amber);display:inline-block}
+#mei .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+#mei .panel{background:var(--mei-panel);border:1px solid var(--mei-line);border-radius:12px;padding:15px;min-width:0}
+#mei .metric small{display:block;color:var(--mei-muted);font-size:11px}
+#mei .metric strong{font-size:24px;display:block;margin-top:3px}
+#mei .muted{color:var(--mei-muted)}
+#mei .layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr);gap:12px}
+#mei label{display:block;color:var(--mei-muted);font-size:12px;margin:8px 0 4px}
+#mei input,#mei select{width:100%;min-width:0;background:#0c1728;border:1px solid var(--mei-line);color:var(--mei-text);padding:10px;border-radius:8px}
+#mei input[type=checkbox]{width:auto;accent-color:var(--mei-blue)}
+#mei button{border:0;border-radius:8px;padding:10px 13px;background:#246bd1;color:white;font-weight:700;cursor:pointer}
+#mei button.secondary{background:#24344c;color:#dce8f8}
+#mei button:disabled{opacity:.5;cursor:not-allowed}
+#mei .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+#mei .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#mei .notice{border:1px solid #6c5425;background:#2b2416;color:#f7d99a;border-radius:9px;padding:11px 12px;font-size:12px;margin:12px 0}
+#mei .good{border-color:#246d51;background:#10291f;color:#a8f0ce}
+#mei table{border-collapse:collapse;width:100%;font-size:12px}
+#mei th,#mei td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--mei-line);white-space:nowrap}
+#mei th{color:var(--mei-muted);font-weight:600}
+#mei td button{padding:5px 8px;font-size:11px}
+#mei .tablewrap{overflow:auto}
+#mei .score{font-weight:800;color:var(--mei-green)}
+#mei .tag{padding:3px 7px;border-radius:6px;background:#183b32;color:#8ce4bd;font-size:10px}
+#mei .tag.warn{background:#3b301b;color:#f4d18a}
+#mei .tag.bad{background:#41252b;color:#ffaaaa}
+#mei .chart{width:100%;height:190px;background:#0c1728;border:1px solid var(--mei-line);border-radius:9px}
+#mei .chart text{fill:#91a4bf;font-size:10px}
+#mei .splitrow{display:grid;grid-template-columns:1fr 90px 90px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--mei-line)}
+#mei .hidden{display:none!important}
+#mei .foot{font-size:11px;color:var(--mei-muted);margin-top:15px}
+#mei .checkline{display:flex;align-items:center;gap:8px;margin:10px 0;color:var(--mei-text)}
+@media(max-width:850px){#mei .grid{grid-template-columns:repeat(2,1fr)}#mei .layout{grid-template-columns:1fr}#mei .controls{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){#mei{padding:13px}#mei .grid{grid-template-columns:repeat(2,1fr)}#mei .controls{grid-template-columns:1fr 1fr}#mei .metric strong{font-size:20px}}
+</style>
+                <section id="mei">
+  <div class="bar">
+    <div>
+      <div class="badge">CHATG MODULE · INDIA EQUITIES · LIVE DATA</div>
+      <h1>Multibagger Early Identifier</h1>
+      <p class="sub">Discover early-stage growth companies using fundamentals, business quality, valuation and market confirmation.</p>
+    </div>
+    <span class="badge"><span class="dot" id="meiStatusDot"></span><span id="meiStatus">No live data yet</span></span>
+  </div>
+
+  <div class="notice" id="meiProviderNotice"><strong>No live data yet.</strong> Tap Rescan live data above.</div>
+
+  <div class="grid">
+    <div class="panel metric"><small>Stocks scanned</small><strong id="meiScanned">0</strong></div>
+    <div class="panel metric"><small>High-potential candidates</small><strong id="meiHigh">0</strong></div>
+    <div class="panel metric"><small>Average research score</small><strong id="meiAverage">—</strong></div>
+    <div class="panel metric"><small>Last scan</small><strong id="meiLast" style="font-size:15px">Not scanned</strong></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:12px">
+    <h2>Scanner controls</h2>
+    <div class="controls">
+      <div><label for="meiExchange">Exchange universe</label><select id="meiExchange"><option value="ALL">NSE + BSE</option><option value="NSE">NSE</option><option value="BSE">BSE</option></select></div>
+      <div><label for="meiMinCap">Minimum market cap (₹ Cr)</label><input id="meiMinCap" type="number" value="300" min="0"></div>
+      <div><label for="meiMinScore">Minimum score</label><select id="meiMinScore"><option value="65">65+</option><option value="75" selected>75+</option><option value="85">85+</option><option value="0">All scores</option></select></div>
+      <div><label for="meiSort">Rank by</label><select id="meiSort"><option value="score">Research score</option><option value="growth">Revenue growth</option><option value="roce">ROCE</option><option value="momentum">Momentum</option></select></div>
+    </div>
+    <div class="actions">
+      <button id="meiScanBtn">Run stock scan</button>
+      <button class="secondary" id="meiRefreshBtn">Rescan live data</button>
+      <button class="secondary" id="meiExportBtn">Export CSV</button>
+    </div>
+    <p class="foot">The Exchange filter narrows the stocks already fetched. To fetch more stocks, pick a wider scan range above and tap Rescan live data. Data is from unofficial Yahoo Finance feeds, so some fields can be missing (a missing field scores 0).</p>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <div class="bar"><h2 style="margin:0">Multibagger candidates</h2><span class="muted" id="meiResultCount">0 results</span></div>
+      <div class="tablewrap">
+        <table><thead><tr><th>Company</th><th>Price</th><th>Score</th><th>Revenue CAGR</th><th>ROCE</th><th>Research status</th><th></th></tr></thead>
+        <tbody id="meiRows"><tr><td colspan="7" class="muted">Tap Rescan live data to fetch stocks.</td></tr></tbody></table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>100-point research model</h2>
+      <div id="meiScoreBreakdown" class="muted">Select a company to inspect its score breakdown.</div>
+      <div class="notice" style="margin-top:12px">Governance red flags, unreliable financials or severe liquidity risks can disqualify a stock regardless of its numerical score.</div>
+    </div>
+  </div>
+
+  <div class="panel" id="meiDetail" style="margin-top:12px">
+    <div class="bar"><div><h2 style="margin:0">Stock research dashboard</h2><div class="muted" id="meiDetailName">Select a stock from the scanner.</div></div><span class="badge" id="meiDetailBadge">No selection</span></div>
+    <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      <div class="metric"><small>Market price</small><strong id="meiPrice">—</strong></div>
+      <div class="metric"><small>Entry threshold</small><strong id="meiEntry">—</strong></div>
+      <div class="metric"><small>Estimated fair value</small><strong id="meiFair">—</strong></div>
+    </div>
+    <svg class="chart" id="meiChart" viewBox="0 0 700 190" preserveAspectRatio="none" role="img" aria-label="Illustrative price history chart">
+      <path d="M35 20V160H680" stroke="#31445e" fill="none"/>
+      <text x="40" y="15">Price history appears when a connected provider supplies historical candles.</text>
+      <text x="40" y="180">No live chart data connected</text>
+    </svg>
+    <div class="controls" style="margin-top:12px">
+      <div><label>Intrinsic value (₹)</label><input id="meiIntrinsic" type="number" min="0" placeholder="Enter researched value"></div>
+      <div><label>Margin of safety (%)</label><input id="meiMos" type="number" min="0" max="80" value="25"></div>
+      <div><label>Current price (₹)</label><input id="meiManualPrice" type="number" min="0" placeholder="Provider price"></div>
+      <div style="display:flex;align-items:end"><button id="meiCalcBtn" style="width:100%">Calculate entry</button></div>
+    </div>
+    <p class="muted" id="meiEntryMessage" style="margin-top:10px">Entry threshold = intrinsic value × (1 − margin of safety). Fair value must be researched; it is not automatically inferred from a score.</p>
+  </div>
+
+  <div class="layout" style="margin-top:12px">
+    <div class="panel">
+      <h2>Investor activity monitor</h2>
+      <p class="muted">Track public disclosures, not assumed real-time portfolios.</p>
+      <div class="checkline"><input type="checkbox" id="meiPromoterAlert" checked><label for="meiPromoterAlert" style="margin:0">Promoter holding / pledge changes</label></div>
+      <div class="checkline"><input type="checkbox" id="meiFiiAlert" checked><label for="meiFiiAlert" style="margin:0">FII / DII holding changes</label></div>
+      <div class="checkline"><input type="checkbox" id="meiBulkAlert" checked><label for="meiBulkAlert" style="margin:0">Bulk / block deal disclosures</label></div>
+      <div class="checkline"><input type="checkbox" id="meiNamedAlert"><label for="meiNamedAlert" style="margin:0">Named investor disclosure changes</label></div>
+      <div class="notice">Public shareholding data is periodic. Bulk/block deals show disclosed transactions, not necessarily the investor's full position. Alert delivery requires your app's notification service.</div>
+      <div id="meiInvestorFeed" class="muted">No connected disclosure feed.</div>
+    </div>
+    <div class="panel">
+      <h2>Monthly investment split</h2>
+      <label for="meiBudget">Monthly amount (₹)</label><input id="meiBudget" type="number" min="0" value="10000">
+      <label for="meiMaxWeight">Maximum per stock (%)</label><input id="meiMaxWeight" type="number" min="1" max="100" value="25">
+      <div class="checkline"><input type="checkbox" id="meiSharia"><label for="meiSharia" style="margin:0">Only Sharia-screened stocks</label></div>
+      <label for="meiShariaStandard">Screening methodology</label><select id="meiShariaStandard"><option value="AAOIFI">AAOIFI</option><option value="MSCI">MSCI Islamic</option></select>
+      <button id="meiAllocateBtn" style="width:100%;margin-top:10px">Recalculate allocation</button>
+      <div id="meiAllocation" class="muted" style="margin-top:10px">Run a scan to calculate an illustrative allocation.</div>
+    </div>
+  </div>
+  <div class="foot">Educational research tool only. Scores are not return probabilities or guaranteed multibagger predictions. Validate financial statements, filings, liquidity, valuation assumptions and Sharia status independently.</div>
+</section>
+                <script>
+(function(){
+"use strict";
+const root=document.getElementById("mei");
+if(!root || root.dataset.initialized==="1") return;
+root.dataset.initialized="1";
+
+/*
+INTEGRATION CONTRACT
+Your parent web app can connect data by calling:
+window.MultibaggerEarlyIdentifier.setData({
+  stocks:[{symbol,name,exchange,price,marketCap,salesGrowth3Y,salesGrowth5Y,
+  quarterlySalesGrowth,profitGrowth3Y,profitGrowth5Y,quarterlyProfitGrowth,
+  roce,roce5Y,roe,roe5Y,opm,opm5Y,debtEquity,interestCoverage,
+  operatingCashFlow,freeCashFlow,promoterHolding,pledgedPct,pe,
+  momentum,volumeConfirmation,governanceFlag,shariaAAOIFI,shariaMSCI,
+  fairValue,history:[{date,close}], investorEvents:[{date,investor,action,source}]}],
+  sourceName:"Your market data provider",
+  lastUpdated:"ISO date"
+});
+Optional: window.MultibaggerEarlyIdentifier.setProvider(async()=>({stocks:[...],sourceName:"..."}))
+All API secrets must stay server-side. Do not put broker/API secret keys in this HTML.
+*/
+let allStocks=[],visibleStocks=[],selected=null,sourceName="No live data yet";
+let lastStamp="";const NOLIVE=()=>sourceName==="No live data yet";
+const $=id=>root.querySelector("#"+id);
+const num=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
+const fmt=(v,d=2)=>v==null||!Number.isFinite(Number(v))?"—":Number(v).toLocaleString("en-IN",{maximumFractionDigits:d});
+const money=v=>v==null?"—":"₹"+fmt(v);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const demo=[];
+function criterion(s,field,threshold,weight,op="gt"){
+ const v=s[field]; if(v==null||v==="") return 0;
+ return (op==="lt"?Number(v)<threshold:Number(v)>threshold)?weight:0;
+}
+function scoreStock(s){
+ const parts=[
+ ["Revenue growth (3Y)",criterion(s,"salesGrowth3Y",15,5)],
+ ["Revenue growth (5Y)",criterion(s,"salesGrowth5Y",15,5)],
+ ["Quarterly sales growth",criterion(s,"quarterlySalesGrowth",15,5)],
+ ["Revenue acceleration",criterion(s,"quarterlySalesGrowth",0,5)],
+ ["EPS/profit growth (3Y)",criterion(s,"profitGrowth3Y",20,5)],
+ ["EPS/profit growth (5Y)",criterion(s,"profitGrowth5Y",20,5)],
+ ["Quarterly profit growth",criterion(s,"quarterlyProfitGrowth",20,5)],
+ ["ROCE",criterion(s,"roce",20,5)],
+ ["Average ROCE",criterion(s,"roce5Y",15,5)],
+ ["ROE",criterion(s,"roe",15,5)],
+ ["Average ROE",criterion(s,"roe5Y",15,5)],
+ ["Operating margin",criterion(s,"opm",15,5)],
+ ["Margin consistency",criterion(s,"opm5Y",12,5)],
+ ["Debt/equity",criterion(s,"debtEquity",.5,5,"lt")],
+ ["Interest coverage",criterion(s,"interestCoverage",4,5)],
+ ["Operating cash flow",criterion(s,"operatingCashFlow",0,5)],
+ ["Free cash flow",criterion(s,"freeCashFlow",0,5)],
+ ["Promoter holding",criterion(s,"promoterHolding",40,5)],
+ ["Low promoter pledge",criterion(s,"pledgedPct",1,5,"lt")],
+ ["Valuation guardrail",criterion(s,"pe",40,5,"lt")]
+ ];
+ // Normalize the 20 components to the requested 100-point scale.
+ const raw=parts.reduce((a,p)=>a+p[1],0);
+ // Growth/quality score plus separately reported technical confirmation.
+ const technical=(criterion(s,"momentum",70,5)+ (s.volumeConfirmation?5:0));
+ const total=Math.min(100,Math.round(raw*.9+technical));
+ const disqualified=!!s.governanceFlag || num(s.pledgedPct,0)>=25;
+ return {score:disqualified?Math.min(total,49):total,parts,technical,disqualified};
+}
+function classify(s){
+ if(s.disqualified)return "Risk flag";
+ if(s.score>=85)return "Exceptional candidate";
+ if(s.score>=75)return "High-potential";
+ if(s.score>=65)return "Growth candidate";
+ if(s.score>=50)return "Watchlist";
+ return "Low priority";
+}
+function filtered(){
+ const exchange=$("meiExchange").value,minCap=num($("meiMinCap").value,0),minScore=num($("meiMinScore").value,0);
+ return allStocks.map(s=>({...s,...scoreStock(s)}))
+ .filter(s=>(exchange==="ALL"||s.exchange===exchange)&&num(s.marketCap)>=minCap&&s.score>=minScore)
+ .sort((a,b)=>{const k=$("meiSort").value;return k==="growth"?num(b.salesGrowth5Y)-num(a.salesGrowth5Y):k==="roce"?num(b.roce)-num(a.roce):k==="momentum"?num(b.momentum)-num(a.momentum):b.score-a.score;});
+}
+function render(){
+ visibleStocks=filtered();
+ $("meiRows").innerHTML=visibleStocks.length?visibleStocks.map((s,i)=>`<tr>
+ <td><strong>${esc(s.name)}</strong><br><span class="muted">${esc(s.symbol)} · ${esc(s.exchange)}</span></td>
+ <td>${money(s.price)}</td><td class="score">${s.score}/100</td><td>${fmt(s.salesGrowth5Y)}%</td><td>${fmt(s.roce)}%</td>
+ <td><span class="tag ${s.disqualified?"bad":s.score<65?"warn":""}">${esc(classify(s))}</span></td>
+ <td><button data-stock="${esc(s.symbol)}">View</button></td></tr>`).join(""):'<tr><td colspan="7" class="muted">No companies match the current filters.</td></tr>';
+ $("meiResultCount").textContent=visibleStocks.length+" results";
+ $("meiScanned").textContent=allStocks.length.toLocaleString("en-IN");
+ $("meiHigh").textContent=allStocks.map(s=>({...s,...scoreStock(s)})).filter(s=>s.score>=75&&!s.disqualified).length;
+ const scored=allStocks.map(s=>scoreStock(s).score);
+ $("meiAverage").textContent=scored.length?fmt(scored.reduce((a,b)=>a+b,0)/scored.length,1):"—";
+ $("meiLast").textContent=NOLIVE()?"Not scanned":(lastStamp||new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}));
+ $("meiStatus").textContent=sourceName;
+ $("meiStatusDot").style.background=NOLIVE()?"#f5bd54":"#35c98b";
+ $("meiProviderNotice").classList.toggle("good",!NOLIVE());
+ $("meiProviderNotice").innerHTML=NOLIVE()
+ ?"<strong>No live data yet.</strong> Tap Rescan live data to fetch stocks."
+ :"<strong>Live source:</strong> "+esc(sourceName)+". Updated: "+esc(lastStamp||new Date().toLocaleString())+". Some fields can be missing (they score 0); promoter pledge and governance are not available, verify them on the exchange site.";
+ $("meiRows").querySelectorAll("button[data-stock]").forEach(b=>b.addEventListener("click",()=>selectStock(b.dataset.stock)));
+ if(selected){const fresh=allStocks.find(s=>s.symbol===selected.symbol);if(fresh)selectStock(fresh.symbol,false);}
+}
+function selectStock(symbol,scroll=true){
+ const s=allStocks.find(x=>x.symbol===symbol);if(!s)return;
+ selected={...s,...scoreStock(s)};
+ $("meiDetailName").textContent=s.name+" · "+s.symbol+" · "+s.exchange;
+ $("meiDetailBadge").textContent=classify(selected)+" · "+selected.score+"/100";
+ $("meiPrice").textContent=money(s.price);
+ $("meiFair").textContent=money(s.fairValue);
+ const mos=num($("meiMos").value,25)/100;
+ $("meiEntry").textContent=s.fairValue?money(s.fairValue*(1-mos)):"Set fair value";
+ $("meiManualPrice").value=s.price??"";
+ $("meiIntrinsic").value=s.fairValue??"";
+ $("meiScoreBreakdown").innerHTML="<strong>"+selected.score+"/100</strong><div style='margin-top:8px'>"+selected.parts.map(p=>`<div style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--mei-line);padding:5px 0"><span>${esc(p[0])}</span><b>${p[1]}</b></div>`).join("")+`<div style="display:flex;justify-content:space-between;padding:6px 0"><span>Technical confirmation</span><b>${selected.technical}/10</b></div></div>`;
+ drawChart(s.history||[]);
+ if(scroll)$("meiDetail").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function drawChart(history){
+ const svg=$("meiChart");
+ if(!Array.isArray(history)||history.length<2){svg.innerHTML='<path d="M35 20V160H680" stroke="#31445e" fill="none"/><text x="40" y="15">No historical price series supplied by connected provider.</text><text x="40" y="180">Connect historical candles for live chart display.</text>';return;}
+ const vals=history.map(x=>num(x.close)).filter(x=>x>0);if(vals.length<2)return;
+ const min=Math.min(...vals),max=Math.max(...vals),range=max-min||1;
+ const pts=history.map((x,i)=>`${35+i*(645/(history.length-1))},${155-((num(x.close)-min)/range)*125}`).join(" ");
+ svg.innerHTML=`<path d="M35 20V160H680" stroke="#31445e" fill="none"/><polyline points="${pts}" fill="none" stroke="#69a7ff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><text x="40" y="15">${esc(history[0].date||"Start")} → ${esc(history[history.length-1].date||"Latest")}</text><text x="40" y="180">Low ${money(min)} · High ${money(max)}</text>`;
+}
+function runScan(){render();if(visibleStocks.length)selectStock(visibleStocks[0].symbol,false);}
+function calculateEntry(){
+ const iv=num($("meiIntrinsic").value,NaN),mos=num($("meiMos").value,25),price=num($("meiManualPrice").value,NaN);
+ if(!Number.isFinite(iv)||iv<=0||mos<0||mos>=100){$("meiEntryMessage").textContent="Enter a positive intrinsic value and a margin of safety between 0% and 100%.";return;}
+ const entry=iv*(1-mos/100);$("meiEntry").textContent=money(entry);
+ $("meiEntryMessage").textContent=Number.isFinite(price)?(price<=entry?"Within the calculated valuation threshold. Complete business, risk and governance checks before any decision.":"Wait: market price is "+money(price-entry)+" above the calculated entry threshold."):"Calculated entry threshold: "+money(entry)+". Enter a current price to compare.";
+}
+function allocate(){
+ const budget=num($("meiBudget").value,0),cap=Math.min(100,Math.max(1,num($("meiMaxWeight").value,25)))/100;
+ const sharia=$("meiSharia").checked,standard=$("meiShariaStandard").value;
+ let picks=allStocks.map(s=>({...s,...scoreStock(s)})).filter(s=>s.score>=65&&!s.disqualified&&(!sharia||(standard==="AAOIFI"?s.shariaAAOIFI===true:s.shariaMSCI===true)));
+ if(!picks.length){$("meiAllocation").textContent="No verified eligible stocks available. Connect complete financial and Sharia-screening data.";return;}
+ picks.sort((a,b)=>b.score-a.score);picks=picks.slice(0,Math.floor(1/cap)||1);
+ const weights=picks.map(s=>Math.max(1,s.score-50));const capAmt=budget*cap;const amts=picks.map(()=>0);let free=picks.map((_,i)=>i),pool=budget;
+ for(let pass=0;pass<picks.length&&free.length&&pool>0.5;pass++){const w=free.reduce((a,i)=>a+weights[i],0);let hit=false;const next=[];free.forEach(i=>{const want=pool*weights[i]/w;if(amts[i]+want>capAmt+1e-9){hit=true;}else next.push(i);});
+  if(!hit){free.forEach(i=>{amts[i]+=pool*weights[i]/w;});pool=0;break;}
+  free.forEach(i=>{if(!next.includes(i)){pool-=(capAmt-amts[i]);amts[i]=capAmt;}});free=next;}
+ const alloc=picks.map((s,i)=>({s,amount:amts[i]}));
+ const total=alloc.reduce((a,x)=>a+x.amount,0);
+ $("meiAllocation").innerHTML=`<p><strong>Illustrative allocation · ${esc(sharia?standard+" filtered":"All eligible")}</strong><br>Total allocated: ${money(total)}${budget-total>1?"<br><span class=\"tag warn\">Unallocated "+money(budget-total)+": the per-stock cap leaves it over, too few eligible stocks</span>":""}</p>`+alloc.map(x=>`<div class="splitrow"><span>${esc(x.s.symbol)} <small>${esc(x.s.name)}</small></span><b>${money(x.amount)}</b><small>${budget?fmt(x.amount/budget*100,1):0}%</small></div>`).join("");
+}
+function exportCSV(){
+ const rows=filtered();const headers=["symbol","name","exchange","price","marketCap","score","salesGrowth5Y","roce","debtEquity","promoterHolding","pledgedPct","classification"];
+ const csv=[headers.join(","),...rows.map(s=>{const x={...s,...scoreStock(s)};return [x.symbol,x.name,x.exchange,x.price,x.marketCap,x.score,x.salesGrowth5Y,x.roce,x.debtEquity,x.promoterHolding,x.pledgedPct,classify(x)].map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",");})].join("\n");
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="multibagger-candidates.csv";a.click();URL.revokeObjectURL(a.href);
+}
+let provider=null;
+window.MultibaggerEarlyIdentifier={
+ setData(payload){
+  if(!payload||!Array.isArray(payload.stocks))throw new Error("setData expects {stocks:[...]}");
+  allStocks=payload.stocks.filter(s=>s&&s.symbol).map(s=>({...s}));
+  sourceName=payload.sourceName||"Connected market data";lastStamp=payload.lastUpdated||"";
+  render();
+ },
+ setProvider(fn){if(typeof fn!=="function")throw new Error("Provider must be an async function");provider=fn;},
+ async refresh(){
+  if(!provider){$("meiStatus").textContent="No provider configured";$("meiProviderNotice").innerHTML="<strong>Live data feed is still loading.</strong> Try again in a moment.";return;}
+  $("meiRefreshBtn").disabled=true;$("meiRefreshBtn").textContent="Scanning…";
+  try{const payload=await provider();this.setData(payload);runScan();}
+  catch(e){$("meiStatus").textContent="Provider error";$("meiProviderNotice").textContent="Data refresh failed: "+e.message;}
+  finally{$("meiRefreshBtn").disabled=false;$("meiRefreshBtn").textContent="Rescan live data";}
+ },
+ runScan,
+ top(n){return allStocks.map(s=>({s,sc:scoreStock(s)})).sort((a,b)=>b.sc.score-a.sc.score).slice(0,n).map(x=>{const c={...x.s};delete c.history;c._score=x.sc.score;c._dq=x.sc.disqualified;return c;});},
+ count(){return allStocks.length;}
+};
+$("meiScanBtn").addEventListener("click",runScan);
+$("meiRefreshBtn").addEventListener("click",()=>window.MultibaggerEarlyIdentifier.refresh());
+$("meiExportBtn").addEventListener("click",exportCSV);
+$("meiCalcBtn").addEventListener("click",calculateEntry);
+$("meiAllocateBtn").addEventListener("click",allocate);
+["meiExchange","meiMinCap","meiMinScore","meiSort"].forEach(id=>$(id).addEventListener("change",render));
+$("meiSharia").addEventListener("change",()=>{if($("meiSharia").checked)allocate();});
+allStocks=demo;render();
+})();
+</script>
+                <div id="scrMeiAlerts"></div>
+              </div>
+            </div>
+
             <div class="accordion" data-key="screen-track" style="margin-top:12px;">
               <button type="button" class="accordion-header"><span>📈 Signal Track Record</span><span class="accordion-arrow">▸</span></button>
               <div class="accordion-body">
@@ -11602,7 +11939,7 @@
     invRender();
   }
   function invRender(){
-    [['comp', 'scrCompAlerts'], ['bp', 'scrBpAlerts']].forEach(([k, id]) => {
+    [['comp', 'scrCompAlerts'], ['bp', 'scrBpAlerts'], ['mei', 'scrMeiAlerts']].forEach(([k, id]) => {
       const el = document.getElementById(id); if(!el) return;
       const rows = (state.investAlerts || []).filter(a => a.k === k).slice(0, 8);
       el.innerHTML = '<div style="font-size:11px;font-weight:600;margin-top:10px;">\ud83d\udd14 Accumulate &amp; sell alerts</div>' + (rows.length
@@ -11921,6 +12258,95 @@
   try{ invRender(); }catch(e){}
   setTimeout(() => { try{ const sc = state.screenerScans && state.screenerScans.blueprint; if(sc && sc.date !== todayStr() && 'Notification' in window && Notification.permission === 'granted') runBlueprint('mine'); }catch(e){} }, 8000);
 
+  // ---- ChatG Multibagger Early Identifier: live-data feed, scope picker, rescan, stop, cache and alerts ----
+  let meiRunning = false, meiStop = false;
+  const meiAPI = () => window.MultibaggerEarlyIdentifier;
+  const meiSay = t => { const el = document.getElementById('meiHostStatus'); if(el) el.textContent = t; };
+  async function meiUniverse(scope){
+    if(scope === 'mine') return (await bpSymbolsMine()).map(x => x.toUpperCase());
+    if(scope === 'midsmall'){
+      const ld = await buffettGet('/api/nifty500?all=1');
+      const l = (ld.list || []).filter(x => x.symbol && (x.cap === 'MIDCAP' || x.cap === 'SMALLCAP')).map(x => x.symbol);
+      if(l.length < 50) throw new Error('stock list unavailable');
+      return l;
+    }
+    const ld = await buffettGet('/api/nifty500?universe=full');
+    const l = (ld.list || []).filter(x => x && x.symbol).map(x => x.symbol);
+    if(l.length < 500) throw new Error('stock list unavailable');
+    return l;
+  }
+  async function meiCollect(){
+    if(meiRunning) throw new Error('a scan is already running');
+    meiRunning = true; meiStop = false;
+    const scope = (document.getElementById('meiScope') || {}).value || 'mine';
+    const stopBtn = document.getElementById('meiStopBtn'); if(stopBtn) stopBtn.style.display = '';
+    try{
+      meiSay('Collecting the stock list\u2026');
+      const list = await meiUniverse(scope);
+      if(!list.length) throw new Error('nothing to scan yet. Add stocks to your holdings or watchlist, or pick a wider range');
+      const wide = list.length > 600;
+      const chunks = []; for(let k = 0; k < list.length; k += 3) chunks.push(list.slice(k, k + 3));
+      const all = []; let ci = 0, done = 0, shown = 0; const t0 = Date.now();
+      async function worker(){
+        while(ci < chunks.length && !meiStop){
+          const ch = chunks[ci++];
+          try{
+            const d = await buffettGet('/api/compounder-scan?mode=early&symbols=' + encodeURIComponent(ch.join(',')));
+            (d.results || []).forEach(r => {
+              if(wide && !(r.salesGrowth3Y > 10 && r.roce > 12)) delete r.history; // keep memory small on huge scans
+              all.push(r);
+            });
+          }catch(e){}
+          done++;
+          const rate = done / Math.max(0.05, (Date.now() - t0) / 60000), left = Math.round((chunks.length - done) / Math.max(rate, 0.1));
+          meiSay('Fetching ' + Math.min(done * 3, list.length) + ' of ' + list.length + ' stocks, ' + all.length + ' with data' + (chunks.length - done > 8 ? ' (about ' + left + ' min left)' : '') + '. Keep this screen open.');
+          if(all.length - shown >= 25){ shown = all.length; try{ meiAPI().setData({ stocks: all.slice(), sourceName: 'Live Yahoo Finance data (scanning\u2026)', lastUpdated: new Date().toLocaleString() }); }catch(e){} }
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      if(!all.length) throw new Error('no stock returned data');
+      meiSay((meiStop ? 'Stopped. ' : '\u2713 Done. ') + all.length + ' of ' + list.length + ' stocks had data.');
+      return { stocks: all, sourceName: 'Live Yahoo Finance data', lastUpdated: new Date().toLocaleString(), scope, universe: list.length };
+    } finally { meiRunning = false; if(stopBtn) stopBtn.style.display = 'none'; }
+  }
+  function meiPersistAndAlert(payload){
+    try{
+      if(!state.screenerScans) state.screenerScans = {};
+      const prev = state.screenerScans.early;
+      const top = meiAPI().top(60);
+      const prevHi = {}; ((prev && prev.stocks) || []).forEach(x => { if(x._score >= 75 && !x._dq) prevHi[x.symbol] = x; });
+      const nowMap = {}; top.forEach(x => { nowMap[x.symbol] = x; });
+      const rs = v => '\u20b9' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+      const bn = [];
+      if(prev && prev.stocks && prev.stocks.length){
+        top.forEach(x => { if(x._score >= 75 && !x._dq && !prevHi[x.symbol]) bn.push({ key: 'mei_' + x.symbol + '_new', title: '\ud83d\udd0e Early multibagger signal: ' + x.name, body: 'Scored ' + x._score + '/100 at ' + rs(x.price) + '. A shortlist to research, not a buy order. Check pledge, governance and valuation first.' }); });
+        Object.keys(prevHi).forEach(sym => { const n = nowMap[sym]; if(n && (n._score < 65 || n._dq)) bn.push({ key: 'mei_' + sym + '_drop', title: '\ud83d\udd34 Review: ' + prevHi[sym].name, body: 'Early Identifier score fell from ' + prevHi[sym]._score + ' to ' + n._score + (n._dq ? ' (risk flag)' : '') + '. Re-check the business before adding more.' }); });
+      }
+      state.screenerScans.early = { date: todayStr(), scope: payload && payload.scope, universe: payload && payload.universe, ok: meiAPI().count(), stocks: top };
+      if(bn.length) invPush('mei', bn);
+      save();
+    }catch(e){}
+  }
+  (function(){
+    if(!document.getElementById('mei') || !meiAPI()) return;
+    meiAPI().setProvider(async () => { const p = await meiCollect(); setTimeout(() => meiPersistAndAlert(p), 0); return p; });
+    const stopBtn = document.getElementById('meiStopBtn'); if(stopBtn) stopBtn.addEventListener('click', () => { meiStop = true; });
+    const c = state.screenerScans && state.screenerScans.early;
+    if(c && c.stocks && c.stocks.length){
+      meiAPI().setData({ stocks: c.stocks, sourceName: 'Live Yahoo Finance data (saved ' + c.date + ', top ' + c.stocks.length + ' of ' + (c.ok || c.stocks.length) + ')', lastUpdated: c.date });
+      meiAPI().runScan();
+    }
+  })();
+  async function meiRescanMine(){ const sel = document.getElementById('meiScope'); const old = sel && sel.value; if(sel) sel.value = 'mine'; try{ await meiAPI().refresh(); } finally { if(sel && old) sel.value = old; } }
+  let meiAutoDone = false;
+  function ensureMei(){
+    try{
+      if(meiAutoDone || meiRunning || !meiAPI()) return; meiAutoDone = true;
+      const c = state.screenerScans && state.screenerScans.early;
+      if(!c || c.date !== todayStr()) meiAPI().refresh(); // first open of the day: fetch live data automatically
+    }catch(e){}
+  }
+
   // ---- Monthly Investment Split: amount -> rescan popup -> diversified split (core + satellite) with limit prices, alerts and monthly history ----
   const MS_MAX_STOCKS = 6, MS_CAP_PCT = 30, MS_MIN_TICKET = 2000, MS_SECTOR_MAX = 2;
   const MS_CORE = { NIFTYBEES: ['Nifty 50 ETF (Nifty BeES)', 'NIFTYBEES.NS'], GOLDBEES: ['Gold ETF (Gold BeES)', 'GOLDBEES.NS'], JUNIORBEES: ['Nifty Next 50 ETF (Junior BeES)', 'JUNIORBEES.NS'] };
@@ -12207,7 +12633,7 @@
       const items = [
         ['holdings', 'My Holdings \u2014 Live Verdicts', true], ['custom', 'My Watchlist \u2014 Live Verdicts', true],
         ['buffett', 'Warren Buffett \u2014 Value Screen (slow)', true], ['toppicks', 'Top Picks Today', true],
-        ['earnings', 'Earnings & Results Calendar', true], ['blueprint', 'Multibagger Blueprint (my stocks &amp; shortlists)', false], ['holdingsLT', 'Holdings long-term check (for diversification)', true], ['compounder', 'Early Compounder scan (very slow, a few minutes)', false], ['market', 'All NSE + BSE stocks (entire market, 15 to 45+ minutes, resumes if stopped)', false]
+        ['earnings', 'Earnings & Results Calendar', true], ['blueprint', 'Multibagger Blueprint (my stocks &amp; shortlists)', false], ['mei', 'ChatG Multibagger Early Identifier (my stocks &amp; shortlists)', false], ['holdingsLT', 'Holdings long-term check (for diversification)', true], ['compounder', 'Early Compounder scan (very slow, a few minutes)', false], ['market', 'All NSE + BSE stocks (entire market, 15 to 45+ minutes, resumes if stopped)', false]
       ];
       const m = document.createElement('div');
       m.id = 'msModal';
@@ -12231,8 +12657,8 @@
     try{
       const keys = await msAskRescan(amount);
       if(keys === null){ if(st) st.textContent = 'Cancelled.'; return; }
-      const steps = { holdings: () => ensureHoldingsScan(true), custom: () => ensureCustomScan(true), buffett: () => ensureBuffettScan(true), toppicks: () => ensureTopPicks(true), earnings: () => ensureEarnings(true), holdingsLT: () => ensureHoldingsLongTermScan(true), compounder: () => runCompounder(), market: () => runMarketScan(), blueprint: () => runBlueprint('mine') };
-      const order = ['holdings', 'custom', 'buffett', 'toppicks', 'earnings', 'holdingsLT', 'compounder', 'market', 'blueprint'].filter(k => keys.indexOf(k) >= 0);
+      const steps = { holdings: () => ensureHoldingsScan(true), custom: () => ensureCustomScan(true), buffett: () => ensureBuffettScan(true), toppicks: () => ensureTopPicks(true), earnings: () => ensureEarnings(true), holdingsLT: () => ensureHoldingsLongTermScan(true), compounder: () => runCompounder(), market: () => runMarketScan(), blueprint: () => runBlueprint('mine'), mei: () => meiRescanMine() };
+      const order = ['holdings', 'custom', 'buffett', 'toppicks', 'earnings', 'holdingsLT', 'compounder', 'market', 'blueprint', 'mei'].filter(k => keys.indexOf(k) >= 0);
       for(let i = 0; i < order.length; i++){
         if(st) st.textContent = `Rescanning ${i + 1} of ${order.length}: ${order[i]}\u2026 (keep this screen open)`;
         try{ await steps[order[i]](); }catch(e){}
@@ -12430,6 +12856,7 @@
     if(acc.dataset.key === 'screen-earnings') ensureEarnings(false);
     if(acc.dataset.key === 'screen-track') renderSignalTrack();
     if(acc.dataset.key === 'screen-multibagger') renderBlueprint();
+    if(acc.dataset.key === 'screen-mei') ensureMei();
   });
   renderWatchlistItems();
   renderBatchResults('uaeindex', 'scrUaeResult');
@@ -19251,7 +19678,7 @@
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.17.0', APP_VERSION_DATE = '12 Nov 2026';
+    const APP_VERSION = '1.18.0', APP_VERSION_DATE = '13 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
