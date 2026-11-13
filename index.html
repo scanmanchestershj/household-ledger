@@ -3133,7 +3133,8 @@
                   </select>
                   <button type="button" class="add-btn ghost" id="meiStopBtn" style="display:none;">⏹ Stop</button>
                 </div>
-                <div id="meiHostStatus" style="font-size:10.5px;color:var(--ink-soft);margin-bottom:4px;"></div>
+                <button type="button" class="add-btn full-width" id="meiTopRescan">🔄 Rescan live data</button>
+                <div id="meiHostStatus" style="font-size:10.5px;color:var(--ink-soft);margin:4px 0;"></div>
                 <style>
 #mei{--mei-bg:#0b1220;--mei-panel:#111c2e;--mei-panel2:#16243a;--mei-line:#263852;--mei-text:#e8eef8;--mei-muted:#9aabc2;--mei-blue:#69a7ff;--mei-green:#35c98b;--mei-amber:#f5bd54;--mei-red:#ff7777;color:var(--mei-text);background:var(--mei-bg);font:14px/1.5 Inter,system-ui,Segoe UI,Arial,sans-serif;padding:16px;border-radius:14px;margin-top:10px;max-width:100%;box-sizing:border-box}
 #mei *{box-sizing:border-box}
@@ -12331,6 +12332,7 @@ allStocks=demo;render();
     if(!document.getElementById('mei') || !meiAPI()) return;
     meiAPI().setProvider(async () => { const p = await meiCollect(); setTimeout(() => meiPersistAndAlert(p), 0); return p; });
     const stopBtn = document.getElementById('meiStopBtn'); if(stopBtn) stopBtn.addEventListener('click', () => { meiStop = true; });
+    const topBtn = document.getElementById('meiTopRescan'); if(topBtn) topBtn.addEventListener('click', async () => { if(meiRunning){ meiSay('A scan is already running.'); return; } topBtn.disabled = true; try{ await meiAPI().refresh(); }catch(e){ meiSay('\u26a0\ufe0f Scan failed: ' + (e && e.message ? e.message : 'unknown error')); } topBtn.disabled = false; });
     const c = state.screenerScans && state.screenerScans.early;
     if(c && c.stocks && c.stocks.length){
       meiAPI().setData({ stocks: c.stocks, sourceName: 'Live Yahoo Finance data (saved ' + c.date + ', top ' + c.stocks.length + ' of ' + (c.ok || c.stocks.length) + ')', lastUpdated: c.date });
@@ -19678,7 +19680,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.18.0', APP_VERSION_DATE = '13 Nov 2026';
+    const APP_VERSION = '1.18.1', APP_VERSION_DATE = '13 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
