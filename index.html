@@ -3147,7 +3147,7 @@
 #mei .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:99px;background:#1b3452;color:#a9ceff;font-size:11px;font-weight:700}
 #mei .dot{width:7px;height:7px;border-radius:50%;background:var(--mei-amber);display:inline-block}
 #mei .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
-#mei .panel{background:var(--mei-panel);border:1px solid var(--mei-line);border-radius:12px;padding:15px;min-width:0}
+#mei .panel{display:block!important;animation:none;background:var(--mei-panel);border:1px solid var(--mei-line);border-radius:12px;padding:15px;min-width:0}
 #mei .metric small{display:block;color:var(--mei-muted);font-size:11px}
 #mei .metric strong{font-size:24px;display:block;margin-top:3px}
 #mei .muted{color:var(--mei-muted)}
@@ -3204,7 +3204,7 @@
     <div class="controls">
       <div><label for="meiExchange">Exchange universe</label><select id="meiExchange"><option value="ALL">NSE + BSE</option><option value="NSE">NSE</option><option value="BSE">BSE</option></select></div>
       <div><label for="meiMinCap">Minimum market cap (₹ Cr)</label><input id="meiMinCap" type="number" value="300" min="0"></div>
-      <div><label for="meiMinScore">Minimum score</label><select id="meiMinScore"><option value="65">65+</option><option value="75" selected>75+</option><option value="85">85+</option><option value="0">All scores</option></select></div>
+      <div><label for="meiMinScore">Minimum score</label><select id="meiMinScore"><option value="65">65+</option><option value="75">75+</option><option value="85">85+</option><option value="0" selected>All scores</option></select></div>
       <div><label for="meiSort">Rank by</label><select id="meiSort"><option value="score">Research score</option><option value="growth">Revenue growth</option><option value="roce">ROCE</option><option value="momentum">Momentum</option></select></div>
     </div>
     <div class="actions">
@@ -19680,7 +19680,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.18.1', APP_VERSION_DATE = '13 Nov 2026';
+    const APP_VERSION = '1.18.2', APP_VERSION_DATE = '14 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
