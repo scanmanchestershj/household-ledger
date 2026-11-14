@@ -115,6 +115,7 @@ async function oneBlueprint(sym, sess, bench6m) {
   const eqs = g('annualStockholdersEquity'), lastEq = eqs.length ? eqs[eqs.length - 1].v : null;
   const dts = g('annualTotalDebt'), lastDebt = dts.length ? dts[dts.length - 1].v : 0;
   const fcf = g('annualFreeCashFlow'), rev = g('annualTotalRevenue'), gp = g('annualGrossProfit');
+  const SB = cagrBest(g('annualTotalRevenue'), 5);
   const R = qs.status === 'fulfilled' ? (qs.value?.quoteSummary?.result?.[0] || {}) : {};
   const raw = o => (o && typeof o.raw === 'number') ? o.raw : null;
   const mcap = raw(R.price?.marketCap) || raw(R.summaryDetail?.marketCap);
@@ -162,6 +163,11 @@ const avgOf = a => { const x = a.filter(v => typeof v === 'number' && isFinite(v
 // Growth over the longest window available (up to maxYears, at least minYears). Yahoo usually carries only 4-5 annual points.
 function cagrUpTo(arr, maxYears, minYears) {
   for (let y = Math.min(maxYears, arr.length - 1); y >= minYears; y--) { const v = cagr(arr, y); if (v != null) return v; }
+  return null;
+}
+// Best available revenue CAGR: longest window up to maxYears, down to a single year (Yahoo often carries only 3-4 annual points).
+function cagrBest(arr, maxYears) {
+  for (let y = Math.min(maxYears, arr.length - 1); y >= 1; y--) { const v = cagr(arr, y); if (v != null) return { v, y }; }
   return null;
 }
 function yoyLatest(arr) { // latest quarter vs the same quarter a year earlier
@@ -305,6 +311,7 @@ async function oneEarly(sym, sess) {
     symbol: sym.replace(/\.(NS|BO)$/i, ''), ysym: sym, name: R.price?.longName || R.price?.shortName || sym,
     exchange: /\.BO$/i.test(sym) ? 'BSE' : 'NSE', industry: R.assetProfile?.industry || null, sector: R.assetProfile?.sector || null,
     price, marketCap: mcap ? mcap / 1e7 : null,
+    salesGrowthBest: SB ? SB.v : null, salesGrowthBestYears: SB ? SB.y : null,
     salesGrowth3Y: cagr(g('annualTotalRevenue'), 3), salesGrowth5Y: cagrUpTo(g('annualTotalRevenue'), 5, 4),
     quarterlySalesGrowth: yoyLatest(g('quarterlyTotalRevenue')),
     profitGrowth3Y: cagr(g('annualNetIncome'), 3), profitGrowth5Y: cagrUpTo(g('annualNetIncome'), 5, 4),

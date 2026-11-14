@@ -3136,99 +3136,121 @@
                 <button type="button" class="add-btn full-width" id="meiTopRescan">🔄 Rescan live data</button>
                 <div id="meiHostStatus" style="font-size:10.5px;color:var(--ink-soft);margin:4px 0;"></div>
                 <style>
-#mei{--mei-bg:#0b1220;--mei-panel:#111c2e;--mei-panel2:#16243a;--mei-line:#263852;--mei-text:#e8eef8;--mei-muted:#9aabc2;--mei-blue:#69a7ff;--mei-green:#35c98b;--mei-amber:#f5bd54;--mei-red:#ff7777;color:var(--mei-text);background:var(--mei-bg);font:14px/1.5 Inter,system-ui,Segoe UI,Arial,sans-serif;padding:16px;border-radius:14px;margin-top:10px;max-width:100%;box-sizing:border-box}
+#mei{--mei-bg:transparent;--mei-panel:var(--card);--mei-panel2:var(--paper-deep);--mei-line:var(--line);--mei-text:var(--ink);--mei-muted:var(--ink-soft);--mei-blue:var(--blue);--mei-green:var(--invest);--mei-amber:var(--amber);--mei-red:var(--coral);color:var(--mei-text);background:var(--mei-bg);font:14px/1.5 'Plus Jakarta Sans','Work Sans',system-ui,sans-serif;padding:4px 0;margin-top:10px;max-width:100%;box-sizing:border-box}
 #mei *{box-sizing:border-box}
-#mei h1,#mei h2,#mei h3,#mei p{margin-top:0}
-#mei h1{font-size:20px;margin-bottom:5px}
-#mei h2{font-size:18px;margin-bottom:12px}
+#mei h1{font-size:18px;margin:4px 0 0}
+#mei h2{font-size:16px;margin:0}
 #mei h3{font-size:15px;margin-bottom:8px}
-#mei .sub{color:var(--mei-muted);margin-bottom:18px}
-#mei .bar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}
-#mei .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:99px;background:#1b3452;color:#a9ceff;font-size:11px;font-weight:700}
+#mei .sub{color:var(--mei-muted);margin:8px 0 10px;font-size:12.5px}
+#mei .bar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
+#mei .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:99px;background:rgba(74,144,226,.14);color:#2b62a8;font-size:11px;font-weight:700}
 #mei .dot{width:7px;height:7px;border-radius:50%;background:var(--mei-amber);display:inline-block}
-#mei .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
-#mei .panel{display:block!important;animation:none;background:var(--mei-panel);border:1px solid var(--mei-line);border-radius:12px;padding:15px;min-width:0}
+#mei .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:4px}
+#mei .panel{display:block!important;animation:none;background:var(--mei-panel);border:1px solid var(--mei-line);border-radius:12px;padding:12px;min-width:0}
 #mei .metric small{display:block;color:var(--mei-muted);font-size:11px}
-#mei .metric strong{font-size:24px;display:block;margin-top:3px}
+#mei .metric strong{font-size:22px;display:block;margin-top:3px}
 #mei .muted{color:var(--mei-muted)}
-#mei .layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr);gap:12px}
 #mei label{display:block;color:var(--mei-muted);font-size:12px;margin:8px 0 4px}
-#mei input,#mei select{width:100%;min-width:0;background:#0c1728;border:1px solid var(--mei-line);color:var(--mei-text);padding:10px;border-radius:8px}
-#mei input[type=checkbox]{width:auto;accent-color:var(--mei-blue)}
-#mei button{border:0;border-radius:8px;padding:10px 13px;background:#246bd1;color:white;font-weight:700;cursor:pointer}
-#mei button.secondary{background:#24344c;color:#dce8f8}
-#mei button:disabled{opacity:.5;cursor:not-allowed}
+#mei input,#mei select{width:100%;min-width:0;background:var(--card);border:1px solid var(--mei-line);color:var(--mei-text);padding:9px;border-radius:8px;font:inherit}
+#mei input[type=checkbox]{width:auto;accent-color:var(--teal)}
+#mei input[type=range]{padding:0;height:22px;accent-color:var(--teal);border:0;background:transparent}
+#mei button{border:0;border-radius:8px;padding:9px 13px;background:var(--teal);color:#fff;font-weight:700;cursor:pointer;font-family:inherit}
+#mei button.secondary{background:var(--paper-deep);color:var(--ink);border:1px solid var(--mei-line)}
+#mei button:disabled{opacity:.45;cursor:not-allowed}
 #mei .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
 #mei .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-#mei .notice{border:1px solid #6c5425;background:#2b2416;color:#f7d99a;border-radius:9px;padding:11px 12px;font-size:12px;margin:12px 0}
-#mei .good{border-color:#246d51;background:#10291f;color:#a8f0ce}
+#mei .notice{border:1px solid #F0D9A8;background:#FFF6E3;color:#7A5410;border-radius:9px;padding:10px 12px;font-size:12px;margin:8px 0}
+#mei .good{border-color:#BFE6D5;background:#E9F8F1;color:#0B6B55}
 #mei table{border-collapse:collapse;width:100%;font-size:12px}
-#mei th,#mei td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--mei-line);white-space:nowrap}
+#mei th,#mei td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--mei-line);white-space:nowrap}
 #mei th{color:var(--mei-muted);font-weight:600}
-#mei td button{padding:5px 8px;font-size:11px}
-#mei .tablewrap{overflow:auto}
+#mei td button{padding:5px 9px;font-size:11px}
+#mei .tablewrap{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;cursor:grab}
+#mei .tablewrap.dragging{cursor:grabbing;user-select:none}
 #mei .score{font-weight:800;color:var(--mei-green)}
-#mei .tag{padding:3px 7px;border-radius:6px;background:#183b32;color:#8ce4bd;font-size:10px}
-#mei .tag.warn{background:#3b301b;color:#f4d18a}
-#mei .tag.bad{background:#41252b;color:#ffaaaa}
-#mei .chart{width:100%;height:190px;background:#0c1728;border:1px solid var(--mei-line);border-radius:9px}
-#mei .chart text{fill:#91a4bf;font-size:10px}
+#mei .tag{padding:3px 7px;border-radius:6px;background:#DFF7EE;color:#0B6B55;font-size:10px}
+#mei .tag.warn{background:#FFF0D1;color:#8A5A10}
+#mei .tag.bad{background:#FDE3E6;color:#B42335}
+#mei .chart{width:100%;height:190px;background:var(--card);border:1px solid var(--mei-line);border-radius:9px}
+#mei .chart text{fill:var(--mei-muted);font-size:10px}
 #mei .splitrow{display:grid;grid-template-columns:1fr 90px 90px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--mei-line)}
 #mei .hidden{display:none!important}
-#mei .foot{font-size:11px;color:var(--mei-muted);margin-top:15px}
+#mei .foot{font-size:11px;color:var(--mei-muted);margin-top:12px}
 #mei .checkline{display:flex;align-items:center;gap:8px;margin:10px 0;color:var(--mei-text)}
-@media(max-width:850px){#mei .grid{grid-template-columns:repeat(2,1fr)}#mei .layout{grid-template-columns:1fr}#mei .controls{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:480px){#mei{padding:13px}#mei .grid{grid-template-columns:repeat(2,1fr)}#mei .controls{grid-template-columns:1fr 1fr}#mei .metric strong{font-size:20px}}
+#mei details.fold{margin-bottom:10px}
+#mei details.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800;font-size:14px;color:var(--heading-ink)}
+#mei details.fold>summary::-webkit-details-marker{display:none}
+#mei details.fold>summary::after{content:"\25B8";color:var(--mei-muted);transition:transform .15s}
+#mei details.fold[open]>summary::after{transform:rotate(90deg)}
+#mei details.fold>.foldbody{margin-top:10px}
+#mei .pager{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}
+#mei .pager button{padding:6px 11px;font-size:12px;background:var(--paper-deep);color:var(--ink);border:1px solid var(--mei-line)}
+#mei .pager button.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+#mei .hscroll{display:flex;gap:8px;align-items:center;margin:0 0 6px}
+#mei .hscroll button{padding:4px 10px;font-size:13px;background:var(--paper-deep);color:var(--ink);border:1px solid var(--mei-line)}
+@media(max-width:850px){#mei .grid{grid-template-columns:repeat(2,1fr)}#mei .controls{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){#mei .grid{grid-template-columns:repeat(2,1fr)}#mei .controls{grid-template-columns:1fr 1fr}#mei .metric strong{font-size:19px}}
+html.dark-mode #mei .badge{background:rgba(74,144,226,.25);color:#BBD7FA}
+html.dark-mode #mei .notice{background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.35);color:#F5D79A}
+html.dark-mode #mei .good{background:rgba(14,147,132,.15);border-color:rgba(14,147,132,.4);color:#8FE3CF}
+html.dark-mode #mei .tag{background:rgba(14,147,132,.22);color:#8FE3CF}
+html.dark-mode #mei .tag.warn{background:rgba(245,166,35,.2);color:#F5D79A}
+html.dark-mode #mei .tag.bad{background:rgba(244,81,95,.2);color:#FFB3BA}
 </style>
                 <section id="mei">
-  <div class="bar">
-    <div>
-      <div class="badge">CHATG MODULE · INDIA EQUITIES · LIVE DATA</div>
-      <h1>Multibagger Early Identifier</h1>
+  <details class="fold panel" id="meiHeroFold" open>
+    <summary><span><span class="badge">CHATG MODULE · INDIA EQUITIES · LIVE DATA</span><br><span style="font-size:16px">Multibagger Early Identifier</span></span><span class="badge" style="margin-left:auto"><span class="dot" id="meiStatusDot"></span><span id="meiStatus">No live data yet</span></span></summary>
+    <div class="foldbody">
       <p class="sub">Discover early-stage growth companies using fundamentals, business quality, valuation and market confirmation.</p>
+      <div class="notice" id="meiProviderNotice"><strong>No live data yet.</strong> Tap Rescan live data above.</div>
+      <div class="grid">
+        <div class="panel metric"><small>Stocks scanned</small><strong id="meiScanned">0</strong></div>
+        <div class="panel metric"><small>High-potential candidates</small><strong id="meiHigh">0</strong></div>
+        <div class="panel metric"><small>Average research score</small><strong id="meiAverage">—</strong></div>
+        <div class="panel metric"><small>Last scan</small><strong id="meiLast" style="font-size:15px">Not scanned</strong></div>
+      </div>
     </div>
-    <span class="badge"><span class="dot" id="meiStatusDot"></span><span id="meiStatus">No live data yet</span></span>
-  </div>
+  </details>
 
-  <div class="notice" id="meiProviderNotice"><strong>No live data yet.</strong> Tap Rescan live data above.</div>
-
-  <div class="grid">
-    <div class="panel metric"><small>Stocks scanned</small><strong id="meiScanned">0</strong></div>
-    <div class="panel metric"><small>High-potential candidates</small><strong id="meiHigh">0</strong></div>
-    <div class="panel metric"><small>Average research score</small><strong id="meiAverage">—</strong></div>
-    <div class="panel metric"><small>Last scan</small><strong id="meiLast" style="font-size:15px">Not scanned</strong></div>
-  </div>
-
-  <div class="panel" style="margin-bottom:12px">
-    <h2>Scanner controls</h2>
-    <div class="controls">
-      <div><label for="meiExchange">Exchange universe</label><select id="meiExchange"><option value="ALL">NSE + BSE</option><option value="NSE">NSE</option><option value="BSE">BSE</option></select></div>
-      <div><label for="meiMinCap">Minimum market cap (₹ Cr)</label><input id="meiMinCap" type="number" value="300" min="0"></div>
-      <div><label for="meiMinScore">Minimum score</label><select id="meiMinScore"><option value="65">65+</option><option value="75">75+</option><option value="85">85+</option><option value="0" selected>All scores</option></select></div>
-      <div><label for="meiSort">Rank by</label><select id="meiSort"><option value="score">Research score</option><option value="growth">Revenue growth</option><option value="roce">ROCE</option><option value="momentum">Momentum</option></select></div>
+  <details class="fold panel" id="meiCtlFold">
+    <summary>Scanner controls</summary>
+    <div class="foldbody">
+      <div class="controls">
+        <div><label for="meiExchange">Exchange universe</label><select id="meiExchange"><option value="ALL">NSE + BSE</option><option value="NSE">NSE</option><option value="BSE">BSE</option></select></div>
+        <div><label for="meiMinCap">Minimum market cap (₹ Cr)</label><input id="meiMinCap" type="number" value="300" min="0"></div>
+        <div><label for="meiMinScore">Minimum score</label><select id="meiMinScore"><option value="65">65+</option><option value="75">75+</option><option value="85">85+</option><option value="0" selected>All scores</option></select></div>
+        <div><label for="meiSort">Rank by</label><select id="meiSort"><option value="score">Research score</option><option value="growth">Revenue growth</option><option value="roce">ROCE</option><option value="momentum">Momentum</option></select></div>
+      </div>
+      <div class="actions">
+        <button id="meiScanBtn">Run stock scan</button>
+        <button class="secondary" id="meiRefreshBtn">Rescan live data</button>
+        <button class="secondary" id="meiExportBtn">Export CSV</button>
+      </div>
+      <p class="foot">The Exchange filter narrows the stocks already fetched. To fetch more stocks, pick a wider scan range above and tap Rescan live data. Data is from unofficial Yahoo Finance feeds, so some fields can be missing (a missing field scores 0).</p>
     </div>
-    <div class="actions">
-      <button id="meiScanBtn">Run stock scan</button>
-      <button class="secondary" id="meiRefreshBtn">Rescan live data</button>
-      <button class="secondary" id="meiExportBtn">Export CSV</button>
-    </div>
-    <p class="foot">The Exchange filter narrows the stocks already fetched. To fetch more stocks, pick a wider scan range above and tap Rescan live data. Data is from unofficial Yahoo Finance feeds, so some fields can be missing (a missing field scores 0).</p>
-  </div>
+  </details>
 
-  <div class="layout">
-    <div class="panel">
-      <div class="bar"><h2 style="margin:0">Multibagger candidates</h2><span class="muted" id="meiResultCount">0 results</span></div>
-      <div class="tablewrap">
+  <details class="fold panel" id="meiModelFold">
+    <summary>100-point research model</summary>
+    <div class="foldbody">
+      <div id="meiScoreBreakdown" class="muted">Select a company to inspect its score breakdown.</div>
+      <div class="notice" style="margin-top:12px">Governance red flags, unreliable financials or severe liquidity risks can disqualify a stock regardless of its numerical score.</div>
+    </div>
+  </details>
+
+  <details class="fold panel" id="meiCandFold" open>
+    <summary><span>Multibagger candidates</span><span class="muted" id="meiResultCount" style="font-weight:600;font-size:12px;margin-left:auto">0 results</span></summary>
+    <div class="foldbody">
+      <div class="pager" id="meiPager">
+        <button type="button" data-pg="25">1-25</button><button type="button" data-pg="100">1-100</button><button type="button" data-pg="200">1-200</button><button type="button" data-pg="prev">Prev</button><button type="button" data-pg="next">Next</button><button type="button" data-pg="all">All</button>
+      </div>
+      <div class="hscroll"><button type="button" id="meiScrL" aria-label="Scroll left">◀</button><input type="range" id="meiHSlider" min="0" max="0" value="0" step="1" aria-label="Drag to scroll table left or right"><button type="button" id="meiScrR" aria-label="Scroll right">▶</button></div>
+      <div class="tablewrap" id="meiTableWrap">
         <table><thead><tr><th>Company</th><th>Price</th><th>Score</th><th>Revenue CAGR</th><th>ROCE</th><th>Promoter</th><th>Pledged</th><th>Research status</th><th></th></tr></thead>
         <tbody id="meiRows"><tr><td colspan="9" class="muted">Tap Rescan live data to fetch stocks.</td></tr></tbody></table>
       </div>
     </div>
-    <div class="panel">
-      <h2>100-point research model</h2>
-      <div id="meiScoreBreakdown" class="muted">Select a company to inspect its score breakdown.</div>
-      <div class="notice" style="margin-top:12px">Governance red flags, unreliable financials or severe liquidity risks can disqualify a stock regardless of its numerical score.</div>
-    </div>
-  </div>
+  </details>
 
   <div class="panel" id="meiDetail" style="margin-top:12px">
     <div class="bar"><div><h2 style="margin:0">Stock research dashboard</h2><div class="muted" id="meiDetailName">Select a stock from the scanner.</div></div><span class="badge" id="meiDetailBadge">No selection</span></div>
@@ -3238,7 +3260,7 @@
       <div class="metric"><small>Estimated fair value</small><strong id="meiFair">—</strong></div>
     </div>
     <svg class="chart" id="meiChart" viewBox="0 0 700 190" preserveAspectRatio="none" role="img" aria-label="Illustrative price history chart">
-      <path d="M35 20V160H680" stroke="#31445e" fill="none"/>
+      <path d="M35 20V160H680" stroke="#9AA6B8" fill="none"/>
       <text x="40" y="15">Price history appears when a connected provider supplies historical candles.</text>
       <text x="40" y="180">No live chart data connected</text>
     </svg>
@@ -3297,6 +3319,7 @@ window.MultibaggerEarlyIdentifier.setData({
 Optional: window.MultibaggerEarlyIdentifier.setProvider(async()=>({stocks:[...],sourceName:"..."}))
 All API secrets must stay server-side. Do not put broker/API secret keys in this HTML.
 */
+let pageStart=0,pageSize=25;
 let allStocks=[],visibleStocks=[],selected=null,sourceName="No live data yet";
 let lastStamp="";const NOLIVE=()=>sourceName==="No live data yet";
 const $=id=>root.querySelector("#"+id);
@@ -3349,21 +3372,28 @@ function classify(s){
  if(s.score>=50)return "Watchlist";
  return "Low priority";
 }
+function revG(s){const c=[[s.salesGrowthBest,s.salesGrowthBestYears?s.salesGrowthBestYears+"Y":"best"],[s.salesGrowth5Y,"5Y"],[s.salesGrowth3Y,"3Y"],[s.quarterlySalesGrowth,"qtr YoY"]];for(const [v,l] of c){if(v!=null&&v!==""&&Number.isFinite(Number(v)))return {v:Number(v),l};}return null;}
 function filtered(){
  const exchange=$("meiExchange").value,minCap=num($("meiMinCap").value,0),minScore=num($("meiMinScore").value,0);
  return allStocks.map(s=>({...s,...scoreStock(s)}))
  .filter(s=>(exchange==="ALL"||s.exchange===exchange)&&num(s.marketCap)>=minCap&&s.score>=minScore)
- .sort((a,b)=>{const k=$("meiSort").value;return k==="growth"?num(b.salesGrowth5Y)-num(a.salesGrowth5Y):k==="roce"?num(b.roce)-num(a.roce):k==="momentum"?num(b.momentum)-num(a.momentum):b.score-a.score;});
+ .sort((a,b)=>{const k=$("meiSort").value;return k==="growth"?((revG(b)||{v:-9999}).v-(revG(a)||{v:-9999}).v):k==="roce"?num(b.roce)-num(a.roce):k==="momentum"?num(b.momentum)-num(a.momentum):b.score-a.score;});
 }
 function render(){
  visibleStocks=filtered();
- $("meiRows").innerHTML=visibleStocks.length?visibleStocks.map((s,i)=>`<tr>
+ const total=visibleStocks.length;
+ if(pageStart>=total)pageStart=0;
+ const size=pageSize===Infinity?Math.max(total,1):pageSize;
+ const pageStocks=visibleStocks.slice(pageStart,pageStart+size);
+ $("meiRows").innerHTML=total?pageStocks.map((s,i)=>`<tr>
  <td><strong>${esc(s.name)}</strong><br><span class="muted">${esc(s.symbol)} · ${esc(s.exchange)}</span></td>
- <td>${money(s.price)}</td><td class="score">${s.score}/100</td><td>${fmt(s.salesGrowth5Y)}%</td><td>${fmt(s.roce)}%</td>
+ <td>${money(s.price)}</td><td class="score">${s.score}/100</td><td>${(r=>r?fmt(r.v,1)+'% <span class="muted" style="font-size:10px">'+r.l+'</span>':'—')(revG(s))}</td><td>${fmt(s.roce)}%</td>
  <td title="${esc(s.promoterSource||'')}">${s.promoterHolding==null?'—':fmt(s.promoterHolding,1)+'%'}</td><td title="${esc(s.pledgeSource||'not found')}">${s.pledgedPct==null?'<span class="muted">n/a</span>':'<span class="tag '+(s.pledgedPct>=25?'bad':s.pledgedPct>=5?'warn':'')+'">'+fmt(s.pledgedPct,1)+'%</span>'}</td>
  <td><span class="tag ${s.disqualified?"bad":s.score<65?"warn":""}">${esc(classify(s))}</span>${cleanPromoter(s)?' <span class="tag">\u2713 Clean promoter</span>':''}</td>
  <td><button data-stock="${esc(s.symbol)}">View</button></td></tr>`).join(""):'<tr><td colspan="9" class="muted">No companies match the current filters.</td></tr>';
- $("meiResultCount").textContent=visibleStocks.length+" results";
+ $("meiResultCount").textContent=total?("Showing "+(pageStart+1)+"–"+(pageStart+pageStocks.length)+" of "+total):"0 results";
+ document.querySelectorAll("#meiPager button").forEach(b=>{const k=b.dataset.pg;b.classList.toggle("on",(k==="all"&&pageSize===Infinity)||(String(pageSize)===k&&pageStart===0));if(k==="prev")b.disabled=pageSize===Infinity||pageStart<=0;if(k==="next")b.disabled=pageSize===Infinity||pageStart+size>=total;});
+ setTimeout(meiSyncSlider,0);
  $("meiScanned").textContent=allStocks.length.toLocaleString("en-IN");
  $("meiHigh").textContent=allStocks.map(s=>({...s,...scoreStock(s)})).filter(s=>s.score>=75&&!s.disqualified).length;
  const scored=allStocks.map(s=>scoreStock(s).score);
@@ -3395,11 +3425,11 @@ function selectStock(symbol,scroll=true){
 }
 function drawChart(history){
  const svg=$("meiChart");
- if(!Array.isArray(history)||history.length<2){svg.innerHTML='<path d="M35 20V160H680" stroke="#31445e" fill="none"/><text x="40" y="15">No historical price series supplied by connected provider.</text><text x="40" y="180">Connect historical candles for live chart display.</text>';return;}
+ if(!Array.isArray(history)||history.length<2){svg.innerHTML='<path d="M35 20V160H680" stroke="#9AA6B8" fill="none"/><text x="40" y="15">No historical price series supplied by connected provider.</text><text x="40" y="180">Connect historical candles for live chart display.</text>';return;}
  const vals=history.map(x=>num(x.close)).filter(x=>x>0);if(vals.length<2)return;
  const min=Math.min(...vals),max=Math.max(...vals),range=max-min||1;
  const pts=history.map((x,i)=>`${35+i*(645/(history.length-1))},${155-((num(x.close)-min)/range)*125}`).join(" ");
- svg.innerHTML=`<path d="M35 20V160H680" stroke="#31445e" fill="none"/><polyline points="${pts}" fill="none" stroke="#69a7ff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><text x="40" y="15">${esc(history[0].date||"Start")} → ${esc(history[history.length-1].date||"Latest")}</text><text x="40" y="180">Low ${money(min)} · High ${money(max)}</text>`;
+ svg.innerHTML=`<path d="M35 20V160H680" stroke="#9AA6B8" fill="none"/><polyline points="${pts}" fill="none" stroke="#D97B3F" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><text x="40" y="15">${esc(history[0].date||"Start")} → ${esc(history[history.length-1].date||"Latest")}</text><text x="40" y="180">Low ${money(min)} · High ${money(max)}</text>`;
 }
 function runScan(){render();if(visibleStocks.length)selectStock(visibleStocks[0].symbol,false);}
 function calculateEntry(){
@@ -3424,7 +3454,7 @@ function allocate(){
 }
 function exportCSV(){
  const rows=filtered();const headers=["symbol","name","exchange","price","marketCap","score","salesGrowth5Y","roce","debtEquity","promoterHolding","pledgedPct","classification"];
- const csv=[headers.join(","),...rows.map(s=>{const x={...s,...scoreStock(s)};return [x.symbol,x.name,x.exchange,x.price,x.marketCap,x.score,x.salesGrowth5Y,x.roce,x.debtEquity,x.promoterHolding,x.pledgedPct,classify(x)].map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",");})].join("\n");
+ const csv=[headers.join(","),...rows.map(s=>{const x={...s,...scoreStock(s)};return [x.symbol,x.name,x.exchange,x.price,x.marketCap,x.score,(revG(x)||{}).v,x.roce,x.debtEquity,x.promoterHolding,x.pledgedPct,classify(x)].map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",");})].join("\n");
  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="multibagger-candidates.csv";a.click();URL.revokeObjectURL(a.href);
 }
 let provider=null;
@@ -3452,7 +3482,26 @@ $("meiRefreshBtn").addEventListener("click",()=>window.MultibaggerEarlyIdentifie
 $("meiExportBtn").addEventListener("click",exportCSV);
 $("meiCalcBtn").addEventListener("click",calculateEntry);
 $("meiAllocateBtn").addEventListener("click",allocate);
-["meiExchange","meiMinCap","meiMinScore","meiSort"].forEach(id=>$(id).addEventListener("change",render));
+["meiExchange","meiMinCap","meiMinScore","meiSort"].forEach(id=>$(id).addEventListener("change",()=>{pageStart=0;render();}));
+document.querySelectorAll("#meiPager button").forEach(b=>b.addEventListener("click",()=>{const k=b.dataset.pg;
+ if(k==="all"){pageSize=Infinity;pageStart=0;}
+ else if(k==="next"){pageStart+=pageSize;}
+ else if(k==="prev"){pageStart=Math.max(0,pageStart-pageSize);}
+ else{pageSize=Number(k);pageStart=0;}
+ render();}));
+const meiTW=$("meiTableWrap"),meiSL=$("meiHSlider");
+function meiSyncSlider(){const m=Math.max(0,meiTW.scrollWidth-meiTW.clientWidth);meiSL.max=m;meiSL.value=meiTW.scrollLeft;meiSL.disabled=m<=0;}
+meiSL.addEventListener("input",()=>{meiTW.scrollLeft=Number(meiSL.value);});
+meiTW.addEventListener("scroll",()=>{meiSL.value=meiTW.scrollLeft;});
+$("meiScrL").addEventListener("click",()=>meiTW.scrollBy({left:-220,behavior:"smooth"}));
+$("meiScrR").addEventListener("click",()=>meiTW.scrollBy({left:220,behavior:"smooth"}));
+window.addEventListener("resize",meiSyncSlider);
+meiTW.closest("details").addEventListener("toggle",meiSyncSlider);
+(function(){let down=false,moved=false,sx=0,sl=0;
+ meiTW.addEventListener("pointerdown",e=>{if(e.pointerType!=="mouse"||e.target.closest("button"))return;down=true;moved=false;sx=e.clientX;sl=meiTW.scrollLeft;});
+ window.addEventListener("pointermove",e=>{if(!down)return;const dx=e.clientX-sx;if(Math.abs(dx)>4){moved=true;meiTW.classList.add("dragging");}if(moved)meiTW.scrollLeft=sl-dx;});
+ window.addEventListener("pointerup",()=>{down=false;meiTW.classList.remove("dragging");});
+})();
 $("meiSharia").addEventListener("change",()=>{if($("meiSharia").checked)allocate();});
 allStocks=demo;render();
 })();
@@ -19682,7 +19731,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.19.0', APP_VERSION_DATE = '14 Nov 2026';
+    const APP_VERSION = '1.20.0', APP_VERSION_DATE = '14 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
