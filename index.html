@@ -12338,7 +12338,7 @@ allStocks=demo;render();
       if(!list.length) throw new Error('nothing to scan yet. Add stocks to your holdings or watchlist, or pick a wider range');
       const wide = list.length > 600;
       const chunks = []; for(let k = 0; k < list.length; k += 3) chunks.push(list.slice(k, k + 3));
-      const all = []; let ci = 0, done = 0, shown = 0; const t0 = Date.now();
+      const all = []; let firstErr = '', ci = 0, done = 0, shown = 0; const t0 = Date.now();
       async function worker(){
         while(ci < chunks.length && !meiStop){
           const ch = chunks[ci++];
@@ -12348,7 +12348,8 @@ allStocks=demo;render();
               if(wide && !(r.salesGrowth3Y > 10 && r.roce > 12)) delete r.history; // keep memory small on huge scans
               all.push(r);
             });
-          }catch(e){}
+          if(!(d.results||[]).length && !firstErr && (d.errors||[])[0]) firstErr = d.errors[0].symbol + ': ' + d.errors[0].error;
+          }catch(e){ if(!firstErr) firstErr = String(e && e.message || e); }
           done++;
           const rate = done / Math.max(0.05, (Date.now() - t0) / 60000), left = Math.round((chunks.length - done) / Math.max(rate, 0.1));
           meiSay('Fetching ' + Math.min(done * 3, list.length) + ' of ' + list.length + ' stocks, ' + all.length + ' with data' + (chunks.length - done > 8 ? ' (about ' + left + ' min left)' : '') + '. Keep this screen open.');
@@ -12356,7 +12357,7 @@ allStocks=demo;render();
         }
       }
       await Promise.all([worker(), worker(), worker()]);
-      if(!all.length) throw new Error('no stock returned data');
+      if(!all.length) throw new Error('no stock returned data' + (firstErr ? ' (' + firstErr + ')' : ''));
       meiSay((meiStop ? 'Stopped. ' : '\u2713 Done. ') + all.length + ' of ' + list.length + ' stocks had data.');
       return { stocks: all, sourceName: 'Live Yahoo Finance data', lastUpdated: new Date().toLocaleString(), scope, universe: list.length };
     } finally { meiRunning = false; if(stopBtn) stopBtn.style.display = 'none'; }
@@ -19731,7 +19732,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.20.0', APP_VERSION_DATE = '14 Nov 2026';
+    const APP_VERSION = '1.20.1', APP_VERSION_DATE = '14 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;

@@ -94,7 +94,7 @@ async function oneBlueprint(sym, sess, bench6m) {
     getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1d`),
     getJson(`https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?symbol=${encodeURIComponent(sym)}&type=${BP_TYPES.join(',')}&period1=${now - 7 * 365 * 86400}&period2=${now}`, sess.cookie),
     sess.crumb ? getJson(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}${cr}`, sess.cookie) : Promise.reject(new Error('no crumb')),
-    promoterInfo(sym)
+    promoterInfo(sym).catch(() => ({}))
   ]);
   if (chart.status !== 'fulfilled') throw new Error('no price history');
   const res0 = chart.value?.chart?.result?.[0];
@@ -115,7 +115,6 @@ async function oneBlueprint(sym, sess, bench6m) {
   const eqs = g('annualStockholdersEquity'), lastEq = eqs.length ? eqs[eqs.length - 1].v : null;
   const dts = g('annualTotalDebt'), lastDebt = dts.length ? dts[dts.length - 1].v : 0;
   const fcf = g('annualFreeCashFlow'), rev = g('annualTotalRevenue'), gp = g('annualGrossProfit');
-  const SB = cagrBest(g('annualTotalRevenue'), 5);
   const R = qs.status === 'fulfilled' ? (qs.value?.quoteSummary?.result?.[0] || {}) : {};
   const raw = o => (o && typeof o.raw === 'number') ? o.raw : null;
   const mcap = raw(R.price?.marketCap) || raw(R.summaryDetail?.marketCap);
@@ -181,14 +180,14 @@ function yoyLatest(arr) { // latest quarter vs the same quarter a year earlier
 let nseCk = { cookie: '', t: 0 };
 async function nseCookie() {
   if (nseCk.cookie && Date.now() - nseCk.t < 600000) return nseCk.cookie;
-  const r = await wt(fetch('https://www.nseindia.com/', { headers: { 'User-Agent': UA, Accept: 'text/html' } }), 4000);
+  const r = await wt(fetch('https://www.nseindia.com/', { headers: { 'User-Agent': UA, Accept: 'text/html' } }), 2500);
   const raw = typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : [];
   nseCk = { cookie: raw.map(c => c.split(';')[0]).join('; '), t: Date.now() };
   return nseCk.cookie;
 }
 async function nseJson(url) {
   const ck = await nseCookie();
-  const r = await wt(fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', Referer: 'https://www.nseindia.com/', Cookie: ck } }), 5000);
+  const r = await wt(fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', Referer: 'https://www.nseindia.com/', Cookie: ck } }), 3000);
   if (!r.ok) throw new Error('nse ' + r.status);
   return r.json();
 }
@@ -216,7 +215,7 @@ async function promoterScreener(code) {
   const out = {};
   for (const suffix of ['/consolidated/', '/']) {
     try {
-      const r = await wt(fetch('https://www.screener.in/company/' + encodeURIComponent(code) + suffix, { headers: { 'User-Agent': UA, Accept: 'text/html' } }), 5000);
+      const r = await wt(fetch('https://www.screener.in/company/' + encodeURIComponent(code) + suffix, { headers: { 'User-Agent': UA, Accept: 'text/html' } }), 3000);
       if (!r.ok) continue;
       const html = await r.text();
       const m = html.match(/Promoters[\s\S]{0,200}?<\/td>((?:\s*<td[^>]*>\s*[\d.,]+%\s*<\/td>)+)/i);
@@ -228,19 +227,25 @@ async function promoterScreener(code) {
   }
   return out;
 }
+// Bounded: NSE and Screener.in run in parallel with a hard 3.5 s cap so a slow or blocking source can never delay or break the scan.
+// Results are cached per symbol (shareholding is quarterly); an empty result is cached only briefly so a blocked source is not hammered.
+const promCache = new Map();
 async function promoterInfo(sym) {
   if (/\.BO$/i.test(sym)) return {};
+  const hit = promCache.get(sym);
+  if (hit && Date.now() < hit.exp) return hit.v;
   const code = sym.replace(/\.NS$/i, '');
-  let out = {};
-  try { out = await promoterNSE(code); } catch (e) {}
-  if (out.promoterHolding == null || out.pledgedPct == null) {
-    let sc = {}; try { sc = await promoterScreener(code); } catch (e) {}
-    ['promoterHolding', 'promoterSource'].forEach(k => { if (out.promoterHolding == null && sc[k] != null) out[k] = sc[k]; });
-    ['pledgedPct', 'pledgeSource'].forEach(k => { if (out.pledgedPct == null && sc[k] != null) out[k] = sc[k]; });
-  }
+  const [n, sc] = await Promise.all([
+    wt(promoterNSE(code), 3500).catch(() => ({})),
+    wt(promoterScreener(code), 3500).catch(() => ({}))
+  ]);
+  const out = Object.assign({}, n);
+  if (out.promoterHolding == null && sc.promoterHolding != null) { out.promoterHolding = sc.promoterHolding; out.promoterSource = sc.promoterSource; }
+  if (out.pledgedPct == null && sc.pledgedPct != null) { out.pledgedPct = sc.pledgedPct; out.pledgeSource = sc.pledgeSource; }
+  const found = out.promoterHolding != null || out.pledgedPct != null;
+  promCache.set(sym, { v: out, exp: Date.now() + (found ? 6 * 3600e3 : 10 * 60e3) });
   return out;
 }
-
 async function oneEarly(sym, sess) {
   const now = Math.floor(Date.now() / 1000);
   const cr = sess.crumb ? '&crumb=' + encodeURIComponent(sess.crumb) : '';
@@ -249,7 +254,7 @@ async function oneEarly(sym, sess) {
     getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1d`),
     getJson(`https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?symbol=${encodeURIComponent(sym)}&type=${EARLY_TYPES.join(',')}&period1=${now - 8 * 365 * 86400}&period2=${now + 86400}`),
     sess.crumb ? getJson(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}${cr}`, sess.cookie) : Promise.reject(new Error('no crumb')),
-    promoterInfo(sym)
+    promoterInfo(sym).catch(() => ({}))
   ]);
   if (chart.status !== 'fulfilled') throw new Error('no price history');
   const res0 = chart.value?.chart?.result?.[0];
@@ -288,6 +293,7 @@ async function oneEarly(sym, sess) {
   const dts = g('annualTotalDebt'), lastDebt = dts.length ? dts[dts.length - 1].v : null;
   const lastOf = a => a.length ? a[a.length - 1].v : null;
   const intExp = g('annualInterestExpense'), lastInt = intExp.length ? Math.abs(intExp[intExp.length - 1].v) : null, lastEbit = lastOf(ebit);
+  const SB = cagrBest(g('annualTotalRevenue'), 5);
   const R = qs.status === 'fulfilled' ? (qs.value?.quoteSummary?.result?.[0] || {}) : {};
   const raw = o => (o && typeof o.raw === 'number') ? o.raw : null;
   const mcap = raw(R.price?.marketCap) || raw(R.summaryDetail?.marketCap);
