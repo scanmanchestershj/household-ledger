@@ -3510,6 +3510,7 @@ function meiEstimate(s){
  if(eps>0)m.push({k:"Graham growth formula",v:eps*(8.5+2*gu)*4.4/7.0,n:"EPS "+inr(eps)+" × (8.5 + 2 × growth "+gu.toFixed(1)+"%) × 4.4 ÷ 7% bond yield"});
  if(bv>0&&roe>0){const pb=Math.max(0.5,Math.min(5,(roe-5)/7));m.push({k:"Justified price-to-book",v:bv*pb,n:"book value "+inr(bv)+" × P/B "+pb.toFixed(2)+" (ROE "+roe.toFixed(1)+"%, cost of equity 12%, long-term growth 5%)"});}
  const loss=Number.isFinite(eps)&&eps<=0;
+ if(loss)return {value:null,methods:[],loss:true,eps,bv};
  if(!m.length)return {value:null,methods:[],loss,eps,bv};
  const vs=m.map(x=>x.v);return {value:vs.reduce((a,b)=>a+b,0)/vs.length,low:Math.min(...vs),high:Math.max(...vs),methods:m,g:gu,eps,bv};
 }
