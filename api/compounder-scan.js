@@ -331,14 +331,52 @@ async function oneEarly(sym, sess) {
     promoterSource: PR.promoterHolding != null ? PR.promoterSource : (ins != null ? 'Yahoo insiders (approx.)' : null),
     pledgedPct: PR.pledgedPct != null ? PR.pledgedPct : null, pledgeSource: PR.pledgedPct != null ? PR.pledgeSource : null,
     holdingDate: PR.holdingDate || null, pledgeDate: PR.pledgeDate || null,
-    pe, momentum, volumeConfirmation, governanceFlag: false,
+    pe, eps: raw(R.defaultKeyStatistics?.trailingEps), bookValue: raw(R.defaultKeyStatistics?.bookValue),
+    high52: closes.length ? Math.round(Math.max(...closes.slice(-250)) * 100) / 100 : null, low52: closes.length ? Math.round(Math.min(...closes.slice(-250)) * 100) / 100 : null,
+    momentum, volumeConfirmation, governanceFlag: false,
     shariaAAOIFI: sharia, shariaMSCI: sharia, fairValue: null, history
   };
+}
+
+// Chart ranges for the stock detail view: [Yahoo range, interval].
+const CHART_RANGES = { '1d': ['1d', '5m'], '1w': ['5d', '15m'], '1m': ['1mo', '60m'], '6m': ['6mo', '1d'], '1y': ['1y', '1d'], '5y': ['5y', '1wk'], 'all': ['max', '1mo'] };
+const rawN = o => (o && typeof o.raw === 'number') ? o.raw : null;
+async function detailMode(mode, q, res) {
+  const sym = String(q.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9&.\-]{1,20}$/.test(sym)) { res.status(400).json({ error: 'Pass ?symbol=ABC.NS' }); return; }
+  try {
+    if (mode === 'chart') {
+      const key = String(q.range || '1d').toLowerCase(), rg = CHART_RANGES[key] || CHART_RANGES['1d'];
+      res.setHeader('Cache-Control', (rg[0] === '1d' || rg[0] === '5d') ? 's-maxage=60, stale-while-revalidate=300' : 's-maxage=900, stale-while-revalidate=3600');
+      const j = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${rg[0]}&interval=${rg[1]}&includePrePost=false`);
+      const r0 = j && j.chart && j.chart.result && j.chart.result[0];
+      if (!r0) throw new Error('no chart data');
+      const st = r0.timestamp || [], cl = (r0.indicators && r0.indicators.quote && r0.indicators.quote[0] && r0.indicators.quote[0].close) || [];
+      let pts = []; st.forEach((t, i) => { if (typeof cl[i] === 'number') pts.push([t, Math.round(cl[i] * 100) / 100]); });
+      if (pts.length > 700) { const step = Math.ceil(pts.length / 700); pts = pts.filter((p, i) => i % step === 0 || i === pts.length - 1); }
+      const m = r0.meta || {};
+      res.status(200).json({ symbol: sym, range: key, points: pts, prevClose: m.chartPreviousClose != null ? m.chartPreviousClose : (m.previousClose != null ? m.previousClose : null),
+        price: m.regularMarketPrice != null ? m.regularMarketPrice : null, dayHigh: m.regularMarketDayHigh != null ? m.regularMarketDayHigh : null, dayLow: m.regularMarketDayLow != null ? m.regularMarketDayLow : null,
+        high52: m.fiftyTwoWeekHigh != null ? m.fiftyTwoWeekHigh : null, low52: m.fiftyTwoWeekLow != null ? m.fiftyTwoWeekLow : null, volume: m.regularMarketVolume != null ? m.regularMarketVolume : null });
+      return;
+    }
+    // mode === 'fund': just the numbers needed for an automatic intrinsic-value estimate
+    res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=43200');
+    const sess = await session();
+    if (!sess.crumb) throw new Error('no session');
+    const j = await getJson(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=summaryDetail,financialData,defaultKeyStatistics&crumb=${encodeURIComponent(sess.crumb)}`, sess.cookie);
+    const R = (j && j.quoteSummary && j.quoteSummary.result && j.quoteSummary.result[0]) || {};
+    const k = R.defaultKeyStatistics || {}, f = R.financialData || {}, d = R.summaryDetail || {};
+    const roe = rawN(f.returnOnEquity), eg = rawN(f.earningsGrowth);
+    res.status(200).json({ symbol: sym, eps: rawN(k.trailingEps), forwardEps: rawN(k.forwardEps), bookValue: rawN(k.bookValue), pe: rawN(d.trailingPE) != null ? rawN(d.trailingPE) : rawN(k.trailingPE), pb: rawN(k.priceToBook),
+      roe: roe != null ? roe * 100 : null, earningsGrowth: eg != null ? eg * 100 : null });
+  } catch (e) { res.status(502).json({ error: 'Detail source unavailable: ' + (e.message || 'unknown') }); }
 }
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=43200');
   const mode = String((req.query || {}).mode || ''), isBp = mode === 'blueprint', isEarly = mode === 'early';
+  if (mode === 'chart' || mode === 'fund') { await detailMode(mode, req.query || {}, res); return; }
   const syms = String((req.query || {}).symbols || '').split(',').map(x => x.trim().toUpperCase()).filter(x => /^[A-Z0-9&.\-]{1,20}$/.test(x)).slice(0, (isBp || isEarly) ? 4 : 6);
   if (!syms.length) { res.status(400).json({ error: 'Pass ?symbols=ABC.NS,XYZ.NS (max 6)' }); return; }
   try {
