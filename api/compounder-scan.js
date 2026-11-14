@@ -90,10 +90,11 @@ async function oneBlueprint(sym, sess, bench6m) {
   const now = Math.floor(Date.now() / 1000);
   const cr = sess.crumb ? '&crumb=' + encodeURIComponent(sess.crumb) : '';
   const mods = 'price,summaryDetail,financialData,defaultKeyStatistics,majorHoldersBreakdown,assetProfile';
-  const [chart, ts, qs] = await Promise.allSettled([
+  const [chart, ts, qs, pr] = await Promise.allSettled([
     getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1d`),
     getJson(`https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?symbol=${encodeURIComponent(sym)}&type=${BP_TYPES.join(',')}&period1=${now - 7 * 365 * 86400}&period2=${now}`, sess.cookie),
-    sess.crumb ? getJson(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}${cr}`, sess.cookie) : Promise.reject(new Error('no crumb'))
+    sess.crumb ? getJson(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}${cr}`, sess.cookie) : Promise.reject(new Error('no crumb')),
+    promoterInfo(sym)
   ]);
   if (chart.status !== 'fulfilled') throw new Error('no price history');
   const res0 = chart.value?.chart?.result?.[0];
@@ -155,7 +156,7 @@ async function oneBlueprint(sym, sess, bench6m) {
 
 // ---- Multibagger Early Identifier mode: GET /api/compounder-scan?mode=early&symbols=ABC.NS,XYZ.NS (max 4) ----
 // Returns the raw fundamentals the "ChatG Multibagger Early Identifier" module scores in the browser.
-// Every field Yahoo does not supply is null (never guessed). Promoter PLEDGE and governance flags are NOT available here.
+// Every field Yahoo does not supply is null (never guessed). Promoter holding and PLEDGE come from free NSE filings, falling back to Screener.in (see promoterInfo); governance flags are not available.
 const EARLY_TYPES = ['annualTotalRevenue', 'annualNetIncome', 'annualEBIT', 'annualStockholdersEquity', 'annualTotalDebt', 'annualFreeCashFlow', 'annualOperatingCashFlow', 'annualInterestExpense', 'quarterlyTotalRevenue', 'quarterlyNetIncome'];
 const avgOf = a => { const x = a.filter(v => typeof v === 'number' && isFinite(v)); return x.length >= 3 ? x.reduce((p, q) => p + q, 0) / x.length : null; };
 // Growth over the longest window available (up to maxYears, at least minYears). Yahoo usually carries only 4-5 annual points.
@@ -168,14 +169,81 @@ function yoyLatest(arr) { // latest quarter vs the same quarter a year earlier
   const a = arr[arr.length - 5].v, b = arr[arr.length - 1].v;
   return a > 0 ? (b / a - 1) * 100 : null;
 }
+
+// ---- Promoter holding + PLEDGE (free sources): NSE filings first, Screener.in page as fallback, Yahoo insiders last ----
+// Shareholding is quarterly, so this is cached 10 min per warm function and 6 h at the CDN. Anything not found stays null (never guessed).
+let nseCk = { cookie: '', t: 0 };
+async function nseCookie() {
+  if (nseCk.cookie && Date.now() - nseCk.t < 600000) return nseCk.cookie;
+  const r = await wt(fetch('https://www.nseindia.com/', { headers: { 'User-Agent': UA, Accept: 'text/html' } }), 4000);
+  const raw = typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : [];
+  nseCk = { cookie: raw.map(c => c.split(';')[0]).join('; '), t: Date.now() };
+  return nseCk.cookie;
+}
+async function nseJson(url) {
+  const ck = await nseCookie();
+  const r = await wt(fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', Referer: 'https://www.nseindia.com/', Cookie: ck } }), 5000);
+  if (!r.ok) throw new Error('nse ' + r.status);
+  return r.json();
+}
+const pct = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[,%\s]/g, '')); return isFinite(n) && n >= 0 && n <= 100 ? n : null; };
+async function promoterNSE(code) {
+  const c = encodeURIComponent(code), out = {};
+  const [sh, pl] = await Promise.allSettled([
+    nseJson('https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&symbol=' + c),
+    nseJson('https://www.nseindia.com/api/corporate-pledgedata?index=equities&symbol=' + c)
+  ]);
+  if (sh.status === 'fulfilled') {
+    const rows = Array.isArray(sh.value) ? sh.value : (sh.value && sh.value.data) || [];
+    const row = rows.find(r => r && pct(r.pr_and_prgrp) != null);
+    if (row) { out.promoterHolding = pct(row.pr_and_prgrp); out.holdingDate = row.date || null; out.promoterSource = 'NSE filing'; }
+  }
+  if (pl.status === 'fulfilled') {
+    const rows = (pl.value && pl.value.data) || (Array.isArray(pl.value) ? pl.value : []);
+    const row = rows.find(r => r && pct(r.percPromoterShares) != null);
+    if (row) { out.pledgedPct = pct(row.percPromoterShares); out.pledgeDate = row.date || null; out.pledgeSource = 'NSE filing'; }
+    else if (rows.length === 0 && out.promoterHolding != null) { /* no pledge record returned: not proof of zero, leave null */ }
+  }
+  return out;
+}
+async function promoterScreener(code) {
+  const out = {};
+  for (const suffix of ['/consolidated/', '/']) {
+    try {
+      const r = await wt(fetch('https://www.screener.in/company/' + encodeURIComponent(code) + suffix, { headers: { 'User-Agent': UA, Accept: 'text/html' } }), 5000);
+      if (!r.ok) continue;
+      const html = await r.text();
+      const m = html.match(/Promoters[\s\S]{0,200}?<\/td>((?:\s*<td[^>]*>\s*[\d.,]+%\s*<\/td>)+)/i);
+      if (m) { const cells = [...m[1].matchAll(/([\d.,]+)%/g)].map(x => x[1]); const v = pct(cells[cells.length - 1]); if (v != null) { out.promoterHolding = v; out.promoterSource = 'Screener.in'; } }
+      const pm = html.match(/Pledged percentage[\s\S]{0,250}?<span class="number">\s*([\d.,]+)\s*<\/span>/i);
+      if (pm) { const v = pct(pm[1]); if (v != null) { out.pledgedPct = v; out.pledgeSource = 'Screener.in'; } }
+      if (out.promoterHolding != null) break;
+    } catch (e) { /* try next */ }
+  }
+  return out;
+}
+async function promoterInfo(sym) {
+  if (/\.BO$/i.test(sym)) return {};
+  const code = sym.replace(/\.NS$/i, '');
+  let out = {};
+  try { out = await promoterNSE(code); } catch (e) {}
+  if (out.promoterHolding == null || out.pledgedPct == null) {
+    let sc = {}; try { sc = await promoterScreener(code); } catch (e) {}
+    ['promoterHolding', 'promoterSource'].forEach(k => { if (out.promoterHolding == null && sc[k] != null) out[k] = sc[k]; });
+    ['pledgedPct', 'pledgeSource'].forEach(k => { if (out.pledgedPct == null && sc[k] != null) out[k] = sc[k]; });
+  }
+  return out;
+}
+
 async function oneEarly(sym, sess) {
   const now = Math.floor(Date.now() / 1000);
   const cr = sess.crumb ? '&crumb=' + encodeURIComponent(sess.crumb) : '';
   const mods = 'price,summaryDetail,financialData,defaultKeyStatistics,majorHoldersBreakdown,assetProfile';
-  const [chart, ts, qs] = await Promise.allSettled([
+  const [chart, ts, qs, pr] = await Promise.allSettled([
     getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1d`),
     getJson(`https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?symbol=${encodeURIComponent(sym)}&type=${EARLY_TYPES.join(',')}&period1=${now - 8 * 365 * 86400}&period2=${now + 86400}`),
-    sess.crumb ? getJson(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}${cr}`, sess.cookie) : Promise.reject(new Error('no crumb'))
+    sess.crumb ? getJson(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${mods}${cr}`, sess.cookie) : Promise.reject(new Error('no crumb')),
+    promoterInfo(sym)
   ]);
   if (chart.status !== 'fulfilled') throw new Error('no price history');
   const res0 = chart.value?.chart?.result?.[0];
@@ -220,6 +288,7 @@ async function oneEarly(sym, sess) {
   const pe = raw(R.summaryDetail?.trailingPE) || raw(R.defaultKeyStatistics?.trailingPE);
   const roeNow = raw(R.financialData?.returnOnEquity), opmNow = raw(R.financialData?.operatingMargins);
   const ins = raw(R.majorHoldersBreakdown?.insidersPercentHeld);
+  const PR = pr.status === 'fulfilled' ? (pr.value || {}) : {};
   const de = lastEq != null && lastEq > 0 && lastDebt != null ? lastDebt / lastEq : (lastDebt === 0 ? 0 : null);
   let interestCoverage = null;
   if (lastEbit != null && lastInt > 0) interestCoverage = lastEbit / lastInt;
@@ -245,7 +314,10 @@ async function oneEarly(sym, sess) {
     opm: opmNow != null ? opmNow * 100 : (opmSeries.length ? opmSeries[opmSeries.length - 1] : null), opm5Y: avgOf(opmSeries),
     debtEquity: de, interestCoverage,
     operatingCashFlow: lastOf(g('annualOperatingCashFlow')), freeCashFlow: lastOf(g('annualFreeCashFlow')),
-    promoterHolding: ins != null ? ins * 100 : null, pledgedPct: null,
+    promoterHolding: PR.promoterHolding != null ? PR.promoterHolding : (ins != null ? ins * 100 : null),
+    promoterSource: PR.promoterHolding != null ? PR.promoterSource : (ins != null ? 'Yahoo insiders (approx.)' : null),
+    pledgedPct: PR.pledgedPct != null ? PR.pledgedPct : null, pledgeSource: PR.pledgedPct != null ? PR.pledgeSource : null,
+    holdingDate: PR.holdingDate || null, pledgeDate: PR.pledgeDate || null,
     pe, momentum, volumeConfirmation, governanceFlag: false,
     shariaAAOIFI: sharia, shariaMSCI: sharia, fairValue: null, history
   };

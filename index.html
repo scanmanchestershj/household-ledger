@@ -3219,8 +3219,8 @@
     <div class="panel">
       <div class="bar"><h2 style="margin:0">Multibagger candidates</h2><span class="muted" id="meiResultCount">0 results</span></div>
       <div class="tablewrap">
-        <table><thead><tr><th>Company</th><th>Price</th><th>Score</th><th>Revenue CAGR</th><th>ROCE</th><th>Research status</th><th></th></tr></thead>
-        <tbody id="meiRows"><tr><td colspan="7" class="muted">Tap Rescan live data to fetch stocks.</td></tr></tbody></table>
+        <table><thead><tr><th>Company</th><th>Price</th><th>Score</th><th>Revenue CAGR</th><th>ROCE</th><th>Promoter</th><th>Pledged</th><th>Research status</th><th></th></tr></thead>
+        <tbody id="meiRows"><tr><td colspan="9" class="muted">Tap Rescan live data to fetch stocks.</td></tr></tbody></table>
       </div>
     </div>
     <div class="panel">
@@ -3340,6 +3340,7 @@ function scoreStock(s){
  const disqualified=!!s.governanceFlag || num(s.pledgedPct,0)>=25;
  return {score:disqualified?Math.min(total,49):total,parts,technical,disqualified};
 }
+function cleanPromoter(s){return !s.disqualified&&s.promoterHolding!=null&&s.promoterHolding>=40&&s.pledgedPct!=null&&s.pledgedPct<5;}
 function classify(s){
  if(s.disqualified)return "Risk flag";
  if(s.score>=85)return "Exceptional candidate";
@@ -3359,8 +3360,9 @@ function render(){
  $("meiRows").innerHTML=visibleStocks.length?visibleStocks.map((s,i)=>`<tr>
  <td><strong>${esc(s.name)}</strong><br><span class="muted">${esc(s.symbol)} · ${esc(s.exchange)}</span></td>
  <td>${money(s.price)}</td><td class="score">${s.score}/100</td><td>${fmt(s.salesGrowth5Y)}%</td><td>${fmt(s.roce)}%</td>
- <td><span class="tag ${s.disqualified?"bad":s.score<65?"warn":""}">${esc(classify(s))}</span></td>
- <td><button data-stock="${esc(s.symbol)}">View</button></td></tr>`).join(""):'<tr><td colspan="7" class="muted">No companies match the current filters.</td></tr>';
+ <td title="${esc(s.promoterSource||'')}">${s.promoterHolding==null?'—':fmt(s.promoterHolding,1)+'%'}</td><td title="${esc(s.pledgeSource||'not found')}">${s.pledgedPct==null?'<span class="muted">n/a</span>':'<span class="tag '+(s.pledgedPct>=25?'bad':s.pledgedPct>=5?'warn':'')+'">'+fmt(s.pledgedPct,1)+'%</span>'}</td>
+ <td><span class="tag ${s.disqualified?"bad":s.score<65?"warn":""}">${esc(classify(s))}</span>${cleanPromoter(s)?' <span class="tag">\u2713 Clean promoter</span>':''}</td>
+ <td><button data-stock="${esc(s.symbol)}">View</button></td></tr>`).join(""):'<tr><td colspan="9" class="muted">No companies match the current filters.</td></tr>';
  $("meiResultCount").textContent=visibleStocks.length+" results";
  $("meiScanned").textContent=allStocks.length.toLocaleString("en-IN");
  $("meiHigh").textContent=allStocks.map(s=>({...s,...scoreStock(s)})).filter(s=>s.score>=75&&!s.disqualified).length;
@@ -3372,7 +3374,7 @@ function render(){
  $("meiProviderNotice").classList.toggle("good",!NOLIVE());
  $("meiProviderNotice").innerHTML=NOLIVE()
  ?"<strong>No live data yet.</strong> Tap Rescan live data to fetch stocks."
- :"<strong>Live source:</strong> "+esc(sourceName)+". Updated: "+esc(lastStamp||new Date().toLocaleString())+". Some fields can be missing (they score 0); promoter pledge and governance are not available, verify them on the exchange site.";
+ :"<strong>Live source:</strong> "+esc(sourceName)+". Updated: "+esc(lastStamp||new Date().toLocaleString())+". Some fields can be missing (they score 0). Promoter holding and pledge: "+allStocks.filter(x=>x.pledgedPct!=null).length+" of "+allStocks.length+" stocks had pledge data from free NSE / Screener.in filings; where it shows n/a, verify on the exchange site. Governance flags are not available.";
  $("meiRows").querySelectorAll("button[data-stock]").forEach(b=>b.addEventListener("click",()=>selectStock(b.dataset.stock)));
  if(selected){const fresh=allStocks.find(s=>s.symbol===selected.symbol);if(fresh)selectStock(fresh.symbol,false);}
 }
@@ -19680,7 +19682,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.18.2', APP_VERSION_DATE = '14 Nov 2026';
+    const APP_VERSION = '1.19.0', APP_VERSION_DATE = '14 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
