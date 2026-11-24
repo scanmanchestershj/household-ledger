@@ -13945,13 +13945,16 @@ allStocks=demo;render();
     if(!out) return;
     const period = currentPeriod();
     const all = (currentData().countries.UAE.homeSent || []).filter(x => inPeriod(x.date, period));
-    if(!all.length){ out.innerHTML = '<div class="empty" style="padding:6px 0;">Nothing sent to India in ' + escapeHtml(periodLabel(period)) + '.</div>'; return; }
+    const expAll = (currentData().countries.UAE.homeSpent || []).filter(x => inPeriod(x.date, period));
+    if(!all.length && !expAll.length){ out.innerHTML = '<div class="empty" style="padding:6px 0;">Nothing sent to India in ' + escapeHtml(periodLabel(period)) + '.</div>'; return; }
     const sum = (arr, k) => arr.reduce((t,x) => t + Number(x[k] || 0), 0);
     const block = (kind, title) => {
       const items = all.filter(x => x.kind === kind).sort((a,b) => (a.date || '').localeCompare(b.date || ''));
-      if(!items.length) return '';
+      const exps = expAll.filter(x => x.kind === kind);
+      if(!items.length && !exps.length) return '';
       const used = {};
       items.forEach(x => (x.splits || []).forEach(sp => { const k = (sp.name || '(no name)').trim(); used[k] = (used[k] || 0) + Number(sp.inr || 0); }));
+      exps.forEach(x => { const k = (x.name || '(no name)').trim(); used[k] = (used[k] || 0) + Number(x.inr || 0); });
       const usedRows = Object.keys(used).sort((a,b) => used[b] - used[a]).map(k => `<div class="sub-row"><span class="label">${escapeHtml(k)}</span><span>${inrFmt(used[k])}</span></div>`).join('');
       const rows = items.map(x => `<div class="sub-row"><span class="label">${escapeHtml(x.date || '')}</span><span>${aedFmt(x.aed)} → ${inrFmt(x.inr)}</span></div>`).join('');
       const spentK = Object.keys(used).reduce((t,k) => t + used[k], 0);
@@ -15723,6 +15726,11 @@ allStocks=demo;render();
     if(!Array.isArray(c.homeSent)) c.homeSent = [];
     return c.homeSent;
   }
+  function homeSpentList(){
+    const c = currentData().countries.UAE;
+    if(!Array.isArray(c.homeSpent)) c.homeSpent = [];
+    return c.homeSpent;
+  }
   function inrFmt(v){ return privacyMode ? PRIVACY_MASK : '₹' + Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }); }
   function aedFmt(v){ return privacyMode ? PRIVACY_MASK : 'AED ' + Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
   function homeSplitRowHtml(name, amt){
@@ -15748,9 +15756,21 @@ allStocks=demo;render();
         <div class="hs-splits">${homeSplitRowHtml('', '')}</div>
         <button type="button" class="add-btn ghost hs-split-add" style="margin-top:4px;">+ Add split row</button>
         <button type="button" class="add-btn full-width hs-add" style="margin-top:8px;">Add entry</button>
+        <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px;">
+          <div style="font-weight:700;margin-bottom:6px;">Add expense in Home Country</div>
+          <div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Log money actually spent in India (rent, groceries, EMI, etc.). It counts toward Spent and Balance below.</div>
+          <div class="form-grid">
+            <div><label class="field-label">Date</label><input type="date" class="hs-x-date"></div>
+            <div><label class="field-label">Used for</label><input type="text" class="hs-x-name" placeholder="e.g. Groceries, Rent"></div>
+            <div><label class="field-label">Amount (INR)</label><input type="number" class="hs-x-inr" placeholder="0.00" step="0.01"></div>
+          </div>
+          <button type="button" class="add-btn full-width hs-exp-add" style="margin-top:8px;">Add expense</button>
+          <div class="hs-exp-list" style="margin-top:8px;"></div>
+        </div>
         <div class="hs-list" style="margin-top:12px;"></div>`;
       const aed = body.querySelector('.hs-aed'), inr = body.querySelector('.hs-inr');
       body.querySelector('.hs-date').value = todayStr();
+      body.querySelector('.hs-x-date').value = todayStr();
       aed.addEventListener('input', () => { const v = parseFloat(aed.value); inr.value = isNaN(v) ? '' : (v * (state.exchangeRate || 22.5)).toFixed(2); });
       body.addEventListener('input', (e) => {
         if(!e.target.classList.contains('hs-en-aed')) return;
@@ -15758,6 +15778,22 @@ allStocks=demo;render();
         if(box) box.querySelector('.hs-en-inr').value = isNaN(v) ? '' : (v * (state.exchangeRate || 22.5)).toFixed(2);
       });
       body.addEventListener('click', (e) => {
+        if(e.target.closest('.hs-exp-add')){
+          const amt = parseFloat(body.querySelector('.hs-x-inr').value);
+          const nm = body.querySelector('.hs-x-name').value.trim();
+          if(isNaN(amt) || amt <= 0){ alert('Enter the expense amount in INR.'); return; }
+          if(!nm){ alert('Enter what it was used for.'); return; }
+          homeSpentList().push({ id: uid(), kind, date: body.querySelector('.hs-x-date').value || todayStr(), name: nm, inr: amt });
+          body.querySelector('.hs-x-inr').value = ''; body.querySelector('.hs-x-name').value = '';
+          save(); renderHomeSent(); return;
+        }
+        const expDel = e.target.closest('.hs-exp-del');
+        if(expDel){
+          if(!confirm('Delete this expense?')) return;
+          const list = homeSpentList(); const i = list.findIndex(x => x.id === expDel.dataset.id);
+          if(i > -1){ list.splice(i, 1); save(); renderHomeSent(); }
+          return;
+        }
         if(e.target.closest('.hs-split-add')){ body.querySelector('.hs-splits').insertAdjacentHTML('beforeend', homeSplitRowHtml('', '')); return; }
         const del = e.target.closest('.hs-split-del');
         if(del){ const rows = body.querySelectorAll('.hs-split-row'); if(rows.length > 1) del.closest('.hs-split-row').remove(); else { rows[0].querySelectorAll('input').forEach(i => i.value = ''); } return; }
@@ -15844,9 +15880,13 @@ allStocks=demo;render();
       const items = all.filter(x => x.kind === kind).sort((a,b) => (b.date || '').localeCompare(a.date || ''));
       const totAed = items.reduce((t,x) => t + Number(x.aed || 0), 0);
       const totInr = items.reduce((t,x) => t + Number(x.inr || 0), 0);
+      const exps = homeSpentList().filter(x => x.kind === kind).sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+      const expTot = exps.reduce((t,x) => t + Number(x.inr || 0), 0);
+      const expEl = body.querySelector('.hs-exp-list');
+      if(expEl) expEl.innerHTML = exps.length ? `<div style="font-size:12px;font-weight:700;margin-bottom:4px;">Expenses logged: ${inrFmt(expTot)}</div>` + exps.map(x => `<div style="font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 0;"><span>${escapeHtml(x.date || '')} · ${escapeHtml(x.name || '(no name)')}</span><span style="display:flex;align-items:center;gap:6px;">${inrFmt(x.inr)}<button type="button" class="del-btn hs-exp-del" data-id="${x.id}" aria-label="Delete expense">×</button></span></div>`).join('') : '';
       const listEl = body.querySelector('.hs-list');
       if(!items.length){ listEl.innerHTML = '<div class="empty" style="padding:6px 0;">Nothing logged yet.</div>'; return; }
-      const totUsed = items.reduce((t,x) => t + (x.splits || []).reduce((a,sp) => a + Number(sp.inr || 0), 0), 0);
+      const totUsed = items.reduce((t,x) => t + (x.splits || []).reduce((a,sp) => a + Number(sp.inr || 0), 0), 0) + expTot;
       listEl.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">Total sent: ${aedFmt(totAed)} · ${inrFmt(totInr)}<br>Spent: ${inrFmt(totUsed)} · ${totInr - totUsed < -0.5 ? 'Over by ' + inrFmt(totUsed - totInr) : 'Balance: ' + inrFmt(totInr - totUsed)}</div>` + items.map(x => {
         const used = (x.splits || []).reduce((t,sp) => t + Number(sp.inr || 0), 0);
         const left = Number(x.inr || 0) - used;
@@ -15895,7 +15935,7 @@ allStocks=demo;render();
     if(sumEl){
       const h = all.filter(x => x.kind === 'home'), iv = all.filter(x => x.kind === 'investment');
       const s = (arr, k) => arr.reduce((t,x) => t + Number(x[k] || 0), 0);
-      const spentAll = all.reduce((t,x) => t + (x.splits || []).reduce((a,sp) => a + Number(sp.inr || 0), 0), 0);
+      const spentAll = all.reduce((t,x) => t + (x.splits || []).reduce((a,sp) => a + Number(sp.inr || 0), 0), 0) + homeSpentList().reduce((t,x) => t + Number(x.inr || 0), 0);
       sumEl.innerHTML = `<div style="font-size:12.5px;line-height:1.6;background:var(--paper-deep);border-radius:10px;padding:8px 12px;">
         India Home: <strong>${aedFmt(s(h,'aed'))}</strong> · ${inrFmt(s(h,'inr'))}<br>
         India Investment: <strong>${aedFmt(s(iv,'aed'))}</strong> · ${inrFmt(s(iv,'inr'))}<br>
@@ -19837,7 +19877,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.21.0', APP_VERSION_DATE = '14 Nov 2026';
+    const APP_VERSION = '1.22.0', APP_VERSION_DATE = '23 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
