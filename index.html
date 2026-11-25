@@ -2013,6 +2013,7 @@
               <input type="text" id="uaeTxSearch" placeholder="Search by label or person…" style="flex:1;">
               <button type="button" class="add-btn ghost" id="uaeTxExportCsv" title="Download shown transactions as CSV">⬇ CSV</button>
             </div>
+            <div id="uaeReturnableSummary" style="display:none; margin-bottom:8px;"></div>
             <ul class="item-list" id="uaeTxList"></ul>
           </div>
         </div>
@@ -2623,6 +2624,7 @@
               <input type="text" id="indiaTxSearch" placeholder="Search by label or person…" style="flex:1;">
               <button type="button" class="add-btn ghost" id="indiaTxExportCsv" title="Download shown transactions as CSV">⬇ CSV</button>
             </div>
+            <div id="indiaReturnableSummary" style="display:none; margin-bottom:8px;"></div>
             <ul class="item-list" id="indiaTxList"></ul>
           </div>
         </div>
@@ -5352,6 +5354,21 @@ allStocks=demo;render();
       return kb.localeCompare(ka) || (b.i - a.i);
     }).map(o => o.x);
   }
+  // Possible double entries in a country's Budget: same date, type, label, amount (and same
+  // spend time when both have one). The earliest entry is treated as the original; later ones
+  // are flagged unless dismissed with "not a duplicate".
+  function budgetDupIds(countryKey){
+    const tx = (currentData().countries[countryKey] && currentData().countries[countryKey].transactions) || [];
+    const groups = {};
+    tx.forEach(t => {
+      if(t.dupOk || t.linkedRemitId) return;
+      const key = [t.date || '', t.type || '', (t.label || '').trim().toLowerCase(), Number(t.amount || 0).toFixed(2), t.time || ''].join('|');
+      (groups[key] = groups[key] || []).push(t.id);
+    });
+    const flagged = new Set();
+    Object.values(groups).forEach(ids => { if(ids.length > 1) ids.slice(1).forEach(id => flagged.add(id)); });
+    return flagged;
+  }
   function nowTimeStr(){ return new Date().toTimeString().slice(0,5); }
 
   function setTitleFrom(sourceEl){
@@ -6953,7 +6970,9 @@ allStocks=demo;render();
       lending: {sign:'−', cls:'expense', tag:'Lent'},
       borrowing: {sign:'', cls:'expense', tag:'Debt'}
     };
+    const dupIdSet = budgetDupIds(countryKey);
     sortNewestFirst(displayedTx).forEach(t => {
+      (t.returnSplits || []).forEach(r => { if(!r.id) r.id = uid(); });
       const li = document.createElement('li');
       const meta = typeMeta[t.type] || typeMeta.expense;
       const timeStr = t.time ? ` ${escapeHtml(t.time)}` : '';
@@ -6968,7 +6987,10 @@ allStocks=demo;render();
           const splitSumTx = t.returnSplits.reduce((a, r) => a + (Number(r.amount) || 0), 0);
           returnBadge = t.returnSplits.map(r => {
             const ret = r.returnable !== 'non-returnable';
-            return `<div class="item-meta ${ret ? 'tag-returnable' : 'tag-nonreturnable'}">${ret ? 'Returnable' : 'Non-ret.'} · ${escapeHtml(r.name)}${r.amount != null ? ' (' + fmt(r.amount) + ')' : ''}</div>`;
+            const who = `${escapeHtml(r.name)}${r.amount != null ? ' (' + fmt(r.amount) + ')' : ''}`;
+            if(!ret) return `<div class="item-meta tag-nonreturnable">Non-ret. · ${who}</div>`;
+            if(r.paid) return `<div class="item-meta tag-paid">✓ Paid · ${who} ${escapeHtml(r.paidDate || '')}${r.appliedDue ? ' → due ' + escapeHtml(r.appliedDue) : ''}${r.usedFor ? ' · used for ' + escapeHtml(r.usedFor) : ''} <button type="button" class="link-btn" data-action="bsplitedit" data-tx="${t.id}" data-split="${r.id}">edit</button> <button type="button" class="link-btn" data-action="bsplitundo" data-tx="${t.id}" data-split="${r.id}">undo</button></div>`;
+            return `<div class="item-meta tag-returnable">Returnable · ${who} <button type="button" class="link-btn" data-action="bsplitpaid" data-tx="${t.id}" data-split="${r.id}">mark paid</button></div>`;
           }).join('') + (t.spendFor === 'split' && Number(t.amount) > 0 ? `<div class="item-meta">My share · ${fmt(Math.max(0, Number(t.amount) - splitSumTx))}</div>` : '');
         } else {
           returnBadge = `<div class="item-meta tag-returnable">Split${t.returnName ? ' · ' + escapeHtml(t.returnName) : ''}</div>`;
@@ -6976,7 +6998,15 @@ allStocks=demo;render();
       } else {
         returnBadge = t.type === 'expense' ? `<div class="item-meta tag-nonreturnable">Non-returnable</div>` : '';
       }
-      const dueBadge = t.dueDate ? `<div class="item-meta">due ${escapeHtml(t.dueDate)}</div>` : '';
+      let dueBadge = '';
+      if(t.dueDate){
+        const ddTx = daysUntil(t.dueDate);
+        const settledTx = t.type === 'borrowing' && t.repaid;
+        if(!settledTx && ddTx !== null && ddTx < 0) dueBadge = `<div class="item-meta tag-overdue">overdue ${Math.abs(ddTx)}d</div>`;
+        else if(!settledTx && ddTx !== null && ddTx <= 5) dueBadge = `<div class="item-meta tag-soon">due in ${ddTx}d</div>`;
+        else dueBadge = `<div class="item-meta">due ${escapeHtml(t.dueDate)}</div>`;
+      }
+      const dupBadge = dupIdSet.has(t.id) ? `<div class="item-meta tag-overdue">⚠ Possible double entry <button type="button" class="link-btn" data-action="bdupok" data-id="${t.id}">not a duplicate</button></div>` : '';
       const repaidChip = t.type === 'borrowing'
         ? `<button class="perm-chip ${t.repaid ? 'on' : ''} tx-repaid-toggle" data-id="${t.id}" style="margin-left:6px;">${t.repaid ? 'Repaid ✓' : 'Mark repaid'}</button>`
         : '';
@@ -7002,6 +7032,7 @@ allStocks=demo;render();
             ${returnBadge}
             ${recurTag ? `<div class="item-meta" style="background:var(--paper-deep);color:var(--teal-dark);">${recurTag}</div>` : ''}
             ${dueBadge}
+            ${dupBadge}
             ${repaidChip}
           </div>
           <div style="text-align:right; margin-top:6px;">
@@ -7012,7 +7043,7 @@ allStocks=demo;render();
       `;
       li.style.cursor = 'pointer';
       li.addEventListener('click', (e) => {
-        if(e.target.closest('.del-btn') || e.target.closest('.edit-btn') || e.target.closest('.tx-repaid-toggle')) return;
+        if(e.target.closest('.del-btn') || e.target.closest('.edit-btn') || e.target.closest('.tx-repaid-toggle') || e.target.closest('.link-btn')) return;
         startEditTxCountry(countryKey, t.id);
       });
       list.appendChild(li);
@@ -7037,6 +7068,40 @@ allStocks=demo;render();
       const t = data.transactions.find(x => x.id === el.dataset.id);
       if(t){ t.repaid = !t.repaid; save(); renderBudgetCountry(countryKey); renderOverview(); }
     }));
+
+    list.querySelectorAll('[data-action="bsplitpaid"], [data-action="bsplitedit"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      markReturnableItemPaid({ type: 'btxsplit', country: countryKey, txId: el.dataset.tx, splitId: el.dataset.split }, true);
+    }));
+    list.querySelectorAll('[data-action="bsplitundo"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      markReturnableItemPaid({ type: 'btxsplit', country: countryKey, txId: el.dataset.tx, splitId: el.dataset.split }, false);
+    }));
+    list.querySelectorAll('[data-action="bdupok"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const t = data.transactions.find(x => x.id === el.dataset.id);
+      if(t){ t.dupOk = true; save(); renderBudgetCountry(countryKey); renderOverview(); }
+    }));
+    // Returnable summary for the period being viewed: who still owes what, and what's been paid back.
+    const retSumEl = document.getElementById(prefix + 'ReturnableSummary');
+    if(retSumEl){
+      let retPending = 0, retPaid = 0; const pendingBy = {};
+      shownTx.forEach(t => {
+        if(t.spendFor !== 'split' && t.spendFor !== 'returnable') return;
+        const sps = t.returnSplits || [];
+        sps.forEach(r => {
+          if(r.returnable === 'non-returnable') return;
+          const amt = r.amount != null ? Number(r.amount) : (sps.length === 1 ? Number(t.amount) : 0);
+          if(!(amt > 0)) return;
+          if(r.paid) retPaid += amt; else { retPending += amt; pendingBy[r.name] = (pendingBy[r.name] || 0) + amt; }
+        });
+      });
+      if(retPending > 0 || retPaid > 0){
+        const who = Object.entries(pendingBy).map(([n, a]) => `${escapeHtml(n)} ${budgetFmt(a, countryKey)}`).join(' · ');
+        retSumEl.style.display = '';
+        retSumEl.innerHTML = `<div class="item-meta tag-returnable" style="display:block; padding:8px 10px;">↩ Returnable — pending <strong>${budgetFmt(retPending, countryKey)}</strong> · paid back <strong>${budgetFmt(retPaid, countryKey)}</strong>${who ? '<div style="margin-top:3px;font-size:11px;">Owes you: ' + who + '</div>' : ''}</div>`;
+      } else { retSumEl.style.display = 'none'; retSumEl.innerHTML = ''; }
+    }
 
     // Balance/Debt/Expense boxes: for a selected month, these are that month's totals;
     // for "All time" they're the running, cumulative totals (borrowing is a liability,
@@ -7313,7 +7378,7 @@ allStocks=demo;render();
   function returnRowHtml(entry){
     const retVal = entry.returnable === 'non-returnable' ? 'non-returnable' : 'returnable';
     return `
-      <div class="split-row returnsplit-row">
+      <div class="split-row returnsplit-row" data-sid="${escapeHtml(entry.id || '')}">
         <input type="text" class="split-name" placeholder="Name" list="knownPeopleList" value="${escapeHtml(entry.name || '')}">
         <input type="number" class="split-amount" placeholder="Amount" step="0.01" value="${entry.amount || entry.amount === 0 ? entry.amount : ''}">
         <input type="number" class="split-percent" placeholder="%" step="0.01" style="display:none;">
@@ -7388,7 +7453,7 @@ allStocks=demo;render();
       const name = row.querySelector('.split-name').value.trim();
       const amountRaw = row.querySelector('.split-amount').value;
       const amount = amountRaw === '' ? null : parseFloat(amountRaw);
-      return { name, amount: (amount === null || isNaN(amount)) ? null : amount, returnable: row.querySelector('.split-returnable').value };
+      return { id: row.dataset.sid || '', name, amount: (amount === null || isNaN(amount)) ? null : amount, returnable: row.querySelector('.split-returnable').value };
     }).filter(r => r.name);
   }
   ['uae', 'india'].forEach(prefix => {
@@ -7490,6 +7555,15 @@ allStocks=demo;render();
     if(isNaN(amountVal) || amountVal <= 0){ alert('Please enter an amount greater than 0.'); return; }
     if(!editingTxId(countryKey)){
       const dateVal = date.value || todayStr();
+      // Double-entry check within this same budget: same date, type, label and amount (and same time when both have one).
+      const timeValDup = (document.getElementById(prefix + 'TxTime') || {}).value || '';
+      const dupSame = (data.transactions || []).find(x => !x.linkedRemitId && x.date === dateVal && x.type === type.value &&
+        Math.abs(Number(x.amount) - amountVal) < 0.005 && (x.label || '').trim().toLowerCase() === labelVal.toLowerCase() &&
+        (!x.time || !timeValDup || x.time === timeValDup));
+      if(dupSame){
+        const proceedDup = confirm(`Possible double entry — "${dupSame.label}" for ${amountVal} is already logged on ${dateVal}${dupSame.time ? ' at ' + dupSame.time : ''}. Add it anyway?`);
+        if(!proceedDup) return;
+      }
       if(countryKey === 'UAE' && type.value === 'expense'){
         const dupRemit = (data.remittances || []).find(r => r.date === dateVal && Math.abs(Number(r.amount) - amountVal) < 5);
         if(dupRemit){
@@ -7545,7 +7619,17 @@ allStocks=demo;render();
     const spendForVal = (spendForEl && type.value !== 'income') ? spendForEl.value : 'own';
     const returnSplits = spendForVal === 'split' ? collectReturnRows(countryKey) : [];
     const returnNameVal = returnSplits.map(r => r.name).join(', ');
-    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnSplits, returnName: returnNameVal };
+    {
+      // Keep "paid back" details when an existing transaction is edited.
+      const exTx = curEditId ? data.transactions.find(x => x.id === curEditId) : null;
+      const exSplits = (exTx && exTx.returnSplits) || [];
+      returnSplits.forEach(r => {
+        if(!r.id) r.id = uid();
+        const ex = exSplits.find(e => e.id === r.id);
+        if(ex && ex.paid && r.returnable !== 'non-returnable'){ r.paid = true; r.paidDate = ex.paidDate || ''; r.appliedDue = ex.appliedDue || ''; r.usedFor = ex.usedFor || ''; }
+      });
+    }
+    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnSplits, returnName: returnNameVal, dupOk: !!(curEditId && (data.transactions.find(x => x.id === curEditId) || {}).dupOk) };
     if(curEditId){
       const idx = data.transactions.findIndex(x => x.id === curEditId);
       if(idx > -1) data.transactions[idx] = Object.assign({id: curEditId}, record);
@@ -14345,6 +14429,16 @@ allStocks=demo;render();
     countryKeys.forEach(ck => {
       const tx = (currentData().countries[ck] && currentData().countries[ck].transactions) || [];
       tx.forEach(t => {
+        if(t.spendFor === 'split' || t.spendFor === 'returnable'){
+          const sps = t.returnSplits || [];
+          sps.forEach(sp => {
+            if(sp.returnable === 'non-returnable') return;
+            if(!sp.id) sp.id = uid();
+            const amt = sp.amount != null ? Number(sp.amount) : (sps.length === 1 ? Number(t.amount) : 0);
+            if(!(amt > 0)) return;
+            items.push({ date: t.date, time: t.time || '', who: sp.name || 'Unnamed', desc: t.label || 'Budget spend', amount: amt, paid: !!sp.paid, paidDate: sp.paidDate || '', appliedDue: sp.appliedDue || '', usedFor: sp.usedFor || '', src: { type: 'btxsplit', country: ck, txId: t.id, splitId: sp.id } });
+          });
+        }
         if(t.type === 'borrowing' && t.purpose === 'spend_for_other' && t.purposePerson){
           items.push({
             date: t.purposeDate || t.date, time: t.purposeTime || '',
@@ -14367,15 +14461,20 @@ allStocks=demo;render();
       const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
       return tx && tx.find(x => x.id === src.txId);
     }
+    if(src.type === 'btxsplit'){
+      const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
+      const bt = tx && tx.find(x => x.id === src.txId);
+      return bt && (bt.returnSplits || []).find(r => r.id === src.splitId);
+    }
     return null;
   }
   function markReturnableItemPaid(src, makePaid){
     let paidDate = '', appliedDue = '', usedFor = '';
     if(makePaid){
       const existing = findReturnableSourceRecord(src) || {};
-      paidDate = prompt('Paid date (YYYY-MM-DD):', todayStr());
+      paidDate = prompt('Paid date (YYYY-MM-DD):', existing.paidDate || existing.purposePaidDate || todayStr());
       if(paidDate === null) return false;
-      appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', '') || '';
+      appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', existing.appliedDue || existing.purposeAppliedDue || '') || '';
       usedFor = prompt('What did you use this money for? (e.g. "Mashreq credit card — July repayment", leave blank if none)', existing.usedFor || existing.purposeUsedFor || '') || '';
     }
     if(src.type === 'card'){
@@ -14392,12 +14491,19 @@ allStocks=demo;render();
       const t = tx && tx.find(x => x.id === src.txId);
       if(!t) return false;
       t.purposePaid = makePaid; t.purposePaidDate = makePaid ? paidDate.trim() : ''; t.purposeAppliedDue = makePaid ? appliedDue.trim() : ''; t.purposeUsedFor = makePaid ? usedFor.trim() : '';
+    } else if(src.type === 'btxsplit'){
+      const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
+      const bt = tx && tx.find(x => x.id === src.txId);
+      const bsp = bt && (bt.returnSplits || []).find(r => r.id === src.splitId);
+      if(!bsp) return false;
+      bsp.paid = makePaid; bsp.paidDate = makePaid ? paidDate.trim() : ''; bsp.appliedDue = makePaid ? appliedDue.trim() : ''; bsp.usedFor = makePaid ? usedFor.trim() : '';
     } else {
       return false;
     }
     save();
     renderReturnableStatement();
     renderCards();
+    if(src.type === 'btxsplit'){ renderBudgetCountry(src.country); renderOverview(); }
     return true;
   }
   function populateReturnablePersonSelect(){
@@ -17705,6 +17811,38 @@ allStocks=demo;render();
       });
     }
 
+    // Budget: possible double entries (last 14 days) and debts/payments due soon or overdue.
+    try{
+      const dupCutoff = new Date(); dupCutoff.setDate(dupCutoff.getDate() - 14);
+      const dupCutoffStr = dupCutoff.toISOString().slice(0,10);
+      const dupHits = [];
+      ['UAE','India'].forEach(ck => {
+        const flagged = budgetDupIds(ck);
+        (currentData().countries[ck].transactions || []).forEach(t => { if(flagged.has(t.id) && (t.date || '') >= dupCutoffStr) dupHits.push(t); });
+      });
+      if(dupHits.length){
+        banners.push({
+          key: 'budget-dups', type: 'warn', emoji: '⚠️',
+          title: `${dupHits.length} possible double entr${dupHits.length === 1 ? 'y' : 'ies'} in Budget`,
+          body: `${dupHits.slice(0,3).map(t => `${t.label} (${t.date})`).join(', ')}${dupHits.length > 3 ? ' and others' : ''} — open Budget and tap "not a duplicate" if it's genuine, or delete the extra one.`
+        });
+      }
+      const debtDue = [];
+      ['UAE','India'].forEach(ck => {
+        (currentData().countries[ck].transactions || []).forEach(t => {
+          if(t.type === 'borrowing' && !t.repaid && t.dueDate){ const dd = daysUntil(t.dueDate); if(dd !== null && dd <= 3) debtDue.push({ t, dd }); }
+        });
+      });
+      if(debtDue.length){
+        const overdue = debtDue.filter(x => x.dd < 0).length;
+        banners.push({
+          key: 'budget-debt-due', type: overdue ? 'danger' : 'warn', emoji: overdue ? '🚨' : '📅',
+          title: `${debtDue.length} Budget debt${debtDue.length === 1 ? '' : 's'} ${overdue ? 'overdue or ' : ''}due within 3 days`,
+          body: `${debtDue.slice(0,3).map(x => x.t.label).join(', ')}${debtDue.length > 3 ? ' and others' : ''} — see Budget → transactions.`
+        });
+      }
+    }catch(e){ /* budget not ready yet — skip silently */ }
+
     // Monthly budget threshold — reuses the same target the Report tab's
     // "Am I overspending?" gauge uses for the combined (both countries) scope.
     try{
@@ -19970,7 +20108,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.23.1', APP_VERSION_DATE = '25 Nov 2026';
+    const APP_VERSION = '1.24.0', APP_VERSION_DATE = '25 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
