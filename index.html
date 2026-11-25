@@ -7353,7 +7353,7 @@ allStocks=demo;render();
   function cancelEditTxCountry(countryKey){
     const prefix = budgetPrefix(countryKey);
     setEditingTxId(countryKey, null);
-    document.getElementById(prefix + 'TxLabel').value = '';
+    document.getElementById(prefix + 'TxLabel').value = 'Tea';
     const labelSelReset = document.getElementById(prefix + 'TxLabelSelect'); if(labelSelReset) labelSelReset.value = 'Tea';
     document.getElementById(prefix + 'TxAmount').value = '';
     document.getElementById(prefix + 'TxType').value = 'expense';
@@ -7393,9 +7393,12 @@ allStocks=demo;render();
     const due = document.getElementById(prefix + 'TxDue');
     const borrowSource = document.getElementById(prefix + 'TxBorrowSource');
     const cardMaps = collectCardMapRows(countryKey);
-    const labelVal = label.value.trim();
+    const labelSelFallback = document.getElementById(prefix + 'TxLabelSelect');
+    let labelVal = label.value.trim();
+    if(!labelVal && labelSelFallback && labelSelFallback.value !== 'Others') labelVal = labelSelFallback.value;
     const amountVal = parseFloat(amount.value);
-    if(!labelVal || isNaN(amountVal) || amountVal <= 0) return;
+    if(!labelVal){ alert('Please enter a description (pick one from the list, or choose Others and type it).'); return; }
+    if(isNaN(amountVal) || amountVal <= 0){ alert('Please enter an amount greater than 0.'); return; }
     if(!editingTxId(countryKey)){
       const dateVal = date.value || todayStr();
       if(countryKey === 'UAE' && type.value === 'expense'){
@@ -7462,7 +7465,7 @@ allStocks=demo;render();
     } else {
       data.transactions.push(Object.assign({id: uid()}, record));
       logActivity('Added transaction', `${record.label} (${countryKey}, ${fmt(record.amount)})`);
-      label.value = ''; amount.value = ''; person.value = ''; due.value = '';
+      label.value = 'Tea'; amount.value = ''; person.value = ''; due.value = '';
       if(timeEl) timeEl.value = '';
       if(spendForEl) spendForEl.value = 'own';
       renderReturnRows(countryKey, []);
@@ -19877,7 +19880,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.22.0', APP_VERSION_DATE = '23 Nov 2026';
+    const APP_VERSION = '1.22.1', APP_VERSION_DATE = '25 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
