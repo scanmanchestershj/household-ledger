@@ -1969,12 +1969,23 @@
           <div class="full" id="uaeTxSpendForWrap">
             <select id="uaeTxSpendFor">
               <option value="own">Own spend only</option>
-              <option value="returnable">Returnable (will be paid back)</option>
+              <option value="split">Split with others</option>
             </select>
             <div id="uaeTxReturnNameWrap" style="display:none; margin-top:8px;">
-              <label class="field-label">Who owes it back? (split across people if needed)</label>
+              <label class="field-label">Split with (each person editable)</label>
+              <div style="margin-bottom:10px;">
+                <label class="field-label">Adjust split</label>
+                <select id="uaeTxSplitType">
+                  <option value="equally">Equally</option>
+                  <option value="unequally" selected>Unequally</option>
+                  <option value="percentage">By percentages</option>
+                  <option value="shares">By shares</option>
+                  <option value="adjustment">By adjustment</option>
+                </select>
+              </div>
               <div id="uaeTxReturnRows"></div>
               <button type="button" class="add-btn ghost" id="uaeTxReturnAdd" style="margin-top:4px;">+ Add person</button>
+              <div style="margin-top:10px; font-size:12.5px; color:var(--ink-soft);">My own share: <strong id="uaeTxMyShare">0.00</strong></div>
             </div>
           </div>
           <div class="full">
@@ -2568,12 +2579,23 @@
           <div class="full" id="indiaTxSpendForWrap">
             <select id="indiaTxSpendFor">
               <option value="own">Own spend only</option>
-              <option value="returnable">Returnable (will be paid back)</option>
+              <option value="split">Split with others</option>
             </select>
             <div id="indiaTxReturnNameWrap" style="display:none; margin-top:8px;">
-              <label class="field-label">Who owes it back? (split across people if needed)</label>
+              <label class="field-label">Split with (each person editable)</label>
+              <div style="margin-bottom:10px;">
+                <label class="field-label">Adjust split</label>
+                <select id="indiaTxSplitType">
+                  <option value="equally">Equally</option>
+                  <option value="unequally" selected>Unequally</option>
+                  <option value="percentage">By percentages</option>
+                  <option value="shares">By shares</option>
+                  <option value="adjustment">By adjustment</option>
+                </select>
+              </div>
               <div id="indiaTxReturnRows"></div>
               <button type="button" class="add-btn ghost" id="indiaTxReturnAdd" style="margin-top:4px;">+ Add person</button>
+              <div style="margin-top:10px; font-size:12.5px; color:var(--ink-soft);">My own share: <strong id="indiaTxMyShare">0.00</strong></div>
             </div>
           </div>
           <div class="full">
@@ -6931,11 +6953,21 @@ allStocks=demo;render();
         ? (t.borrowSource === 'card' ? 'Card debt (see Cards tab)' : 'Debt')
         : meta.tag;
       const recurTag = t.recurring ? '🔁 Recurring' : '';
-      const returnBadge = t.spendFor === 'returnable'
-        ? ((t.returnSplits && t.returnSplits.length)
-            ? t.returnSplits.map(r => `<div class="item-meta tag-returnable">Returnable · ${escapeHtml(r.name)}${r.amount != null ? ' (' + fmt(r.amount) + ')' : ''}</div>`).join('')
-            : `<div class="item-meta tag-returnable">Returnable${t.returnName ? ' · ' + escapeHtml(t.returnName) : ''}</div>`)
-        : (t.type === 'expense' ? `<div class="item-meta tag-nonreturnable">Non-returnable</div>` : '');
+      const isSplitTx = t.spendFor === 'returnable' || t.spendFor === 'split';
+      let returnBadge;
+      if(isSplitTx){
+        if(t.returnSplits && t.returnSplits.length){
+          const splitSumTx = t.returnSplits.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+          returnBadge = t.returnSplits.map(r => {
+            const ret = r.returnable !== 'non-returnable';
+            return `<div class="item-meta ${ret ? 'tag-returnable' : 'tag-nonreturnable'}">${ret ? 'Returnable' : 'Non-ret.'} · ${escapeHtml(r.name)}${r.amount != null ? ' (' + fmt(r.amount) + ')' : ''}</div>`;
+          }).join('') + (t.spendFor === 'split' && Number(t.amount) > 0 ? `<div class="item-meta">My share · ${fmt(Math.max(0, Number(t.amount) - splitSumTx))}</div>` : '');
+        } else {
+          returnBadge = `<div class="item-meta tag-returnable">Split${t.returnName ? ' · ' + escapeHtml(t.returnName) : ''}</div>`;
+        }
+      } else {
+        returnBadge = t.type === 'expense' ? `<div class="item-meta tag-nonreturnable">Non-returnable</div>` : '';
+      }
       const dueBadge = t.dueDate ? `<div class="item-meta">due ${escapeHtml(t.dueDate)}</div>` : '';
       const repaidChip = t.type === 'borrowing'
         ? `<button class="perm-chip ${t.repaid ? 'on' : ''} tx-repaid-toggle" data-id="${t.id}" style="margin-left:6px;">${t.repaid ? 'Repaid ✓' : 'Mark repaid'}</button>`
@@ -7260,8 +7292,8 @@ allStocks=demo;render();
     const returnWrap = document.getElementById(prefix + 'TxReturnNameWrap');
     if(spendForEl && returnWrap){
       spendForEl.addEventListener('change', () => {
-        returnWrap.style.display = spendForEl.value === 'returnable' ? '' : 'none';
-        if(spendForEl.value === 'returnable' && collectReturnRows(prefix === 'uae' ? 'UAE' : 'India').length === 0){
+        returnWrap.style.display = spendForEl.value === 'split' ? '' : 'none';
+        if(spendForEl.value === 'split' && txSplitRows(prefix).length === 0){
           addReturnRow(prefix === 'uae' ? 'UAE' : 'India', {name:'', amount:''});
         }
       });
@@ -7271,22 +7303,61 @@ allStocks=demo;render();
   // ---- Returnable split rows: "who owes it back" supports multiple people,
   // each with their own share, mirroring the Cards split pattern. ----
   function returnRowHtml(entry){
+    const retVal = entry.returnable === 'non-returnable' ? 'non-returnable' : 'returnable';
     return `
-      <div class="add-row returnsplit-row" style="margin-bottom:6px;">
-        <input type="text" class="returnsplit-name" placeholder="Name" list="knownPeopleList" value="${escapeHtml(entry.name || '')}">
-        <input type="number" class="returnsplit-amount" placeholder="Amount (optional)" step="0.01" style="max-width:130px;" value="${entry.amount || entry.amount === 0 ? entry.amount : ''}">
+      <div class="split-row returnsplit-row">
+        <input type="text" class="split-name" placeholder="Name" list="knownPeopleList" value="${escapeHtml(entry.name || '')}">
+        <input type="number" class="split-amount" placeholder="Amount" step="0.01" value="${entry.amount || entry.amount === 0 ? entry.amount : ''}">
+        <input type="number" class="split-percent" placeholder="%" step="0.01" style="display:none;">
+        <input type="number" class="split-shares" placeholder="Shares" step="1" value="1" style="display:none;">
+        <input type="number" class="split-adjust" placeholder="+/-" step="0.01" value="0" style="display:none;">
+        <select class="split-returnable">
+          <option value="returnable" ${retVal === 'returnable' ? 'selected' : ''}>Returnable</option>
+          <option value="non-returnable" ${retVal === 'non-returnable' ? 'selected' : ''}>Non-ret.</option>
+        </select>
         <button type="button" class="del-btn returnsplit-remove" aria-label="Remove person">×</button>
       </div>
     `.trim();
+  }
+  function txSplitRows(prefix){
+    const c = document.getElementById(prefix + 'TxReturnRows');
+    return c ? [...c.querySelectorAll('.returnsplit-row')] : [];
+  }
+  function txSplitType(prefix){
+    const el = document.getElementById(prefix + 'TxSplitType');
+    return el ? el.value : 'unequally';
+  }
+  function updateTxMyShare(prefix){
+    const total = parseFloat((document.getElementById(prefix + 'TxAmount') || {}).value) || 0;
+    const sum = txSplitRows(prefix).reduce((a, r) => a + (parseFloat(r.querySelector('.split-amount').value) || 0), 0);
+    const el = document.getElementById(prefix + 'TxMyShare');
+    if(el) el.textContent = fmt(Math.max(0, total - sum));
+  }
+  function applyTxSplitTypeUI(prefix){
+    const type = txSplitType(prefix);
+    txSplitRows(prefix).forEach(r => {
+      r.querySelector('.split-percent').style.display = type === 'percentage' ? '' : 'none';
+      r.querySelector('.split-shares').style.display = type === 'shares' ? '' : 'none';
+      r.querySelector('.split-adjust').style.display = type === 'adjustment' ? '' : 'none';
+    });
+    updateTxMyShare(prefix);
+  }
+  function recalcTxSplit(prefix){
+    const total = parseFloat((document.getElementById(prefix + 'TxAmount') || {}).value) || 0;
+    const type = txSplitType(prefix);
+    const rows = txSplitRows(prefix);
+    if(type !== 'unequally') recomputeSplitAmounts(type, total, rows);
+    updateTxMyShare(prefix);
   }
   function renderReturnRows(countryKey, entries){
     const prefix = budgetPrefix(countryKey);
     const container = document.getElementById(prefix + 'TxReturnRows');
     if(!container) return;
     container.innerHTML = '';
-    (entries && entries.length ? entries : [{name:'', amount:''}]).forEach(entry => addReturnRow(countryKey, entry));
+    (entries && entries.length ? entries : [{name:'', amount:''}]).forEach(entry => addReturnRow(countryKey, entry, true));
+    applyTxSplitTypeUI(prefix);
   }
-  function addReturnRow(countryKey, entry){
+  function addReturnRow(countryKey, entry, skipRecalc){
     const prefix = budgetPrefix(countryKey);
     const container = document.getElementById(prefix + 'TxReturnRows');
     if(!container) return;
@@ -7296,20 +7367,28 @@ allStocks=demo;render();
     container.appendChild(rowEl);
     rowEl.querySelector('.returnsplit-remove').addEventListener('click', () => {
       rowEl.remove();
-      if(!container.children.length) addReturnRow(countryKey, {name:'', amount:''});
+      if(!container.children.length) addReturnRow(countryKey, {name:'', amount:''}, true);
+      recalcTxSplit(prefix);
     });
+    rowEl.querySelector('.split-amount').addEventListener('input', () => updateTxMyShare(prefix));
+    ['.split-percent', '.split-shares', '.split-adjust'].forEach(sel => rowEl.querySelector(sel).addEventListener('input', () => recalcTxSplit(prefix)));
+    if(!skipRecalc){ applyTxSplitTypeUI(prefix); recalcTxSplit(prefix); }
   }
   function collectReturnRows(countryKey){
     const prefix = budgetPrefix(countryKey);
-    const container = document.getElementById(prefix + 'TxReturnRows');
-    if(!container) return [];
-    return [...container.querySelectorAll('.returnsplit-row')].map(row => {
-      const name = row.querySelector('.returnsplit-name').value.trim();
-      const amountRaw = row.querySelector('.returnsplit-amount').value;
+    return txSplitRows(prefix).map(row => {
+      const name = row.querySelector('.split-name').value.trim();
+      const amountRaw = row.querySelector('.split-amount').value;
       const amount = amountRaw === '' ? null : parseFloat(amountRaw);
-      return { name, amount: (amount === null || isNaN(amount)) ? null : amount };
+      return { name, amount: (amount === null || isNaN(amount)) ? null : amount, returnable: row.querySelector('.split-returnable').value };
     }).filter(r => r.name);
   }
+  ['uae', 'india'].forEach(prefix => {
+    const typeEl = document.getElementById(prefix + 'TxSplitType');
+    if(typeEl) typeEl.addEventListener('change', () => { applyTxSplitTypeUI(prefix); recalcTxSplit(prefix); });
+    const amtEl = document.getElementById(prefix + 'TxAmount');
+    if(amtEl) amtEl.addEventListener('input', () => recalcTxSplit(prefix));
+  });
   document.getElementById('uaeTxReturnAdd').addEventListener('click', () => addReturnRow('UAE', {name:'', amount:''}));
   document.getElementById('indiaTxReturnAdd').addEventListener('click', () => addReturnRow('India', {name:'', amount:''}));
 
@@ -7330,8 +7409,9 @@ allStocks=demo;render();
     const spendForElEdit = document.getElementById(prefix + 'TxSpendFor');
     const returnWrapEdit = document.getElementById(prefix + 'TxReturnNameWrap');
     if(spendForElEdit){
-      spendForElEdit.value = t.spendFor === 'returnable' ? 'returnable' : 'own';
-      if(returnWrapEdit) returnWrapEdit.style.display = spendForElEdit.value === 'returnable' ? '' : 'none';
+      spendForElEdit.value = (t.spendFor === 'returnable' || t.spendFor === 'split') ? 'split' : 'own';
+      if(returnWrapEdit) returnWrapEdit.style.display = spendForElEdit.value === 'split' ? '' : 'none';
+      const splitTypeEdit = document.getElementById(prefix + 'TxSplitType'); if(splitTypeEdit) splitTypeEdit.value = 'unequally';
     }
     const returnEntries = (t.returnSplits && t.returnSplits.length) ? t.returnSplits : (t.returnName ? [{name: t.returnName, amount: null}] : []);
     renderReturnRows(countryKey, returnEntries);
@@ -7363,6 +7443,7 @@ allStocks=demo;render();
     document.getElementById(prefix + 'TxDue').value = '';
     document.getElementById(prefix + 'TxBorrowSource').value = 'person';
     const spendForElReset = document.getElementById(prefix + 'TxSpendFor'); if(spendForElReset) spendForElReset.value = 'own';
+    const splitTypeReset = document.getElementById(prefix + 'TxSplitType'); if(splitTypeReset) splitTypeReset.value = 'unequally';
     renderReturnRows(countryKey, []);
     const returnWrapReset = document.getElementById(prefix + 'TxReturnNameWrap'); if(returnWrapReset) returnWrapReset.style.display = 'none';
     const purposeElC = document.getElementById(prefix + 'TxPurpose'); if(purposeElC) purposeElC.value = '';
@@ -7454,7 +7535,7 @@ allStocks=demo;render();
     const timeEl = document.getElementById(prefix + 'TxTime');
     const spendForEl = document.getElementById(prefix + 'TxSpendFor');
     const spendForVal = (spendForEl && type.value !== 'income') ? spendForEl.value : 'own';
-    const returnSplits = spendForVal === 'returnable' ? collectReturnRows(countryKey) : [];
+    const returnSplits = spendForVal === 'split' ? collectReturnRows(countryKey) : [];
     const returnNameVal = returnSplits.map(r => r.name).join(', ');
     const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnSplits, returnName: returnNameVal };
     if(curEditId){
@@ -7468,6 +7549,7 @@ allStocks=demo;render();
       label.value = 'Tea'; amount.value = ''; person.value = ''; due.value = '';
       if(timeEl) timeEl.value = '';
       if(spendForEl) spendForEl.value = 'own';
+      const splitTypeAdd = document.getElementById(prefix + 'TxSplitType'); if(splitTypeAdd) splitTypeAdd.value = 'unequally';
       renderReturnRows(countryKey, []);
       const rnWrap = document.getElementById(prefix + 'TxReturnNameWrap'); if(rnWrap) rnWrap.style.display = 'none';
       const labelSelEl = document.getElementById(prefix + 'TxLabelSelect'); if(labelSelEl) labelSelEl.value = 'Tea';
@@ -19880,7 +19962,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.22.1', APP_VERSION_DATE = '25 Nov 2026';
+    const APP_VERSION = '1.23.0', APP_VERSION_DATE = '25 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
