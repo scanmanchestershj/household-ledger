@@ -5344,6 +5344,14 @@ allStocks=demo;render();
 
   function uid(){ return Math.random().toString(36).slice(2,9); }
   function todayStr(){ return new Date().toISOString().slice(0,10); }
+  // Newest first: by date, then by time within the same day, then by the order added
+  // (last added on top). Works for budget transactions, remittances and similar lists.
+  function sortNewestFirst(arr){
+    return (arr || []).map((x, i) => ({x, i})).sort((a, b) => {
+      const ka = `${a.x.date || ''}T${a.x.time || '00:00'}`, kb = `${b.x.date || ''}T${b.x.time || '00:00'}`;
+      return kb.localeCompare(ka) || (b.i - a.i);
+    }).map(o => o.x);
+  }
   function nowTimeStr(){ return new Date().toTimeString().slice(0,5); }
 
   function setTitleFrom(sourceEl){
@@ -6945,7 +6953,7 @@ allStocks=demo;render();
       lending: {sign:'−', cls:'expense', tag:'Lent'},
       borrowing: {sign:'', cls:'expense', tag:'Debt'}
     };
-    [...displayedTx].reverse().forEach(t => {
+    sortNewestFirst(displayedTx).forEach(t => {
       const li = document.createElement('li');
       const meta = typeMeta[t.type] || typeMeta.expense;
       const timeStr = t.time ? ` ${escapeHtml(t.time)}` : '';
@@ -7220,7 +7228,7 @@ allStocks=demo;render();
     if(!rows.length){ alert('Nothing to export for the current month/search.'); return; }
     const header = ['Date', 'Label', 'Type', 'Amount', 'Person', 'Due date', 'Recurring', 'Repaid'];
     const lines = [header.map(csvEscape).join(',')];
-    [...rows].reverse().forEach(t => {
+    sortNewestFirst(rows).forEach(t => {
       lines.push([
         t.date || '', t.label || '', t.type || '', Number(t.amount).toFixed(2),
         t.person || '', t.dueDate || '', t.recurring ? 'Yes' : '', t.type === 'borrowing' ? (t.repaid ? 'Yes' : 'No') : ''
@@ -15740,7 +15748,7 @@ allStocks=demo;render();
       save(); renderBudgetCountry('UAE'); renderBudgetCountry('India'); renderOverview();
     }
 
-    [...shownRemits].reverse().forEach(r => {
+    sortNewestFirst(shownRemits).forEach(r => {
       const li = document.createElement('li');
       let cardLine = '';
       if(r.cardMapId){
@@ -19962,7 +19970,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.23.0', APP_VERSION_DATE = '25 Nov 2026';
+    const APP_VERSION = '1.23.1', APP_VERSION_DATE = '25 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
