@@ -1684,6 +1684,10 @@
         <div class="accordion-body">
           <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px;">Pick a person (or "Overall" for everyone) and a date range to see exactly what's owed, date by date — then generate a PDF you can hand to them directly.</div>
           <div class="form-grid">
+            <div class="full">
+              <label class="field-label">Month (monthly report)</label>
+              <select id="returnableMonth"><option value="">All dates</option></select>
+            </div>
             <div>
               <label class="field-label">Person</label>
               <select id="returnablePerson">
@@ -1889,6 +1893,7 @@
           </div>
         </div>
 
+        <div id="uaeQuickAdd" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
         <div class="form-grid">
           <div class="full">
             <label class="field-label">Description</label>
@@ -2500,6 +2505,7 @@
           </div>
         </div>
 
+        <div id="indiaQuickAdd" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
         <div class="form-grid">
           <div class="full">
             <label class="field-label">Description</label>
@@ -6943,7 +6949,59 @@ allStocks=demo;render();
   document.getElementById('uaeTxPurpose').addEventListener('change', () => updateTxPurposeVisibilityCountry('UAE'));
   document.getElementById('indiaTxPurpose').addEventListener('change', () => updateTxPurposeVisibilityCountry('India'));
 
+  // ---- Quick-add: one tap logs a usual expense (Tea, Lunch…) with its usual amount,
+  // today's date and the current time; Undo removes it. With no history yet, it just fills the form. ----
+  function quickAddUsualAmount(countryKey, label){
+    const tx = (currentData().countries[countryKey].transactions || []).filter(t => t.type === 'expense' && Number(t.amount) > 0 && (t.label || '').trim().toLowerCase() === label.toLowerCase());
+    if(!tx.length) return null;
+    const recent = sortNewestFirst(tx).slice(0, 10);
+    const counts = {};
+    recent.forEach(t => { const k = Number(t.amount).toFixed(2); counts[k] = (counts[k] || 0) + 1; });
+    let best = null, bestN = 0;
+    recent.forEach(t => { const k = Number(t.amount).toFixed(2); if(counts[k] > bestN){ best = k; bestN = counts[k]; } });
+    return Number(best);
+  }
+  function quickAddTx(countryKey, label, amount){
+    const prefix = budgetPrefix(countryKey);
+    const data = currentData().countries[countryKey];
+    const now = new Date();
+    const time = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    const dateVal = todayStr();
+    const dup = (data.transactions || []).find(x => !x.linkedRemitId && x.date === dateVal && x.type === 'expense' && Math.abs(Number(x.amount) - amount) < 0.005 && (x.label || '').trim().toLowerCase() === label.toLowerCase() && x.time === time);
+    if(dup && !confirm(`Possible double entry — "${label}" for ${amount} is already logged today at ${time}. Add it anyway?`)) return;
+    const rec = { id: uid(), label, amount, type: 'expense', date: dateVal, time, person: '', dueDate: '', repaid: false, borrowSource: '', cardMaps: [], cardMapId: '', purpose: '', purposeCardDue: '', purposePerson: '', purposeDate: '', purposeTime: '', recurring: false, recurringGroupId: null, spendFor: 'own', returnSplits: [], returnName: '' };
+    data.transactions.push(rec);
+    logActivity('Added transaction', `${label} (${countryKey}, ${fmt(amount)}) — quick add`);
+    save(); renderBudgetCountry(countryKey); renderOverview();
+    showUndoToast(`Added ${label} ${amount}`, () => {
+      currentData().countries[countryKey].transactions = currentData().countries[countryKey].transactions.filter(x => x.id !== rec.id);
+      save(); renderBudgetCountry(countryKey); renderOverview();
+    });
+  }
+  function renderQuickAdd(countryKey){
+    const prefix = budgetPrefix(countryKey);
+    const box = document.getElementById(prefix + 'QuickAdd');
+    if(!box) return;
+    box.innerHTML = '';
+    ['Tea', 'Lunch', 'Dinner', 'Groceries'].forEach(label => {
+      const usual = quickAddUsualAmount(countryKey, label);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'add-btn ghost';
+      btn.style.cssText = 'padding:6px 12px; font-size:12.5px;';
+      btn.textContent = usual != null ? `+ ${label} · ${usual}` : `+ ${label}`;
+      btn.addEventListener('click', () => {
+        if(usual != null) quickAddTx(countryKey, label, usual);
+        else {
+          setTxLabelValue(prefix, label);
+          const amt = document.getElementById(prefix + 'TxAmount'); if(amt) amt.focus();
+        }
+      });
+      box.appendChild(btn);
+    });
+  }
   function renderBudgetCountry(countryKey){
+    try{ renderQuickAdd(countryKey); }catch(e){ /* quick-add is optional — never block the budget render */ }
     const prefix = budgetPrefix(countryKey);
     const data = currentData().countries[countryKey];
     const list = document.getElementById(prefix + 'TxList');
@@ -6998,18 +7056,28 @@ allStocks=demo;render();
       } else {
         returnBadge = t.type === 'expense' ? `<div class="item-meta tag-nonreturnable">Non-returnable</div>` : '';
       }
+      // Budget spending is paid by debit card (money leaves immediately), so there are no
+      // card-bill style due dates here. A due date only exists on loans: money you lent
+      // (expected back) or borrowed (to repay) — and it stops showing once settled.
+      const isLoanTx = t.type === 'borrowing' || t.type === 'lending';
       let dueBadge = '';
-      if(t.dueDate){
+      if(t.dueDate && isLoanTx){
         const ddTx = daysUntil(t.dueDate);
-        const settledTx = t.type === 'borrowing' && t.repaid;
-        if(!settledTx && ddTx !== null && ddTx < 0) dueBadge = `<div class="item-meta tag-overdue">overdue ${Math.abs(ddTx)}d</div>`;
-        else if(!settledTx && ddTx !== null && ddTx <= 5) dueBadge = `<div class="item-meta tag-soon">due in ${ddTx}d</div>`;
-        else dueBadge = `<div class="item-meta">due ${escapeHtml(t.dueDate)}</div>`;
+        const dueWord = t.type === 'lending' ? 'payback' : 'repayment';
+        if(t.repaid) dueBadge = '';
+        else if(ddTx !== null && ddTx < 0) dueBadge = `<div class="item-meta tag-overdue">${dueWord} overdue ${Math.abs(ddTx)}d</div>`;
+        else if(ddTx !== null && ddTx === 0) dueBadge = `<div class="item-meta tag-soon">${dueWord} due today</div>`;
+        else if(ddTx !== null && ddTx <= 5) dueBadge = `<div class="item-meta tag-soon">${dueWord} due in ${ddTx}d</div>`;
+        else dueBadge = `<div class="item-meta">${dueWord} due ${escapeHtml(t.dueDate)}</div>`;
       }
       const dupBadge = dupIdSet.has(t.id) ? `<div class="item-meta tag-overdue">⚠ Possible double entry <button type="button" class="link-btn" data-action="bdupok" data-id="${t.id}">not a duplicate</button></div>` : '';
-      const repaidChip = t.type === 'borrowing'
-        ? `<button class="perm-chip ${t.repaid ? 'on' : ''} tx-repaid-toggle" data-id="${t.id}" style="margin-left:6px;">${t.repaid ? 'Repaid ✓' : 'Mark repaid'}</button>`
-        : '';
+      let repaidChip = '';
+      if(isLoanTx){
+        const paidWord = t.type === 'lending' ? 'Paid back' : 'Repaid';
+        repaidChip = t.repaid
+          ? `<div class="item-meta tag-paid">✓ ${paidWord}${t.repaidDate ? ' ' + escapeHtml(t.repaidDate) : ''}${t.repaidNote ? ' · ' + escapeHtml(t.repaidNote) : ''} <button type="button" class="link-btn" data-action="bloanedit" data-id="${t.id}">edit</button> <button type="button" class="link-btn" data-action="bloanundo" data-id="${t.id}">undo</button></div>`
+          : `<div class="item-meta tag-returnable">${t.type === 'lending' ? 'Awaiting payback' : 'Repayment pending'}${t.person ? ' · ' + escapeHtml(t.person) : ''} <button type="button" class="link-btn" data-action="bloanpaid" data-id="${t.id}">mark ${t.type === 'lending' ? 'paid back' : 'repaid'}</button></div>`;
+      }
       let cardMapLine = '';
       const cmList = (t.cardMaps && t.cardMaps.length) ? t.cardMaps : (t.cardMapId ? [{cardId: t.cardMapId, amount: t.amount}] : []);
       if(cmList.length){
@@ -7077,6 +7145,14 @@ allStocks=demo;render();
       e.stopPropagation();
       markReturnableItemPaid({ type: 'btxsplit', country: countryKey, txId: el.dataset.tx, splitId: el.dataset.split }, false);
     }));
+    list.querySelectorAll('[data-action="bloanpaid"], [data-action="bloanedit"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      markReturnableItemPaid({ type: 'btxloan', country: countryKey, txId: el.dataset.id }, true);
+    }));
+    list.querySelectorAll('[data-action="bloanundo"]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      markReturnableItemPaid({ type: 'btxloan', country: countryKey, txId: el.dataset.id }, false);
+    }));
     list.querySelectorAll('[data-action="bdupok"]').forEach(el => el.addEventListener('click', (e) => {
       e.stopPropagation();
       const t = data.transactions.find(x => x.id === el.dataset.id);
@@ -7087,6 +7163,10 @@ allStocks=demo;render();
     if(retSumEl){
       let retPending = 0, retPaid = 0; const pendingBy = {};
       shownTx.forEach(t => {
+        if(t.type === 'lending' && Number(t.amount) > 0){
+          const lamt = Number(t.amount);
+          if(t.repaid) retPaid += lamt; else { retPending += lamt; const ln = t.person || 'Unnamed'; pendingBy[ln] = (pendingBy[ln] || 0) + lamt; }
+        }
         if(t.spendFor !== 'split' && t.spendFor !== 'returnable') return;
         const sps = t.returnSplits || [];
         sps.forEach(r => {
@@ -7296,7 +7376,7 @@ allStocks=demo;render();
     sortNewestFirst(rows).forEach(t => {
       lines.push([
         t.date || '', t.label || '', t.type || '', Number(t.amount).toFixed(2),
-        t.person || '', t.dueDate || '', t.recurring ? 'Yes' : '', t.type === 'borrowing' ? (t.repaid ? 'Yes' : 'No') : ''
+        t.person || '', t.dueDate || '', t.recurring ? 'Yes' : '', (t.type === 'borrowing' || t.type === 'lending') ? (t.repaid ? 'Yes' : 'No') : ''
       ].map(csvEscape).join(','));
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
@@ -7599,6 +7679,7 @@ allStocks=demo;render();
     }
     const curEditId = editingTxId(countryKey);
     const existingRepaid = curEditId ? (data.transactions.find(x=>x.id===curEditId)||{}).repaid : false;
+    const exLoanRec = curEditId ? (data.transactions.find(x=>x.id===curEditId)||{}) : {};
     const purposeEl = document.getElementById(prefix + 'TxPurpose');
     const purpose = (type.value === 'borrowing' && purposeEl) ? purposeEl.value : '';
     let purposeCardDue = '', purposePerson = '', purposeDate = '', purposeTime = '';
@@ -7629,7 +7710,7 @@ allStocks=demo;render();
         if(ex && ex.paid && r.returnable !== 'non-returnable'){ r.paid = true; r.paidDate = ex.paidDate || ''; r.appliedDue = ex.appliedDue || ''; r.usedFor = ex.usedFor || ''; }
       });
     }
-    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnSplits, returnName: returnNameVal, dupOk: !!(curEditId && (data.transactions.find(x => x.id === curEditId) || {}).dupOk) };
+    const record = { label: labelVal, amount: amountVal, type: type.value, date: date.value || todayStr(), time: timeEl ? timeEl.value : '', person: person.value.trim(), dueDate: due.value || '', repaid: !!existingRepaid, repaidDate: exLoanRec.repaidDate || '', repaidNote: exLoanRec.repaidNote || '', borrowSource: type.value === 'borrowing' ? borrowSource.value : '', cardMaps, cardMapId: cardMaps.length ? cardMaps[0].cardId : '', purpose, purposeCardDue, purposePerson, purposeDate, purposeTime, recurring: isRecurring, recurringGroupId: isRecurring ? (existingRecurGroup || uid()) : (existingRecurGroup || null), spendFor: spendForVal, returnSplits, returnName: returnNameVal, dupOk: !!(curEditId && (data.transactions.find(x => x.id === curEditId) || {}).dupOk) };
     if(curEditId){
       const idx = data.transactions.findIndex(x => x.id === curEditId);
       if(idx > -1) data.transactions[idx] = Object.assign({id: curEditId}, record);
@@ -14429,6 +14510,9 @@ allStocks=demo;render();
     countryKeys.forEach(ck => {
       const tx = (currentData().countries[ck] && currentData().countries[ck].transactions) || [];
       tx.forEach(t => {
+        if(t.type === 'lending' && Number(t.amount) > 0){
+          items.push({ date: t.date, time: t.time || '', who: t.person || 'Unnamed', desc: t.label || 'Lent', amount: Number(t.amount), paid: !!t.repaid, paidDate: t.repaidDate || '', appliedDue: '', usedFor: t.repaidNote || '', src: { type: 'btxloan', country: ck, txId: t.id } });
+        }
         if(t.spendFor === 'split' || t.spendFor === 'returnable'){
           const sps = t.returnSplits || [];
           sps.forEach(sp => {
@@ -14466,16 +14550,27 @@ allStocks=demo;render();
       const bt = tx && tx.find(x => x.id === src.txId);
       return bt && (bt.returnSplits || []).find(r => r.id === src.splitId);
     }
+    if(src.type === 'btxloan'){
+      const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
+      const lt = tx && tx.find(x => x.id === src.txId);
+      return lt ? { type: lt.type, paidDate: lt.repaidDate || '', usedFor: lt.repaidNote || '' } : null;
+    }
     return null;
   }
   function markReturnableItemPaid(src, makePaid){
     let paidDate = '', appliedDue = '', usedFor = '';
     if(makePaid){
       const existing = findReturnableSourceRecord(src) || {};
+      if(src.type === 'btxloan'){
+        paidDate = prompt(existing.type === 'lending' ? 'Date it was paid back to you (YYYY-MM-DD):' : 'Date you repaid it (YYYY-MM-DD):', existing.paidDate || todayStr());
+        if(paidDate === null) return false;
+        usedFor = prompt('Note (e.g. how it was paid, or what it was used for — leave blank if none)', existing.usedFor || '') || '';
+      } else {
       paidDate = prompt('Paid date (YYYY-MM-DD):', existing.paidDate || existing.purposePaidDate || todayStr());
       if(paidDate === null) return false;
       appliedDue = prompt('This payment was applied toward which card repayment due date? (YYYY-MM-DD, leave blank if none)', existing.appliedDue || existing.purposeAppliedDue || '') || '';
       usedFor = prompt('What did you use this money for? (e.g. "Mashreq credit card — July repayment", leave blank if none)', existing.usedFor || existing.purposeUsedFor || '') || '';
+      }
     }
     if(src.type === 'card'){
       const c = currentData().cards.find(x => x.id === src.cardId);
@@ -14491,6 +14586,11 @@ allStocks=demo;render();
       const t = tx && tx.find(x => x.id === src.txId);
       if(!t) return false;
       t.purposePaid = makePaid; t.purposePaidDate = makePaid ? paidDate.trim() : ''; t.purposeAppliedDue = makePaid ? appliedDue.trim() : ''; t.purposeUsedFor = makePaid ? usedFor.trim() : '';
+    } else if(src.type === 'btxloan'){
+      const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
+      const lt = tx && tx.find(x => x.id === src.txId);
+      if(!lt) return false;
+      lt.repaid = makePaid; lt.repaidDate = makePaid ? paidDate.trim() : ''; lt.repaidNote = makePaid ? usedFor.trim() : '';
     } else if(src.type === 'btxsplit'){
       const tx = currentData().countries[src.country] && currentData().countries[src.country].transactions;
       const bt = tx && tx.find(x => x.id === src.txId);
@@ -14503,7 +14603,7 @@ allStocks=demo;render();
     save();
     renderReturnableStatement();
     renderCards();
-    if(src.type === 'btxsplit'){ renderBudgetCountry(src.country); renderOverview(); }
+    if(src.type === 'btxsplit' || src.type === 'btxloan'){ renderBudgetCountry(src.country); renderOverview(); }
     return true;
   }
   function populateReturnablePersonSelect(){
@@ -14523,14 +14623,23 @@ allStocks=demo;render();
     const to = toEl && toEl.value ? toEl.value : '9999-12-31';
     let items = allReturnableItems().filter(it => it.date >= from && it.date <= to);
     if(person !== '__overall__') items = items.filter(it => it.who === person);
-    items.sort((a,b) => a.date.localeCompare(b.date));
+    items = sortNewestFirst(items);
     const total = items.reduce((s,it) => s + it.amount, 0);
     const paidTotal = items.filter(it => it.paid).reduce((s,it) => s + it.amount, 0);
     const balanceDue = total - paidTotal;
     return { items, total, paidTotal, balanceDue, person, from: fromEl ? fromEl.value : '', to: toEl ? toEl.value : '' };
   }
+  function populateReturnableMonthSelect(){
+    const sel = document.getElementById('returnableMonth');
+    if(!sel) return;
+    const current = sel.value;
+    const months = [...new Set(allReturnableItems().map(it => (it.date || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+    sel.innerHTML = '<option value="">All dates</option>' + months.map(m => `<option value="${m}">${escapeHtml(monthLabel(m))}</option>`).join('');
+    sel.value = months.includes(current) ? current : '';
+  }
   function renderReturnableStatement(){
     populateReturnablePersonSelect();
+    populateReturnableMonthSelect();
     const listEl = document.getElementById('returnableStatementList');
     if(!listEl) return;
     const { items, total, paidTotal, balanceDue } = returnableStatementData();
@@ -14538,7 +14647,23 @@ allStocks=demo;render();
       listEl.innerHTML = '<div class="empty">No returnable items match this selection.</div>';
       return;
     }
-    listEl.innerHTML = `
+    const personSelNow = document.getElementById('returnablePerson');
+    let personSummaryHtml = '';
+    if(personSelNow && personSelNow.value === '__overall__'){
+      const byWho = {};
+      items.forEach(it => {
+        const r = byWho[it.who] || (byWho[it.who] = { total: 0, paid: 0 });
+        r.total += it.amount; if(it.paid) r.paid += it.amount;
+      });
+      personSummaryHtml = `
+        <div class="report-table-wrap">
+        <table class="report-table">
+          <thead><tr><th>Person</th><th>Total</th><th>Paid</th><th>Pending</th></tr></thead>
+          <tbody>${Object.entries(byWho).sort((a, b) => (b[1].total - b[1].paid) - (a[1].total - a[1].paid)).map(([n, r]) => `<tr><td>${escapeHtml(n)}</td><td>${fmt(r.total)}</td><td>${fmt(r.paid)}</td><td><strong>${fmt(r.total - r.paid)}</strong></td></tr>`).join('')}</tbody>
+        </table>
+        </div>`;
+    }
+    listEl.innerHTML = personSummaryHtml + `
       <div class="report-table-wrap">
       <table class="report-table">
         <thead><tr><th>Date</th><th>Time</th><th>What</th><th>Amount</th><th>Status</th><th>Paid date</th><th>Applied to due</th><th>Used for</th></tr></thead>
@@ -14584,6 +14709,24 @@ allStocks=demo;render();
     const el = document.getElementById(id);
     if(el) el.addEventListener('change', renderReturnableStatement);
   });
+  (function wireReturnableMonth(){
+    const monthSel = document.getElementById('returnableMonth');
+    const fromEl = document.getElementById('returnableFrom');
+    const toEl = document.getElementById('returnableTo');
+    if(!monthSel || !fromEl || !toEl) return;
+    monthSel.addEventListener('change', () => {
+      const m = monthSel.value;
+      if(m){
+        const [y, mo] = m.split('-').map(Number);
+        const last = new Date(y, mo, 0).getDate();
+        fromEl.value = m + '-01';
+        toEl.value = m + '-' + pad2(last);
+      } else { fromEl.value = ''; toEl.value = ''; }
+      renderReturnableStatement();
+    });
+    // Picking custom dates by hand leaves the "monthly" selection.
+    [fromEl, toEl].forEach(el => el.addEventListener('change', () => { monthSel.value = ''; }));
+  })();
   document.getElementById('returnableGeneratePdf').addEventListener('click', () => {
     const { items, total, paidTotal, balanceDue, person, from, to } = returnableStatementData();
     if(items.length === 0){ alert('Nothing to put in the PDF for this selection.'); return; }
@@ -17841,6 +17984,20 @@ allStocks=demo;render();
           body: `${debtDue.slice(0,3).map(x => x.t.label).join(', ')}${debtDue.length > 3 ? ' and others' : ''} — see Budget → transactions.`
         });
       }
+      const lentDue = [];
+      ['UAE','India'].forEach(ck => {
+        (currentData().countries[ck].transactions || []).forEach(t => {
+          if(t.type === 'lending' && !t.repaid && t.dueDate){ const dd = daysUntil(t.dueDate); if(dd !== null && dd <= 3) lentDue.push({ t, dd }); }
+        });
+      });
+      if(lentDue.length){
+        const overdueL = lentDue.filter(x => x.dd < 0).length;
+        banners.push({
+          key: 'budget-lent-due', type: overdueL ? 'danger' : 'warn', emoji: overdueL ? '🚨' : '💸',
+          title: `${lentDue.length} lent amount${lentDue.length === 1 ? '' : 's'} ${overdueL ? 'overdue or ' : ''}due back within 3 days`,
+          body: `${lentDue.slice(0,3).map(x => (x.t.person || x.t.label)).join(', ')}${lentDue.length > 3 ? ' and others' : ''} — see Budget → transactions.`
+        });
+      }
     }catch(e){ /* budget not ready yet — skip silently */ }
 
     // Monthly budget threshold — reuses the same target the Report tab's
@@ -20108,7 +20265,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.24.0', APP_VERSION_DATE = '25 Nov 2026';
+    const APP_VERSION = '1.25.0', APP_VERSION_DATE = '25 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
