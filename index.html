@@ -12192,7 +12192,7 @@ allStocks=demo;render();
     const rows = up.map(r => {
       const soon = r.daysAway <= 7;
       const when = r.daysAway === 0 ? 'today' : (r.daysAway === 1 ? 'tomorrow' : `in ${r.daysAway} days`);
-      return `<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;"><b>${escapeHtml(r.name)}</b> <span style="font-size:10px;color:var(--ink-soft);">${escapeHtml((r.tags || []).join(' \u00b7 '))}</span><br>${fmt(r.date)}${r.estimate ? ' (estimate)' : ''} \u00b7 <span style="font-weight:600;color:${soon ? '#c0392b' : 'var(--ink-soft)'};">${soon ? '\u26a0\ufe0f ' : ''}${when}</span>${soon ? '<div style="font-size:10.5px;color:#c0392b;">Results are close \u2014 avoid adding fresh money until they are out; review your stop.</div>' : ''}</div>`;
+      return `<div class="sh-row" data-symbol="${escapeHtml(r.symbol || '')}" style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;"><b>${escapeHtml(r.name)}</b> <span style="font-size:10px;color:var(--ink-soft);">${escapeHtml((r.tags || []).join(' \u00b7 '))}</span><br>${fmt(r.date)}${r.estimate ? ' (estimate)' : ''} \u00b7 <span style="font-weight:600;color:${soon ? '#c0392b' : 'var(--ink-soft)'};">${soon ? '\u26a0\ufe0f ' : ''}${when}</span>${soon ? '<div style="font-size:10.5px;color:#c0392b;">Results are close \u2014 avoid adding fresh money until they are out; review your stop.</div>' : ''}</div>`;
     }).join('');
     const none = (s.rows || []).filter(r => !r.date || r.daysAway < 0).map(r => r.name);
     box.innerHTML = `<div style="font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;">Updated ${s.date} \u00b7 ${(s.rows || []).length} stocks checked</div>`
@@ -12379,12 +12379,12 @@ allStocks=demo;render();
     });
     return out;
   }
-  async function msEnsureSharia(syms){
+  async function msEnsureSharia(syms, statusEl){
     if(!state.shariaCache) state.shariaCache = {};
     const cutoff = Date.now() - 30 * 864e5;
     const need = Array.from(new Set(syms)).filter(x => { const c = state.shariaCache[x]; return !c || !(c.t > cutoff); });
     const chunks = []; for(let k = 0; k < need.length; k += 3) chunks.push(need.slice(k, k + 3));
-    let ci = 0, done = 0; const st = document.getElementById('msStatus');
+    let ci = 0, done = 0; const st = statusEl || document.getElementById('msStatus');
     async function worker(){
       while(ci < chunks.length){
         const ch = chunks[ci++];
@@ -12395,6 +12395,70 @@ allStocks=demo;render();
     await Promise.all([worker(), worker(), worker()]);
     save();
   }
+  // ---- Sharia-compliant tick box on every Investment Screener sub-heading that lists stocks ----
+  // Ticking hides every stock that is not verified Shariah-compliant (AAOIFI-style ratio screen, same as Monthly Investment Split).
+  const SH_SECTIONS = ['holdings', 'customwatch', 'buffett', 'toppicks', 'earnings', 'compounder', 'multibagger', 'strongbuy', 'undervalued'];
+  const shBusy = {};
+  function shSel(){ return '.stock-row[data-symbol], .sh-row[data-symbol]'; }
+  function shApply(key){
+    const acc = document.querySelector('.accordion[data-key="screen-' + key + '"]'); if(!acc) return;
+    const on = !!(state.shariaOnly && state.shariaOnly[key]), cache = state.shariaCache || {};
+    let shown = 0, total = 0, unver = 0;
+    acc.querySelectorAll(shSel()).forEach(el => {
+      const sym = el.getAttribute('data-symbol'); if(!sym) return;
+      total++;
+      const c = cache[sym], ok = !!(c && c.ok === true);
+      if(c && c.ok == null || !c) unver++;
+      const hide = on && !ok;
+      el.style.display = hide ? 'none' : '';
+      if(!hide) shown++;
+    });
+    const note = acc.querySelector('.sh-note');
+    if(note){
+      note.textContent = !on ? '' : (shBusy[key] ? '' : (total ? ('Showing ' + shown + ' of ' + total + ' stocks that pass the Shariah ratio screen' + (unver ? ' (' + unver + ' with missing data are hidden)' : '') + '.') : 'Nothing to filter yet - run the scan first.'));
+    }
+  }
+  async function shOnToggle(key, chk){
+    state.shariaOnly = Object.assign({}, state.shariaOnly || {}, { [key]: chk.checked }); save();
+    const acc = document.querySelector('.accordion[data-key="screen-' + key + '"]'); if(!acc) return;
+    const note = acc.querySelector('.sh-note');
+    if(chk.checked){
+      const syms = Array.from(acc.querySelectorAll(shSel())).map(el => el.getAttribute('data-symbol')).filter(Boolean);
+      if(syms.length){
+        shBusy[key] = true; if(note) note.textContent = 'Checking Shariah compliance...';
+        try{ await msEnsureSharia(syms, note); }catch(e){}
+        shBusy[key] = false;
+      }
+    }
+    shApply(key);
+  }
+  function shInit(){
+    SH_SECTIONS.forEach(key => {
+      const acc = document.querySelector('.accordion[data-key="screen-' + key + '"]');
+      const body = acc && acc.querySelector('.accordion-body');
+      if(!body || body.querySelector('.sh-wrap')) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'sh-wrap'; wrap.style.cssText = 'margin:0 0 8px 0;';
+      wrap.innerHTML = '<label style="display:flex;align-items:center;gap:6px;font-size:12px;"><input type="checkbox" class="sh-chk"> \u262a Shariah-compliant only</label><div class="sh-note" style="font-size:10px;color:var(--ink-soft);margin-top:2px;line-height:1.45;"></div>';
+      body.insertBefore(wrap, body.firstChild);
+      const chk = wrap.querySelector('.sh-chk');
+      chk.checked = !!(state.shariaOnly && state.shariaOnly[key]);
+      chk.addEventListener('change', () => shOnToggle(key, chk));
+      // keep the filter applied whenever the section re-renders (rescan, refresh, new results)
+      let t = null;
+      new MutationObserver(recs => {
+        if(recs.every(r => r.target && r.target.closest && r.target.closest('.sh-wrap'))) return;
+        if(!(state.shariaOnly && state.shariaOnly[key]) || shBusy[key]) return;
+        clearTimeout(t); t = setTimeout(async () => {
+          const syms = Array.from(acc.querySelectorAll(shSel())).map(el => el.getAttribute('data-symbol')).filter(x => x && !(state.shariaCache || {})[x]);
+          if(syms.length){ shBusy[key] = true; const note = acc.querySelector('.sh-note'); if(note) note.textContent = 'Checking Shariah compliance...'; try{ await msEnsureSharia(syms, note); }catch(e){} shBusy[key] = false; }
+          shApply(key);
+        }, 250);
+      }).observe(body, { childList: true, subtree: true });
+      if(chk.checked) setTimeout(() => shOnToggle(key, chk), 2000);
+    });
+  }
+  try{ shInit(); }catch(e){ console.warn('Shariah tick init failed', e); }
   // ---- Whole market: every listed NSE stock plus BSE-only stocks, scored with the Multibagger Blueprint ----
   let mktRunning = false, mktStop = false;
   async function runMarketScan(){
@@ -20265,7 +20329,7 @@ allStocks=demo;render();
   // Tapping it clears the offline cache and reloads, so an installed app always
   // picks up the newest deploy.
   (function(){
-    const APP_VERSION = '1.25.0', APP_VERSION_DATE = '25 Nov 2026';
+    const APP_VERSION = '1.26.0', APP_VERSION_DATE = '27 Nov 2026';
     const el = document.getElementById('appVersionBadge');
     if(!el) return;
     el.textContent = 'v' + APP_VERSION;
